@@ -1,7 +1,7 @@
 ---
 id: B-24
-title: "REFUTED: the accounting guard does not time out — it was run without its fixture"
-status: question
+title: "The central guard's red pointed at coroutines, because a default named a topic nothing creates"
+status: done
 priority: P1
 size: S
 stage: stage-1-produce
@@ -81,7 +81,43 @@ So `runTest`'s default was **masking** the honest error, not causing the failure
 The three acceptance criteria above are therefore not achievable as written: there is no timeout to
 measure idle and under load, and no timeout message to improve.
 
-## The question, and it is for a person
+## Decided, 2026-09-17: option 2, in a narrower form than it was written
+
+Taken by the owner's instruction to decide it here rather than hand it back. **Neither option as
+written**, because looking at the code turned the choice into a smaller and better-shaped one.
+
+**The defect is a default, and the fix is its deletion.** `Observations.accountingTopic` read
+
+```kotlin
+(testEnv("KAFKAKN_ACCOUNTING_TOPIC") ?: "kafkakn-acct") + "-" + armName
+```
+
+and `kafkakn-acct-<arm>` is **a name nothing creates**: `ci/b-09/run.sh` passes a per-run one
+(`kafkakn-acct-<epoch>-<arm>`). A test started any other way therefore asked for a topic that could
+not exist. Its own KDoc said "the harness creates both" while the line below it invented a third
+name — a fallback that manufactures its own subject, which is the shape that makes a lookup test
+vacuous, here making a timeout look like a coroutines failure.
+
+That is why option 2's cost does not apply. It asked whether "every test that needs a fixture then
+needs the same guard" — but this is not a guard added to a test, it is **one lying accessor stopped
+from lying**. `testTopic` and `strictTopic` keep their defaults, and the difference is written next
+to them: those fall back to exactly the names the scripts use, so they name something that exists.
+
+### Measured, before and after
+
+| | before | after |
+|---|---|---|
+| `./gradlew :kafkakn-core:jvmTest --tests "*AccountingTest*"` | 60 s of silence, then `UncompletedCoroutinesError: After waiting for 1m…` (137 s in total) | **12 s**, of which the test itself is instant |
+| what it says | coroutines | `KAFKAKN_ACCOUNTING_TOPIC is unset, so this test was not started by ci/b-09/run.sh` — and what that script does |
+
+### The third criterion, which survived the item being rewritten
+
+`ci/b-09/run.sh` after the change: **3000 of 3000 on each arm**, end offsets `0 → 3000`, and the
+naive control still red for the reason it has always been red — 2 900 and 2 730 records dropped,
+`AccountingTest failures=1` on both arms. A fix that quieted the guard would have shown up here as a
+control that stopped failing. Log in `logs/b-24/`.
+
+## The question as it stood, and what was refuted
 
 **Option 1 — close this as refuted.** The guard is fine, the repository already says how the suite
 runs (`CLAUDE.md`: "each item's `ci/b-NN/run.sh` is what runs it"), and a contributor who reads that

@@ -76,13 +76,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[?]` | REFUTED: the accounting guard does not time out — it was run without its fixture | P1 | S | - |
+No open tasks.
 
-## Closed (23)
+## Closed (24)
 
 **It builds, and a test can fail**
 
@@ -99,6 +97,7 @@ verdict.
 - [B-07](docs/backlog/B-07-native-actual.md) `[x]` - The native actual: produce and delivery reports across the callback seam
 - [B-08](docs/backlog/B-08-suspend-on-backpressure.md) `[x]` - Suspend on backpressure instead of failing
 - [B-09](docs/backlog/B-09-accounting.md) `[x]` - Account for every record the caller handed in
+- [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[x]` - The central guard's red pointed at coroutines, because a default named a topic nothing creates
 
 **Usable against a real deployment**
 
