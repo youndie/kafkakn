@@ -65,7 +65,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-19](docs/backlog/B-19-close-under-a-real-shutdown.md) `[ ]` | RQ-A: does close() keep its promise inside a real ordered shutdown? | P0 | L | - |
+| [B-19](docs/backlog/B-19-close-under-a-real-shutdown.md) `[~]` | RQ-A: does close() keep its promise inside a real ordered shutdown? | P0 | L | - |
 | [B-16](docs/backlog/B-16-readme-says-what-was-measured.md) `[ ]` | The README says what was measured, not what sounded right | P1 | S | - |
 | [B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md) `[ ]` | Certificate verification: the README and the contract disagree | P1 | S | - |
 | [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[ ]` | RQ-C: does the artefact resolve and link on a machine that has never seen this repository? | P1 | S | - |

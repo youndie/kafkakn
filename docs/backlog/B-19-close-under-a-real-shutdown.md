@@ -1,7 +1,7 @@
 ---
 id: B-19
 title: "RQ-A: does close() keep its promise inside a real ordered shutdown?"
-status: open
+status: wip
 priority: P0
 size: L
 stage: stage-4-a-real-user
