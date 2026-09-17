@@ -31,11 +31,10 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (10)
+## Open (9)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-05](docs/backlog/B-05-differential-harness.md) `[~]` | The differential harness: one suite, both actuals, one broker | P0 | M | B-02, B-04 |
 | [B-06](docs/backlog/B-06-jvm-actual.md) `[ ]` | The JVM actual over kafka-clients | P0 | M | B-05 |
 | [B-07](docs/backlog/B-07-native-actual.md) `[ ]` | The native actual: produce and delivery reports across the callback seam | P0 | L | B-03, B-06 |
 | [B-08](docs/backlog/B-08-suspend-on-backpressure.md) `[ ]` | Suspend on backpressure instead of failing | P0 | M | B-07 |
@@ -46,7 +45,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (4)
+## Closed (5)
 
 **It builds, and a test can fail**
 
@@ -54,6 +53,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 - [B-02](docs/backlog/B-02-expect-surface.md) `[x]` - The expect surface, compiling and throwing
 - [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[x]` - The C bundle, built against glibc 2.17, consumed by cinterop
 - [B-04](docs/backlog/B-04-broker-fixture.md) `[x]` - The broker fixture: KRaft, three partitions, auto-create off
+- [B-05](docs/backlog/B-05-differential-harness.md) `[x]` - The differential harness: one suite, both actuals, one broker
 
 <!-- END INDEX -->
 

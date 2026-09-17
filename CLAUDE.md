@@ -41,9 +41,23 @@ the intended reason** → implement → green.
 > **The JVM arm is the oracle, not a portability afterthought.**
 
 The same `commonTest` suite runs on both arms against one broker. The native arm is correct when it
-agrees with the reference implementation. A test that can only be written in `jvmTest` or
-`nativeTest` is either about the platform seam itself, or a sign the `expect` surface has leaked a
-platform's shape — and that is a finding for the research document, not something to work around.
+agrees with the reference implementation.
+
+Three kinds of assertion, and the difference matters (research §2.1):
+
+- **the broker's truth** — offsets, partitions, what an independent reader sees. `commonTest`, each
+  arm checked against the same third party. Agreement follows from both being right.
+- **what only the client knows** — the partitioner's choice for a key, the error type, how a config
+  value is normalised. `commonTest` too, but comparing them *across* arms cannot happen inside a
+  test: record with `recordObservation`, and `ci/harness/compare-arms.sh` diffs the two files. This
+  is where the arms can differ while each looks right alone.
+- **the platform seam** — that the archives link, that a callback on librdkafka's thread resumes the
+  right coroutine. `linuxX64Test`, and that is correct rather than a leak.
+
+So a test that can only live in one arm's source set is a warning sign for the first two and the
+normal case for the third. If it is one of the first two, the `expect` surface has probably leaked a
+platform's shape, and that is a finding for the research document rather than something to work
+around.
 
 ## What not to do
 
