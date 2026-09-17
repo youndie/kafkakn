@@ -31,17 +31,16 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (5)
+## Open (4)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-14](docs/backlog/B-14-ci-workflow.md) `[~]` | CI: make check on every pull request | P0 | XS | - |
 | [B-11](docs/backlog/B-11-tls.md) `[ ]` | TLS on both arms | P1 | M | B-07 |
 | [B-12](docs/backlog/B-12-publish-snapshots.md) `[ ]` | Publish snapshots to reposilite | P1 | S | B-09 |
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (9)
+## Closed (10)
 
 **It builds, and a test can fail**
 
@@ -50,6 +49,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 - [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[x]` - The C bundle, built against glibc 2.17, consumed by cinterop
 - [B-04](docs/backlog/B-04-broker-fixture.md) `[x]` - The broker fixture: KRaft, three partitions, auto-create off
 - [B-05](docs/backlog/B-05-differential-harness.md) `[x]` - The differential harness: one suite, both actuals, one broker
+- [B-14](docs/backlog/B-14-ci-workflow.md) `[x]` - CI: make check on every pull request
 
 **It produces, and loses nothing**
 

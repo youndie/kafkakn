@@ -9,7 +9,7 @@ involved_services:
   - test-broker
 client_entries: []
 api:
-  - producer-contract-that-does-not-exist
+  - producer-contract
 tags: [producer, correctness]
 ---
 
