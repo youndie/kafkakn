@@ -1,0 +1,34 @@
+=== sources (librdkafka 2.13.0, from the catalogue) ===
+  v2.13.0.tar.gz             sha256 3bd351601d8ebcbc…
+  zstd-1.5.6.tar.gz          sha256 8c29e06cf42aacc1…
+  zlib-1.3.1.tar.gz          sha256 9a93b2b7dfdac77c…
+  openssl-3.0.13.tar.gz      sha256 88525753f79d3bec…
+
+=== build image ===
+  sha256:bd3116bbe59f5dec5e5adf231f849d72806e6d0d5d361239cbb57ec4eece7910
+
+=== building in kafkakn/oldglibc ===
+  host: ldd (GNU libc) 2.17, gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11)
+  librdkafka
+    applying 0001-guard-sys-random-include.patch
+    0001-guard-sys-random-include.patch: patching file src/rdrand.c
+    0001-guard-sys-random-include.patch: Hunk #1 succeeded at 32 with fuzz 1 (offset 1 line).
+disabling linker-script since python3 is not available
+  --- what configure SELECTED (the fallbacks must be chosen, not silently skipped) ---
+    WITH_ZLIB=	y
+    WITH_SSL=	y
+    WITH_ZSTD=	y
+    WITH_SASL_SCRAM=	y
+    #define ENABLE_C11THREADS "try"
+    // pthread_setname_gnu
+    #define HAVE_PTHREAD_SETNAME_GNU 1
+    (no WITH_C11THREADS: the bundled tinycthread is what will be linked)
+
+=== does any archive still need a symbol newer than glibc 2.19? ===
+  ARCHIVE                SYMBOL         VERDICT
+  librdkafka-static.a    mtx_lock       defined here
+  librdkafka-static.a    thrd_create    defined here
+  librdkafka-static.a    cnd_signal     defined here
+  no archive expects a post-2.19 symbol from libc
+
+cache: /home/youndie/.cache/kafkakn/librdkafka-2.13.0

@@ -1,0 +1,13 @@
+=== the four answers ===
+pristine         exit=0   applying
+already-guarded  exit=1   PATCH OBSOLETE
+moved            exit=1   PATCH NO LONGER APPLIES
+target-missing   exit=1   PATCH TARGET MISSING
+
+=== the patch actually changed the pristine source ===
+  the guard is in the file - the green case did something
+
+=== the four answers are four, not one repeated ===
+  three refusals, three different sentences
+
+B-22: every answer the bundle build can give has been watched happening
