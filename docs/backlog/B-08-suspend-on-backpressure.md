@@ -1,7 +1,7 @@
 ---
 id: B-08
 title: "Suspend on backpressure instead of failing"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-1-produce
