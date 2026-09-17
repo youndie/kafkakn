@@ -11,8 +11,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 cd "$ROOT" || exit 3
 
-VERSION=$(sed -n 's/^version=//p' gradle.properties)
-GROUP_PATH=io/github/youndie/kafkakn
+. ci/lib/coordinate.sh
+kafkakn_coordinate || exit 2
 REPO=$ROOT/build/local-repo
 EMPTY_REPO=$ROOT/build/empty-repo
 # Kept between runs so Kotlin's own artefacts are not re-downloaded every time; OUR group is purged

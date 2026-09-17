@@ -15,8 +15,8 @@ ROOT=$(cd "$HERE/../.." && pwd)
 cd "$ROOT" || exit 3
 
 REPO_URL=${REPO_URL:-https://reposilite.kotlin.website/snapshots}
-GROUP=$(sed -n 's/^group=//p' gradle.properties)
-VERSION=$(sed -n 's/^version=//p' gradle.properties)
+. ci/lib/coordinate.sh
+kafkakn_coordinate || exit 2
 CONSUMER_HOME=${CONSUMER_HOME:-$HOME/.cache/kafkakn/consumer-gradle-home}
 
 echo "=== $GROUP:$VERSION, resolved from $REPO_URL ==="

@@ -11,8 +11,8 @@ ROOT=$(cd "$HERE/../.." && pwd)
 cd "$ROOT" || exit 3
 H=ci/harness/broker.sh
 TOPIC=kafkakn
-VERSION=$(sed -n 's/^version=//p' gradle.properties)
-GROUP=$(sed -n 's/^group=//p' gradle.properties)
+. ci/lib/coordinate.sh
+kafkakn_coordinate || exit 2
 # A HOME OF ITS OWN, emptied of this group: a consumer that resolves from a warm cache proves the
 # cache. Kotlin's own artefacts stay, because re-downloading the compiler measures the network.
 CONSUMER_HOME=${CONSUMER_HOME:-$HOME/.cache/kafkakn/b13-gradle-home}
