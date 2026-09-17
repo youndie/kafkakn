@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-11](docs/backlog/B-11-tls.md) `[ ]` | TLS on both arms | P1 | M | B-07 |
+| [B-11](docs/backlog/B-11-tls.md) `[~]` | TLS on both arms | P1 | M | B-07 |
 | [B-12](docs/backlog/B-12-publish-snapshots.md) `[ ]` | Publish snapshots to reposilite | P1 | S | B-09 |
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
