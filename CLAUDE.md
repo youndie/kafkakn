@@ -127,11 +127,18 @@ all.
 ## Checks
 
 ```bash
-make check
+make check          # the documents
+./gradlew ktlintCheck   # the code
 ```
 
-Documentation only, for now — there is no build yet. CI runs exactly this
-([B-14](docs/backlog/B-14-ci-workflow.md)). Whatever is not in `make check` is not a gate.
+**Two halves, and CI runs both** ([B-14](docs/backlog/B-14-ci-workflow.md)): `make check` needs
+python and takes a second, `ktlintCheck` needs a JDK and takes a minute. Neither runs the suite —
+that needs the C bundle and a broker, and every item's own `ci/b-NN/run.sh` is what runs it on the
+Linux box.
+
+The formatter is the portfolio's, pinned by `io.github.youndie.sborka.lint`, and its rule set is not
+only about layout: it refuses a `catch (e: Throwable)` that swallows `CancellationException`, and it
+was right twice on the day it arrived.
 
 ## Language
 

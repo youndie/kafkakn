@@ -32,63 +32,67 @@ import kotlin.test.assertTrue
  * failure mode is unknown.
  */
 class AccountingTest {
-
     @Test
-    fun the_broker_holds_every_record_the_caller_handed_in() = runTest {
-        val naive = naiveProducerRequested()
-        val topic = accountingTopic
-        val real = kafkaProducer(
-            ProducerConfig(
-                buildMap {
-                    put("bootstrap.servers", bootstrap)
-                    put("acks", "all")
-                    putAll(smallQueueConfig())
-                },
-            ),
-        )
-        val producer: KafkaProducer = if (naive) NaiveProducer(real, NAIVE_BOUND) else real
+    fun the_broker_holds_every_record_the_caller_handed_in() =
+        runTest {
+            val naive = naiveProducerRequested()
+            val topic = accountingTopic
+            val real =
+                kafkaProducer(
+                    ProducerConfig(
+                        buildMap {
+                            put("bootstrap.servers", bootstrap)
+                            put("acks", "all")
+                            putAll(smallQueueConfig())
+                        },
+                    ),
+                )
+            val producer: KafkaProducer = if (naive) NaiveProducer(real, NAIVE_BOUND) else real
 
-        val results = try {
-            withContext(Dispatchers.Default) {
-                val sent = coroutineScope {
-                    (0 until RECORDS).map { index ->
-                        async {
-                            producer.send(
-                                ProducerRecord(topic, "acct-$armName:$index".encodeToByteArray()),
-                            )
-                        }
-                    }.awaitAll()
+            val results =
+                try {
+                    withContext(Dispatchers.Default) {
+                        val sent =
+                            coroutineScope {
+                                (0 until RECORDS)
+                                    .map { index ->
+                                        async {
+                                            producer.send(
+                                                ProducerRecord(topic, "acct-$armName:$index".encodeToByteArray()),
+                                            )
+                                        }
+                                    }.awaitAll()
+                            }
+                        producer.flush()
+                        sent
+                    }
+                } finally {
+                    producer.close()
                 }
-                producer.flush()
-                sent
+
+            val dropped = results.count { it.partition == NAIVE_DROP_PARTITION }
+            recordArmFact("accounting.topic", topic)
+            recordArmFact("accounting.handed_in", RECORDS.toString())
+            recordArmFact("accounting.dropped", dropped.toString())
+            recordArmFact("accounting.naive", naive.toString())
+
+            assertEquals(RECORDS, results.size, "every send must answer, one answer per record")
+
+            // The vacuity guard, and it is the reason the sends above are concurrent. `send` awaits the
+            // acknowledgement, so a caller that awaits each record has exactly one in flight and cannot
+            // fill a queue of any size - the first version of the sibling backpressure test was serial
+            // and proved nothing at all (research §2.5).
+            val waits = backpressureWaitCount()
+            if (waits >= 0 && !naive) {
+                assertTrue(waits > 0, "the queue bound was never reached - this run accounts for nothing")
             }
-        } finally {
-            producer.close()
+
+            assertTrue(
+                dropped == 0,
+                "$dropped of $RECORDS records were answered with a result and never sent - " +
+                    "this is the shape that lost 264 826 records with every indicator green",
+            )
         }
-
-        val dropped = results.count { it.partition == NAIVE_DROP_PARTITION }
-        recordArmFact("accounting.topic", topic)
-        recordArmFact("accounting.handed_in", RECORDS.toString())
-        recordArmFact("accounting.dropped", dropped.toString())
-        recordArmFact("accounting.naive", naive.toString())
-
-        assertEquals(RECORDS, results.size, "every send must answer, one answer per record")
-
-        // The vacuity guard, and it is the reason the sends above are concurrent. `send` awaits the
-        // acknowledgement, so a caller that awaits each record has exactly one in flight and cannot
-        // fill a queue of any size - the first version of the sibling backpressure test was serial
-        // and proved nothing at all (research §2.5).
-        val waits = backpressureWaitCount()
-        if (waits >= 0 && !naive) {
-            assertTrue(waits > 0, "the queue bound was never reached - this run accounts for nothing")
-        }
-
-        assertTrue(
-            dropped == 0,
-            "$dropped of $RECORDS records were answered with a result and never sent - " +
-                "this is the shape that lost 264 826 records with every indicator green",
-        )
-    }
 
     private companion object {
         /** Enough to overrun a queue bound of 100 many times over, few enough to finish. */

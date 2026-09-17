@@ -31,7 +31,6 @@ internal class NaiveProducer(
     private val delegate: KafkaProducer,
     bound: Int,
 ) : KafkaProducer {
-
     private val room = Semaphore(bound)
 
     override suspend fun send(record: ProducerRecord): RecordMetadata {

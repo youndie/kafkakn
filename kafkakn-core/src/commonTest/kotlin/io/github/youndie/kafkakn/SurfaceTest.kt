@@ -12,7 +12,6 @@ import kotlin.test.assertNull
  * because the producer is wrong, not because the suite could not construct one.
  */
 class SurfaceTest {
-
     @Test
     fun a_producer_can_be_constructed_on_this_arm() {
         val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to "127.0.0.1:9092"))

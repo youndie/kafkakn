@@ -14,7 +14,6 @@ package io.github.youndie.kafkakn
  * exactly why the contract is written down and the implementation is held to it.
  */
 public interface KafkaProducer {
-
     /**
      * Sends [record] and returns where it landed, after the broker has acknowledged it.
      *
@@ -50,6 +49,8 @@ public expect fun kafkaProducer(config: ProducerConfig): KafkaProducer
  */
 internal object UnimplementedProducer : KafkaProducer {
     override suspend fun send(record: ProducerRecord): RecordMetadata = TODO("no producer yet")
+
     override suspend fun flush(): Unit = TODO("no producer yet")
+
     override suspend fun close(): Unit = TODO("no producer yet")
 }

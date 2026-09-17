@@ -17,7 +17,10 @@ package io.github.youndie.kafkakn
  *
  * The file is per-arm and the comparison is `ci/harness/compare-arms.sh`.
  */
-internal expect fun recordObservation(key: String, value: String)
+internal expect fun recordObservation(
+    key: String,
+    value: String,
+)
 
 /**
  * A fact that belongs to **this** arm and is not expected to match the other.
@@ -29,7 +32,10 @@ internal expect fun recordObservation(key: String, value: String)
  * The split is the point: a file where everything must agree is a file whose disagreements mean
  * something.
  */
-internal expect fun recordArmFact(key: String, value: String)
+internal expect fun recordArmFact(
+    key: String,
+    value: String,
+)
 
 /** The arm this test is running on, as it names itself in the observation file. */
 internal expect val armName: String
@@ -98,7 +104,9 @@ internal val caPath: String get() = testEnv("KAFKAKN_CA") ?: "${testEnv("HOME")}
  * Without it a TLS test cannot tell "the certificate was verified" from "verification never
  * happened" — and the second is also what a client with verification disabled looks like.
  */
-internal val wrongCaPath: String get() = testEnv("KAFKAKN_WRONG_CA") ?: "${testEnv("HOME")}/.cache/kafkakn/tls/wrong-ca.pem"
+internal val wrongCaPath: String get() =
+    testEnv("KAFKAKN_WRONG_CA")
+        ?: "${testEnv("HOME")}/.cache/kafkakn/tls/wrong-ca.pem"
 
 /**
  * Timeouts short enough that a connection which will never succeed fails inside a test.

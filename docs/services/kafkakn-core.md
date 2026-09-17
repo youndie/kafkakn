@@ -78,6 +78,9 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
   `ci/publish/run.sh` names all three after a publish and then compiles a **separate build** against
   them from a cache purged of this group — and requires that same probe to fail against an empty
   repository, because "it resolved" says nothing about where it resolved from.
+- **The POM said Apache-2.0 while `LICENSE` is MIT**, from B-12 until the conventions arrived: it
+  was written by hand, and the snapshots already on the server carry the wrong licence. The
+  convention derives it from a property whose default is MIT, so the next publish corrects it.
 - **Published, and resolved back from the network**: all three coordinates answer at
   `reposilite.kotlin.website/snapshots` and `ci/publish/verify-published.sh` compiles a separate
   build against them after every upload. An upload that returned 2xx is not a publication — a
@@ -89,9 +92,14 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
   reads. A klib published here carries metadata a build on another compiler version refuses, which
   is why the compiler is the shared one rather than a number typed in this repository.
 
-  The **module** conventions (`sborka.kmp`, `sborka.lint`, `sborka.publish`) are deliberately not
-  taken: they move the toolchain, the formatter and the whole publication block, and the publication
-  is what B-12 and B-15 measured. That is its own migration with its own run of the acceptance.
+  The **module** conventions are taken too — `sborka.kmp`, `sborka.lint`, `sborka.publish` — and
+  with them the toolchain, `explicitApi()`, warnings as errors, the formatter and the POM. What is
+  left in `kafkakn-core/build.gradle.kts` is what is about this module: the targets, the C bundle,
+  the cinterop seam, and the `local` repository the publication proof writes to.
+
+  The jvm floor is pinned at **21**, the target this repository already had. The convention defaults
+  to 17, which is a wider promise than anything here has measured — and a floor is the oldest Java a
+  consumer may be on, so lowering it is a decision about who may use the library.
 - The coordinate lives in `gradle.properties` and nowhere else. Gradle applies `group` and `version`
   to every project, so a module cannot publish under a different one by forgetting to set it.
 

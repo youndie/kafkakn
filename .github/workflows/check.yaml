@@ -70,6 +70,22 @@ jobs:
 
       - run: make check
 
+      # THE FORMATTER IS A GATE OR IT IS NOTHING. `sborka.lint` pins ktlint and the portfolio's rule
+      # set, and a rule set that only runs where somebody remembers to run it is a rule set that
+      # drifts out of the code. It found two things that were not formatting on the day it arrived:
+      # a KDoc orphaned by a declaration inserted under it, and three catches that swallowed
+      # CancellationException - one of which had already filed a `runTest` timeout as a producer
+      # failure.
+      #
+      # Only the formatter. Compiling the native arm needs the C bundle and the suite needs a broker;
+      # whether those belong on a hosted runner is a separate decision with its own item.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - run: ./gradlew --no-daemon --console=plain ktlintCheck
+
       # Default branch only. `status: draft` is legal in a pull request, where it means "this
       # branch will make it true", and a defect the moment it merges.
       - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
