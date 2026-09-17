@@ -32,8 +32,8 @@ it is not in this project's scope and no claim is made here.
 ## The module cut, and why it is one module
 
 One published artefact, `kafkakn-core`. A `kafkakn-testing` module is expected later for the
-fixtures an external consumer needs ([B-13](../backlog/B-13-external-consumer-acceptance.md)); it is
-not split out before there is a consumer to need it, because a module with one in-tree caller
+fixtures an external downstream build needs ([B-13](../backlog/B-13-external-downstream-acceptance.md)); it is
+not split out before there is a downstream build to need it, because a module with one in-tree caller
 accumulates API nobody has used.
 
 Package and group are the same string: `io.github.youndie.kafkakn`.
@@ -107,11 +107,11 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
 
 - **The klib carries the C archives, and that is why it is 11 MB.** `staticLibraries` in
   `rdkafka.def` makes cinterop copy `librdkafka-static.a`, OpenSSL, zlib and zstd into the klib, so a
-  consumer links against the published artefact and nothing else. Before that it was 76 KB of
+  dependant links against the published artefact and nothing else. Before that it was 76 KB of
   bindings with no implementation and a stranger got 14 undefined symbols
   ([research §2.12](../research/research-architecture.md)).
 - **There are no `linkerOpts` in `build.gradle.kts`, deliberately.** While they were there the
-  suite's own test binaries linked in a way no consumer could reproduce, and the gate could not see
+  suite's own test binaries linked in a way no dependant could reproduce, and the gate could not see
   the difference. Their absence is the check.
 - **The C bundle is not built by Gradle.** It is produced by a script into a cache outside the
   source tree and consumed by cinterop as static archives. Building it inside the Gradle graph

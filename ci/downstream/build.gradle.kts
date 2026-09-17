@@ -13,7 +13,7 @@ kotlin {
     }
     linuxX64 {
         // LINKED, not merely compiled. A klib that compiles against a cinterop and cannot be linked
-        // into a binary is a library nobody can ship, and compiling is where a consumer stops
+        // into a binary is a library nobody can ship, and compiling is where a downstream build stops
         // noticing.
         binaries.executable { entryPoint = "main" }
     }

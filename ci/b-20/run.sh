@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # RQ-C: ten minutes on a machine that has never seen this repository.
 #
-# `ci/consumer` proves the artefact resolves and links - in CI, on a runner this project configured,
+# `ci/downstream` proves the artefact resolves and links - in CI, on a runner this project configured,
 # against a cache this project purges. This asks the same question from a machine with nothing on it:
 # no clone, no Gradle cache, no `~/.konan`, and no knowledge of this repository beyond what the README
 # prints. The difference between the two is every step the README does not name.

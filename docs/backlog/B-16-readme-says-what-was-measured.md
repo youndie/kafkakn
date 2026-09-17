@@ -14,7 +14,7 @@ unfalsifiable as written**, and the fifth is the missing half of what a reader n
 link the artefact at all.
 
 - **The two defects are the strongest claim in the document and it names neither.** "The oracle
-  found a real defect on the first day it ran, and an external consumer found another the library's
+  found a real defect on the first day it ran, and an external build found another the library's
   own suite could not see" is the proof of this project's thesis, served as a teaser. One sentence
   each, with the item that holds the run: the partitioner disagreement
   ([B-07](B-07-native-actual.md), [research §2.2](../research/research-architecture.md)) and the
@@ -58,7 +58,7 @@ link the artefact at all.
 All five corrections are in, and the third one came out differently from how this item wrote it.
 
 **`ldd`, measured rather than quoted** (`ci/b-16/run.sh`, 2026-09-17). The subject is the binary a
-build outside this repository links — `ci/consumer` — against the same build with the dependency
+build outside this repository links — `ci/downstream` — against the same build with the dependency
 removed. The sets are **identical in both directions**: `linux-vdso`, the loader, `libc libcrypt
 libdl libgcc_s libm libpthread libresolv librt libutil`. The spike's claim reproduces.
 
@@ -70,10 +70,10 @@ number instead of the argument. The script pins 2.17, so the README and the arte
 apart without the check saying so.
 
 **The first comparison attributed four libraries to the wrong thing.** Its baseline was a
-hello-world, which differs from the consumer in *two* ways — kafkakn and kotlinx-coroutines — and it
+hello-world, which differs from the downstream build in *two* ways — kafkakn and kotlinx-coroutines — and it
 reported `libcrypt`, `libresolv`, `librt` and `libutil` as kafkakn's. They belong to the coroutines
 runtime. That list was one edit from going into the README as a measured fact. The baseline is now
-the consumer with the library taken out, and the reason is in the script beside it.
+the downstream build with the library taken out, and the reason is in the script beside it.
 
 The check can say no: the same `comm`, held against `/bin/bash`, reports what that adds — otherwise
 an empty answer would pass whether the comparison worked or not.

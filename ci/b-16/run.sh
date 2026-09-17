@@ -8,7 +8,7 @@
 # baseline does not need. So what the README says now is the list this script prints, and what this
 # script does is fail when that list changes.
 #
-# The subject is `ci/consumer`, not this repository's own test binary: a consumer is what a stranger
+# The subject is `ci/downstream`, not this repository's own test binary: that is what a stranger
 # links, and this repository's own binaries were once linked with options no stranger had (B-15).
 #
 #   ci/b-16/run.sh
@@ -28,15 +28,15 @@ echo "  $GROUP:kafkakn-core:$VERSION, from $REPO_URL"
 echo
 echo "=== the two binaries ==="
 ./gradlew --no-daemon --console=plain \
-    -p ci/consumer -Pkafkakn.version="$VERSION" -Pkafkakn.repo="$REPO_URL" \
+    -p ci/downstream -Pkafkakn.version="$VERSION" -Pkafkakn.repo="$REPO_URL" \
     linkReleaseExecutableLinuxX64 2>&1 | tail -3
-[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "  THE CONSUMER COULD NOT BUILD"; exit 1; }
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "  THE DOWNSTREAM BUILD COULD NOT BUILD"; exit 1; }
 
 ./gradlew --no-daemon --console=plain \
     -p ci/b-16/baseline linkReleaseExecutableLinuxX64 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "  THE BASELINE COULD NOT BUILD"; exit 1; }
 
-WITH=$(ls ci/consumer/build/bin/linuxX64/releaseExecutable/*.kexe 2>/dev/null | head -1)
+WITH=$(ls ci/downstream/build/bin/linuxX64/releaseExecutable/*.kexe 2>/dev/null | head -1)
 WITHOUT=$(ls ci/b-16/baseline/build/bin/linuxX64/releaseExecutable/*.kexe 2>/dev/null | head -1)
 [ -n "$WITH" ] && [ -n "$WITHOUT" ] || { echo "  one of the two was not linked" >&2; exit 1; }
 printf '  with kafkakn:    %s (%s bytes)\n' "$WITH" "$(stat -c %s "$WITH")"
@@ -55,10 +55,10 @@ names "$WITHOUT" | sed 's/^/  /'
 
 echo
 echo "=== what kafkakn adds ==="
-# THE FIRST BASELINE MADE THIS COME OUT WRONG. It was a hello-world, so it differed from the consumer
+# THE FIRST BASELINE MADE THIS COME OUT WRONG. It was a hello-world, so it differed from the downstream build
 # in two things - kafkakn and kotlinx-coroutines - and the comparison reported `libcrypt`,
 # `libresolv`, `librt` and `libutil` as kafkakn's. They are the coroutines runtime's. The baseline is
-# the consumer with the library removed for exactly that reason: a difference with two possible
+# the downstream build with the library removed for exactly that reason: a difference with two possible
 # causes attributes nothing, and it was about to be written into the README as a fact.
 comm -13 <(names "$WITHOUT") <(names "$WITH") > /tmp/kafkakn-ldd-added
 comm -23 <(names "$WITHOUT") <(names "$WITH") > /tmp/kafkakn-ldd-removed

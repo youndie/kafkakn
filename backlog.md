@@ -76,15 +76,14 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (3)
+## Open (2)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[?]` | REFUTED: the accounting guard does not time out — it was run without its fixture | P1 | S | - |
-| [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 | [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
-## Closed (21)
+## Closed (22)
 
 **It builds, and a test can fail**
 
@@ -112,9 +111,10 @@ verdict.
 **Someone else can use it**
 
 - [B-12](docs/backlog/B-12-publish-snapshots.md) `[x]` - Publish snapshots to reposilite
-- [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[x]` - Acceptance from outside: a consumer project that uses the published artefact
+- [B-13](docs/backlog/B-13-external-downstream-acceptance.md) `[x]` - Acceptance from outside: a downstream project that uses the published artefact
 - [B-15](docs/backlog/B-15-native-klib-carries-no-c.md) `[x]` - The published native klib does not carry its C dependency
 - [B-16](docs/backlog/B-16-readme-says-what-was-measured.md) `[x]` - The README says what was measured, not what sounded right
+- [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[x]` - `ci/downstream` is the wrong word in a Kafka repository
 
 **Somebody actually runs it**
 

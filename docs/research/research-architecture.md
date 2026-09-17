@@ -81,7 +81,7 @@ a way only the measurement could show. The script pins 2.17 so the README and th
 drift apart.
 
 **The first version of that comparison attributed four libraries to the wrong thing.** Its baseline
-was a hello-world, so it differed from the consumer in *two* ways — kafkakn and kotlinx-coroutines —
+was a hello-world, so it differed from the downstream build in *two* ways — kafkakn and kotlinx-coroutines —
 and it reported `libcrypt`, `libresolv`, `librt` and `libutil` as kafkakn's. They are the coroutines
 runtime's. That list was one edit away from being written into the README as a measured fact; what
 kept it out was asking what else the two binaries differed by.
@@ -478,7 +478,7 @@ than after somebody has depended on the old coordinate.
 ### 2.12 The klib carried the bindings and not the implementation
 
 [B-15](../backlog/B-15-native-klib-carries-no-c.md), found by
-[B-13](../backlog/B-13-external-consumer-acceptance.md). A build that is not this one resolved the
+[B-13](../backlog/B-13-external-downstream-acceptance.md). A build that is not this one resolved the
 published `kafkakn-core-linuxx64`, compiled against it, and could not link: **14 undefined symbols**,
 `rd_kafka_produceva` and `rd_kafka_poll` among them. The same source ran on the jvm arm from the same
 version, so the API was fine and the artefact was not.
@@ -697,4 +697,4 @@ says *which* rot it is — obsolete, moved, or a file that is gone — because o
 opposite actions is how a dead patch gets carried for years (§2.16).
 
 **A green suite over a library nobody has called.** Mitigation: an acceptance item that uses the
-published artefact from an external consumer project, not the sources.
+published artefact from an external downstream project, not the sources.

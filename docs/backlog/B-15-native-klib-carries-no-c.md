@@ -10,8 +10,8 @@ blocked_by: [B-12]
 
 # B-15 — The published native klib does not carry its C dependency
 
-**A stranger cannot link `kafkakn-core-linuxx64` today.** Found by [B-13](B-13-external-consumer-acceptance.md)
-on the first run of a consumer that is not part of this build: it resolved the published artefact,
+**A stranger cannot link `kafkakn-core-linuxx64` today.** Found by [B-13](B-13-external-downstream-acceptance.md)
+on the first run of a build that is not part of this one: it resolved the published artefact,
 compiled against it, and then the link failed with
 
 ```
@@ -38,26 +38,26 @@ published klib says a word about `librdkafka-static.a`. `rdkafka.def` carries `i
      delta is 8.26 MB of which 5.71 MB is TLS+zlib+zstd,
      [research §1.2](../research/research-architecture.md)).
   2. **Publish the C bundle as its own artefact** and have consumers add it. Keeps the klib small,
-     adds a second coordinate and a step every consumer must not forget.
-  3. **Document that a consumer supplies `linkerOpts`.** Free here, and it makes every consumer
+     adds a second coordinate and a step every dependant must not forget.
+  3. **Document that a dependant supplies `linkerOpts`.** Free here, and it makes every dependant
      solve the problem this project exists to have solved. It is also unverifiable: the only thing
-     that would catch a broken instruction is a consumer, which is B-13.
+     that would catch a broken instruction is a downstream build, which is B-13.
 
   Recommended: **1**, because the alternative to a self-contained klib is a README nobody reads at
   link time, and because the size is the size the binary was always going to have — it is the same
   archives, moved from this repository's build file into the artefact.
 - The rejected alternative is `linkerOpts` inside `rdkafka.def`. Absolute paths cannot travel, and
-  `-lrdkafka` means the consumer's machine must already have a librdkafka — which is the one thing
+  `-lrdkafka` means the dependant's machine must already have a librdkafka — which is the one thing
   the old-glibc build exists to avoid ([D4](../research/research-architecture.md)).
 - Not covered: `linuxArm64`, and any change to how the bundle itself is built.
 
-- AC: the consumer in `ci/consumer`, with **no linker configuration of its own**, links and runs a
+- AC: the downstream build in `ci/downstream`, with **no linker configuration of its own**, links and runs a
   `linuxX64` binary against the published artefact.
-- AC: the same consumer is shown **failing** against the artefact published before the fix, so the
+- AC: the same build is shown **failing** against the artefact published before the fix, so the
   check is known to catch what it exists for.
 - AC: whatever the klib grows by is measured and written down, not estimated.
 - Anchors: `kafkakn-core/src/nativeInterop/cinterop/rdkafka.def`, `kafkakn-core/build.gradle.kts`,
-  `ci/consumer/build.gradle.kts`.
+  `ci/downstream/build.gradle.kts`.
 
 ## Outcome — 2026-09-17
 
@@ -65,7 +65,7 @@ published klib says a word about `librdkafka-static.a`. `rdkafka.def` carries `i
 the two directories passed from Gradle as `-libraryPath` so the file stays machine-independent.
 Option 1, as recommended.
 
-**The same consumer, the same version string, two repositories:**
+**The same build, the same version string, two repositories:**
 
 | | the server, pre-fix | the candidate, post-fix |
 |---|---|---|
@@ -74,7 +74,7 @@ Option 1, as recommended.
 | `…-cinterop-rdkafka.klib` | 76 952 bytes | 11 280 633 bytes |
 
 That A/B is the positive control, and it cost nothing: the server still held the artefact this item
-exists to condemn. An earlier attempt at a control — pinning the consumer to the previous
+exists to condemn. An earlier attempt at a control — pinning that build to the previous
 **timestamped** snapshot — failed with `Could not find …:0.1.0-20260917.151134-1`, which is red for
 the wrong reason and was not counted.
 

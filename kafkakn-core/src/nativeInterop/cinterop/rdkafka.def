@@ -16,7 +16,7 @@ package = rdkafka
 # directories come from build.gradle.kts as `-libraryPath`, so the file stays the same wherever the
 # bundle is cached.
 #
-# Measured by B-13: with only the bindings published, a consumer resolved the artefact, compiled
+# Measured by B-13: with only the bindings published, a downstream build resolved the artefact, compiled
 # against it, and then got nine undefined symbols from the linker - `rd_kafka_produceva`,
 # `rd_kafka_poll` and the rest. This project's own tests linked, because its build file names the
 # archives on its own test binaries, so every check was green and none could see it.

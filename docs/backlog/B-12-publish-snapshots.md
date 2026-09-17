@@ -11,12 +11,12 @@ blocked_by: [B-09]
 # B-12 — Publish snapshots to reposilite
 
 `io.github.youndie:kafkakn-core` as snapshots on `reposilite.kotlin.website/snapshots`, so that
-[B-13](B-13-external-consumer-acceptance.md) can consume the artefact rather than the sources.
+[B-13](B-13-external-downstream-acceptance.md) can consume the artefact rather than the sources.
 
 - **The decision and its reason.** Snapshots only, no Maven Central, no release
   ([D7](../research/research-architecture.md)). A published coordinate is a promise, and nobody has
   decided to make one.
-- The rejected alternative is `mavenLocal` for the consumer test. It hides exactly the defects
+- The rejected alternative is `mavenLocal` for the downstream probe. It hides exactly the defects
   publication introduces — a missing variant, a wrong `group`, a dependency that resolves only
   because it is already in the local cache.
 - Not covered: signing, a release line, and any version scheme beyond the snapshot one.
@@ -39,7 +39,7 @@ Everything except the upload itself, measured by `ci/publish/run.sh`.
 - **Three coordinates publish**, listed file by file: `kafkakn-core` (metadata), `kafkakn-core-jvm`,
   `kafkakn-core-linuxx64` — each with its `.module` and `.pom`, the native one carrying the cinterop
   klib beside its own.
-- **A separate build resolves them.** `ci/publish/consumer` is a build of its own, not a module: it
+- **A separate build resolves them.** `ci/publish/downstream` is a build of its own, not a module: it
   knows a coordinate and a repository URL and nothing else, declares **no `mavenLocal`**, and
   compiles `jvm`, `linuxX64` and the common metadata against the published module on a cache purged
   of `io.github.youndie.kafkakn` with `--refresh-dependencies`.
@@ -94,7 +94,7 @@ Published, and **resolved back from the network by a build that is not this one*
 `ci/publish/verify-published.sh` runs after every upload and is the only statement that means
 anything: **an upload that returned 2xx is not a publication.** A `.module` listing a variant that
 was never uploaded, a POM under the wrong group, a `maven-metadata.xml` that does not name the
-snapshot just written — each answers 200 and fails the first consumer to try. So the check is a
+snapshot just written — each answers 200 and fails the first build that tries to resolve it. So the check is a
 separate build, knowing a coordinate and a URL, compiling `jvm`, `linuxX64` and the common metadata
 with the group purged from its cache.
 
@@ -110,7 +110,7 @@ beside the Gradle-plugin one. That job is not in this repository and is not name
 2. The group moved to the project's own before the first token was issued.
 3. The first real upload was refused where it was predicted, and nothing landed.
 
-[B-13](B-13-external-consumer-acceptance.md) is unblocked: there is now an artefact on the network
+[B-13](B-13-external-downstream-acceptance.md) is unblocked: there is now an artefact on the network
 to consume.
 
 ## What this document does not name
