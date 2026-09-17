@@ -111,6 +111,16 @@ case "${1:-}" in
         --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" 2>/dev/null \
         | grep -ac "$3"
     ;;
+  headers)
+    # What the broker actually stored, read by a third party. `print.headers` is the only way to see
+    # them at all from outside: nothing in this library reads back, and a producer checked by its own
+    # consumer can be wrong in both directions at once.
+    kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
+        --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
+        --property print.headers=true --property print.value=true \
+        --property headers.separator=, --property key.separator=$'\t' 2>/dev/null \
+        | grep -a "$3" | head -1
+    ;;
   produce)
     # Reads stdin. Note kci, not kc.
     kci /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP" \

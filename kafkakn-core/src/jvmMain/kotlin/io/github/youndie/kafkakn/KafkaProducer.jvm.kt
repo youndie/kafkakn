@@ -3,6 +3,7 @@ package io.github.youndie.kafkakn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.apache.kafka.clients.producer.ProducerConfig as ApacheProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord as ApacheRecord
+import org.apache.kafka.common.header.internals.RecordHeader as ApacheHeader
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 import kotlin.coroutines.resume
@@ -76,7 +77,7 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
      */
     override suspend fun send(record: ProducerRecord): RecordMetadata =
         suspendCancellableCoroutine { continuation ->
-            delegate.send(ApacheRecord(record.topic, record.key, record.value)) { metadata, failure ->
+            delegate.send(record.toApache()) { metadata, failure ->
                 when {
                     failure != null -> continuation.resumeWithException(failure)
                     else -> continuation.resume(
@@ -85,6 +86,22 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
                 }
             }
         }
+
+    /**
+     * The five-argument constructor, because the shorter ones cannot carry headers.
+     *
+     * `partition` and `timestamp` are null so the client decides both, which is what the
+     * three-argument form did. The headers are handed over in order and duplicates are kept: the
+     * Java client stores an ordered list too, so nothing has to be reconciled here.
+     */
+    private fun ProducerRecord.toApache(): ApacheRecord<ByteArray, ByteArray> = ApacheRecord(
+        topic,
+        null,
+        null,
+        key,
+        value,
+        headers.map { ApacheHeader(it.name, it.value) },
+    )
 
     override suspend fun flush() {
         delegate.flush()
