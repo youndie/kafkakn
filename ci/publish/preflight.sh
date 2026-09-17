@@ -20,8 +20,8 @@ cd "$ROOT" || exit 3
 
 HOST=${HOST:-https://reposilite.kotlin.website}
 MAVEN_REPO=${MAVEN_REPO:-snapshots}
-GROUP=$(sed -n 's/^group=//p' gradle.properties)
-GROUP_PATH=${GROUP//./\/}
+. ci/lib/coordinate.sh
+kafkakn_coordinate || exit 2
 REPO=$ROOT/build/local-repo
 
 [ -n "${REPOSILITE_USER:-}" ] && [ -n "${REPOSILITE_SECRET:-}" ] || {
