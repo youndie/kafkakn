@@ -35,8 +35,16 @@ public actual fun kafkaProducer(config: ProducerConfig): KafkaProducer = JvmKafk
  * own key and it travels untouched.
  */
 internal fun translateForJava(properties: Map<String, String>): Map<String, String> {
-    val ca = properties["ssl.ca.location"] ?: return properties
-    return properties - "ssl.ca.location" +
+    var translated = properties
+    // The second translation, and the same argument as the first: the clients disagree about the
+    // VALUE here rather than the key. librdkafka refuses an empty one — "cannot be set to empty
+    // value", measured — and `kafka-clients` documents the empty string as the way to disable
+    // hostname checking. The contract spells it `none`; this is where that becomes the Java one.
+    if (translated[HOSTNAME_VERIFICATION] == "none") {
+        translated = translated + (HOSTNAME_VERIFICATION to "")
+    }
+    val ca = translated["ssl.ca.location"] ?: return translated
+    return translated - "ssl.ca.location" +
         mapOf(
             "ssl.truststore.location" to ca,
             "ssl.truststore.type" to "PEM",
@@ -49,6 +57,11 @@ internal class JvmKafkaProducer(
     private val properties = translateForJava(config.properties)
 
     init {
+        // FIRST, so that a key this library refuses by decision says so, rather than being reported
+        // as one `kafka-clients` has never heard of. The two are different answers to the caller:
+        // one is "we will not carry this", the other is "you misspelled something".
+        config.checkTlsKeys()
+
         // A key nobody honours fails HERE, not silently. kafka-clients logs unknown configuration at
         // WARN and carries on, which is the shape this project refuses: an option accepted and
         // dropped behaves exactly like one that worked, until it matters.

@@ -212,6 +212,14 @@ public class KafkaProduceException(
 internal class NativeKafkaProducer(
     private val config: ProducerConfig,
 ) : KafkaProducer {
+    init {
+        // BEFORE the handle below, because property initialisers run in source order and this one
+        // has to answer before any C is touched. The rule it enforces is shared with the other arm
+        // on purpose: a configuration refused on one arm only is a configuration the caller meets
+        // for the first time on the platform they do not run locally.
+        config.checkTlsKeys()
+    }
+
     private val handle: CPointer<rd_kafka_t> =
         memScoped {
             val conf = rd_kafka_conf_new() ?: error("rd_kafka_conf_new returned null")
