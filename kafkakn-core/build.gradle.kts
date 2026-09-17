@@ -5,7 +5,12 @@
 
 plugins {
     alias(wip.plugins.kotlinMultiplatform)
-    `maven-publish`
+    // The portfolio's module half: the coordinate and the toolchain, explicit API and warnings as
+    // errors, the formatter, and the publication with its POM and its `wip` repository. What stays
+    // in this file is what is about THIS module - the targets, the C bundle, the cinterop seam.
+    id("io.github.youndie.sborka.kmp")
+    id("io.github.youndie.sborka.lint")
+    id("io.github.youndie.sborka.publish")
 }
 
 // The C bundle, built by ci/librdkafka/build.sh into a cache outside the source tree. It is not
@@ -19,8 +24,6 @@ val bundle: String = (findProperty("kafkakn.bundle") as String?)
     ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}"
 
 kotlin {
-    jvmToolchain(21)
-
     jvm()
     linuxX64 {
         if (kafkaC) {
@@ -74,38 +77,10 @@ kotlin {
 // `ci/publish/run.sh` asserts all three are present after a publish, because "it published" is a
 // statement about a task, not about what a consumer can resolve.
 publishing {
-    publications.withType<MavenPublication>().configureEach {
-        pom {
-            name.set("kafkakn")
-            description.set("A Kafka producer for Kotlin Multiplatform: librdkafka on native, the official client on the JVM")
-            url.set("https://github.com/youndie/kafkakn")
-            licenses {
-                license {
-                    name.set("The Apache License, Version 2.0")
-                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                }
-            }
-            scm { url.set("https://github.com/youndie/kafkakn") }
-        }
-    }
     repositories {
-        // A real Maven repository on disk. It is what the publication proof resolves from, and it
-        // is deliberately NOT mavenLocal: `~/.m2` is shared with everything else on the machine, so
-        // a consumer resolving from it can succeed on an artefact that was never published here.
         maven {
             name = "local"
             url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
-        }
-        maven {
-            name = "wip"
-            url = uri("https://reposilite.kotlin.website/snapshots")
-            credentials {
-                // Gradle properties, which ORG_GRADLE_PROJECT_* supplies in CI. `orNull` rather
-                // than `get()`: a developer without the credentials must still be able to configure
-                // the build and publish to `local`.
-                username = providers.gradleProperty("REPOSILITE_USER").orNull
-                password = providers.gradleProperty("REPOSILITE_SECRET").orNull
-            }
         }
     }
 }

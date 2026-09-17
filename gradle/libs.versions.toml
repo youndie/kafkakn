@@ -7,6 +7,10 @@
 # What stays is what is this project's own and nobody else's business.
 
 [versions]
+# The number is here AND in settings.gradle.kts, and it cannot be in one place: `pluginManagement`
+# is evaluated before any catalogue exists, so the settings plugin's version has to be a literal
+# there. The two are kept equal by hand, which is the cost the portfolio pays for the arrangement.
+sborka = "0.4.0.86"
 # The JVM arm delegates to this, and it is the same release as the broker below - one variable fewer
 # in the differential suite.
 kafka-clients = "4.3.1"
@@ -18,3 +22,10 @@ kafka-image = "apache/kafka:4.3.1"
 
 [libraries]
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
+
+[plugins]
+# The module half of the conventions: the coordinate, the toolchain, explicit API, warnings as
+# errors, the formatter and the publication.
+sborkaKmp = { id = "io.github.youndie.sborka.kmp", version.ref = "sborka" }
+sborkaLint = { id = "io.github.youndie.sborka.lint", version.ref = "sborka" }
+sborkaPublish = { id = "io.github.youndie.sborka.publish", version.ref = "sborka" }
