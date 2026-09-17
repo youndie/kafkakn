@@ -97,6 +97,19 @@ Because the session exists, `git`, `make` and the documentation scripts in this 
 `LOCAL=1` prefix: they belong on the Mac, and git on the replica is meaningless anyway — the session
 is `--ignore-vcs` and there is no `.git` over there.
 
+## Read the file back instead of believing the edit
+
+Three separate no-ops happened in one item on 2026-09-17 and each was reported as done: a shell that
+failed to parse a command before the edit inside it ran; a second edit that could not find text the
+first was supposed to have written; and the commit-message hook rejecting a **whole** command for a
+73-character subject, so the status change and index regeneration chained in front of the commit
+never ran either — and retrying only the commit merged the work with the item still `wip`.
+
+The hook intercepts **before** execution. Anything chained after a bad commit message silently does
+not happen. So: after editing, read the file back; after a merge, check the item's status on `main`.
+A command that printed nothing did not necessarily do nothing quietly — it more often did nothing at
+all.
+
 ## Checks
 
 ```bash
