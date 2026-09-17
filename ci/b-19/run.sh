@@ -153,8 +153,8 @@ round() {
     # check that can never fire.
     deadline=ok
     grep -q 'DEADLINE_EXCEEDED' "$log" && deadline=EXCEEDED
-    drain=$(awk '/^DRAIN /{ print $3 }' "$log" | tail -1)
-    release=$(awk '/^RELEASE_CONSUMERS /{ print $3 }' "$log" | tail -1)
+    drain=$(awk '/^DRAIN /{ print $4 }' "$log" | tail -1)
+    release=$(awk '/^RELEASE_CONSUMERS /{ print $4 }' "$log" | tail -1)
 
     printf '%-10s rows=%-6s records=%-6s missing=%-5s silent=%-5s extra=%-4s refused=%-4s stop=%-7s exit=%s %s drain=%s release=%s\n' \
         "$label" "$rows" "$records" "$missing" "$silent" "$extra" "$refused" "${seconds}s" "$code" \

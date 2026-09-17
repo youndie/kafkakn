@@ -120,6 +120,16 @@ Implemented natively as `rd_kafka_outq_len` reaching zero, **not** as the return
 Flushes, then releases. A record accepted by `send` before `close` is either acknowledged or its
 `send` throws; `close` does not discard silently.
 
+**Measured 2026-09-17, and only half of that sentence has been.** Twenty `SIGTERM`s at unplanned
+moments inside a real service's ordered shutdown — 91 149 accepted events, none missing from the
+topic ([research §2.14](../research/research-architecture.md)). That publisher awaits the broker's
+acknowledgement inside each request, so nothing was ever outstanding when `close` ran: what the
+rounds show is that an ordered shutdown does not cut a request mid-`send`. The other half — `close`
+answering for records already queued when the signal arrives — needs a caller that returns before the
+acknowledgement, and is [B-23](../backlog/B-23-the-sink-that-does-not-wait.md). The distinction is
+written here rather than left to the reader, because this sentence covers both shapes and the harder
+one is the one a reader assumes.
+
 ## Configuration
 
 One map, keys named as Kafka names them, passed through to whichever client is underneath:
