@@ -85,6 +85,9 @@ message for naming librdkafka outside a comment — common code that knows which
 stopped being common. The message says "only one of the two clients has it" instead, which is what
 the caller needs anyway.
 
-**Found on the way, not fixed here:** `AccountingTest` times out after `runTest`'s default minute on
-the jvm arm. It fails on `main` as well — reproduced there twice with none of this branch in the
-tree — so it is [B-24](B-24-the-central-guard-times-out.md) rather than a change here.
+**Found on the way, not fixed here:** `AccountingTest` appeared to time out after `runTest`'s default
+minute on the jvm arm, on `main` as well as here, and was filed as
+[B-24](B-24-the-central-guard-times-out.md). **That diagnosis was wrong** and B-24 says so: the test
+was being run directly through Gradle rather than through `ci/b-09/run.sh`, which creates its topic,
+so the Java client was waiting for metadata that would never arrive. Through its own runner the guard
+passes on both arms.
