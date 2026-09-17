@@ -1,7 +1,7 @@
 ---
 id: B-09
 title: "Account for every record the caller handed in"
-status: open
+status: wip
 priority: P0
 size: S
 stage: stage-1-produce

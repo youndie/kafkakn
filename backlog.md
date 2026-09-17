@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-09](docs/backlog/B-09-accounting.md) `[ ]` | Account for every record the caller handed in | P0 | S | B-08 |
+| [B-09](docs/backlog/B-09-accounting.md) `[~]` | Account for every record the caller handed in | P0 | S | B-08 |
 | [B-14](docs/backlog/B-14-ci-workflow.md) `[ ]` | CI: make check on every pull request | P0 | XS | - |
 | [B-11](docs/backlog/B-11-tls.md) `[ ]` | TLS on both arms | P1 | M | B-07 |
 | [B-12](docs/backlog/B-12-publish-snapshots.md) `[ ]` | Publish snapshots to reposilite | P1 | S | B-09 |
