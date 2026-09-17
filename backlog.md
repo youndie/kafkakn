@@ -31,13 +31,11 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[~]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12, B-15 |
+No open tasks.
 
-## Closed (14)
+## Closed (15)
 
 **It builds, and a test can fail**
 
@@ -63,6 +61,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 **Someone else can use it**
 
 - [B-12](docs/backlog/B-12-publish-snapshots.md) `[x]` - Publish snapshots to reposilite
+- [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[x]` - Acceptance from outside: a consumer project that uses the published artefact
 - [B-15](docs/backlog/B-15-native-klib-carries-no-c.md) `[x]` - The published native klib does not carry its C dependency
 
 <!-- END INDEX -->
