@@ -1,7 +1,7 @@
 ---
 id: B-22
 title: "A bump that makes the patch dead must say so, not merely fail"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-2-real-use
