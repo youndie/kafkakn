@@ -13,4 +13,8 @@ internal actual fun recordObservation(key: String, value: String) {
 // Gradle process, not on the forked test JVM, so the skew never reached the test and the comparison
 // happily reported agreement. An environment variable is inherited by both arms' test processes and
 // is one mechanism instead of two.
-internal actual fun skewedArm(): String? = System.getenv("KAFKAKN_SKEW_ARM")
+internal actual fun testEnv(name: String): String? = System.getenv(name)
+
+internal actual fun skewedArm(): String? = testEnv("KAFKAKN_SKEW_ARM")
+
+internal actual fun randomSuffix(): String = System.nanoTime().toString(36)

@@ -93,12 +93,25 @@ worked, right up until it matters.
 |---|---|
 | queue at its bound | `send` suspends; **not** an error |
 | unknown topic, auto-creation off | `send` throws, and the message names the topic |
-| broker rejects the `acks` value | `send` throws, and the message carries the broker's own text |
+| the client refuses a configuration **value** | construction throws — see below |
+| the broker refuses a configuration value | `send` throws, and the message carries the broker's own text |
 | TLS peer not verifiable | construction or the first `send` throws, and the message names certificate verification |
 | producer closed | `send` throws `IllegalStateException` |
 
 Error **text** is not part of the contract; error **type** and the fact that something is thrown at
 all are.
+
+**Where a configuration value is refused is not the same on both arms, and the contract does not
+pretend otherwise** (measured in [B-06](../backlog/B-06-jvm-actual.md)). `kafka-clients` validates
+values at construction — `acks=99` raises its own `ConfigException` before any broker is contacted —
+while librdkafka accepts the same value and lets the broker refuse it. The contract promises only
+that an unusable value **fails**, and names construction as the earlier of the two places it may
+happen. Failing earlier is better and neither arm is asked to become the other.
+
+One consequence for testing, and it cost an iteration to find: **an invalid value proves nothing
+about whether a setting reaches the broker**, because the JVM arm never sends it. The probe that
+does is a *valid* value the broker cannot satisfy — `acks=all` against a topic whose
+`min.insync.replicas` exceeds the in-sync set — with `acks=1` on the same topic as the control.
 
 ## What both actuals must agree on
 

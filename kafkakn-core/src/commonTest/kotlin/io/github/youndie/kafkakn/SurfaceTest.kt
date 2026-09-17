@@ -1,9 +1,8 @@
 package io.github.youndie.kafkakn
 
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
@@ -17,16 +16,14 @@ class SurfaceTest {
     @Test
     fun a_producer_can_be_constructed_on_this_arm() {
         val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to "127.0.0.1:9092"))
-        assertEquals(UnimplementedProducer, producer)
+        assertNotNull(producer)
     }
 
-    @Test
-    fun send_is_not_implemented_yet_on_this_arm() = runTest {
-        val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to "127.0.0.1:9092"))
-        assertFailsWith<NotImplementedError> {
-            producer.send(ProducerRecord(topic = "t", value = byteArrayOf(1, 2, 3)))
-        }
-    }
+    // The two assertions that stood here - that the factory returns the stub, and that `send` throws
+    // NotImplementedError - were true on both arms when B-02 wrote them and are now true only on the
+    // arm that is still a stub. An assertion about "no arm is implemented" becomes a lie the moment
+    // one is, so it is gone rather than qualified: what an implemented arm does is asserted by its
+    // own feature tests, and what an unimplemented one does is not interesting.
 
     @Test
     fun configuration_keeps_kafka_s_own_key_names() {

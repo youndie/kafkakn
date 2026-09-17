@@ -40,12 +40,15 @@ Every one is **target**: nothing is built.
 * **When:** 100 records with no key are sent.
 * **Then:** every `send` returns `RecordMetadata` naming the topic, the topic's summed end offsets
   have grown by exactly 100, and `kafka-console-consumer` reads back all 100.
+* **Automated:** `ProduceTest.a_record_with_no_key_reaches_the_topic` (jvm), with the broker side
+  checked by `ci/b-06/run.sh`.
 
 ### Scenario: Records with the same key land on one partition
 * **Given:** a producer against the test broker.
 * **When:** 50 records with the key `k` are sent.
 * **Then:** every returned `RecordMetadata` names the same partition, and that partition's end
   offset has grown by exactly 50.
+* **Automated:** `ProduceTest.records_with_the_same_key_land_on_one_partition` (jvm).
 
 ### Scenario: Both actuals choose the same partition for the same key
 * **Given:** the same 200 keys.
@@ -57,27 +60,36 @@ Every one is **target**: nothing is built.
 * **Given:** the test broker with auto-creation off.
 * **When:** a record is sent to a topic that does not exist.
 * **Then:** `send` throws, and the message names the topic.
+* **Automated:** `ProduceTest.a_topic_that_does_not_exist_is_an_error_not_a_silence` (jvm).
 
 ### Scenario: A value is bytes, not text
 * **Given:** a value that is not valid UTF-8.
 * **When:** it is sent and read back by an independent consumer.
 * **Then:** the bytes read are identical to the bytes sent.
 
-### Scenario: acks reaches the broker
-* **Given:** a producer configured with an `acks` value the broker must refuse.
+### Scenario: acks reaches the broker and is honoured
+* **Given:** a topic whose `min.insync.replicas` exceeds the in-sync set, and a producer with
+  `acks=all`.
 * **When:** a record is sent.
-* **Then:** `send` throws carrying the broker's own refusal text.
-* *Without this, a producer whose `acks` was silently dropped is indistinguishable from one that
-  honoured it.*
+* **Then:** `send` throws carrying the broker's own refusal, naming the replicas.
+* **And** the same topic accepts a record at `acks=1`, so the refusal was about `acks` and not about
+  the topic being unusable.
+* **Automated:** `ProduceTest.acks_reaches_the_broker_and_is_honoured` (jvm).
+* *An **invalid** value would prove nothing: `kafka-clients` refuses `acks=99` at construction,
+  before any broker sees it (B-06). The probe has to be a valid value the broker cannot satisfy.*
 
 ## 4. Quirks
 
 - **The offsets are the oracle, never this library's own consumer.** A producer checked by its own
   consumer can be wrong in both directions at once
   ([test-broker](../services/test-broker.md)).
-- **`acks` must be shown reaching the broker.** A producer whose `acks` was silently dropped behaves
-  identically to one that honoured it, until something goes wrong. The suite sends a value the
-  broker must refuse and watches it refuse.
+- **`acks` must be shown reaching the broker**, and an invalid value does not show it. A producer
+  whose `acks` was silently dropped behaves identically to one that honoured it until something goes
+  wrong — but `kafka-clients` rejects an invalid value at construction, so nothing is sent and
+  nothing is proved. The suite uses a *valid* value the broker cannot satisfy.
+- **The two arms refuse a bad configuration value in different places.** The JVM client validates at
+  construction; librdkafka accepts and lets the broker decide. The contract promises only that it
+  fails, and says so.
 
 ## 5. Code anchors
 

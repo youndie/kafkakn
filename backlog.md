@@ -31,11 +31,10 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (9)
+## Open (8)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-06](docs/backlog/B-06-jvm-actual.md) `[~]` | The JVM actual over kafka-clients | P0 | M | B-05 |
 | [B-07](docs/backlog/B-07-native-actual.md) `[ ]` | The native actual: produce and delivery reports across the callback seam | P0 | L | B-03, B-06 |
 | [B-08](docs/backlog/B-08-suspend-on-backpressure.md) `[ ]` | Suspend on backpressure instead of failing | P0 | M | B-07 |
 | [B-09](docs/backlog/B-09-accounting.md) `[ ]` | Account for every record the caller handed in | P0 | S | B-08 |
@@ -45,7 +44,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (5)
+## Closed (6)
 
 **It builds, and a test can fail**
 
@@ -54,6 +53,10 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 - [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[x]` - The C bundle, built against glibc 2.17, consumed by cinterop
 - [B-04](docs/backlog/B-04-broker-fixture.md) `[x]` - The broker fixture: KRaft, three partitions, auto-create off
 - [B-05](docs/backlog/B-05-differential-harness.md) `[x]` - The differential harness: one suite, both actuals, one broker
+
+**It produces, and loses nothing**
+
+- [B-06](docs/backlog/B-06-jvm-actual.md) `[x]` - The JVM actual over kafka-clients
 
 <!-- END INDEX -->
 

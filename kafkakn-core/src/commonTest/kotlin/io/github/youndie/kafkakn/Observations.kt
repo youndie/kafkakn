@@ -21,3 +21,12 @@ internal expect fun recordObservation(key: String, value: String)
 
 /** The arm this test is running on, as it names itself in the observation file. */
 internal expect val armName: String
+
+/** One environment variable, read the same way on both arms. */
+internal expect fun testEnv(name: String): String?
+
+/** Where the suite's broker is. The harness always sets it; the default is for a local run. */
+internal val bootstrap: String get() = testEnv("KAFKAKN_BOOTSTRAP") ?: "127.0.0.1:9092"
+
+/** The topic the harness created. Never auto-created: the broker has auto-creation off. */
+internal val testTopic: String get() = testEnv("KAFKAKN_TOPIC") ?: "kafkakn"

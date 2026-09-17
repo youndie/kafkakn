@@ -48,6 +48,16 @@ case "${1:-}" in
         --partitions "$PARTITIONS" --replication-factor 1 >/dev/null 2>&1
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$2" 2>/dev/null
     ;;
+  strict-topic)
+    # min.insync.replicas=2 on a single-broker cluster: a valid `acks=all` is then refused by the
+    # BROKER with NOT_ENOUGH_REPLICAS, while acks=1 succeeds. That is what proves the setting
+    # travels - an invalid value proves nothing, because the JVM client refuses it locally before
+    # any broker sees it (B-06).
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" \
+        --create --if-not-exists --topic "$2" --partitions 1 --replication-factor 1 \
+        --config min.insync.replicas=2 >/dev/null 2>&1
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$2" 2>/dev/null
+    ;;
   offsets)
     # The summed end offsets of every partition: the oracle for "how many records actually landed".
     kc /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server "$BOOTSTRAP" --topic "$2" 2>/dev/null \
