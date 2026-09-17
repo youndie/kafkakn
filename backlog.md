@@ -31,16 +31,15 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (4)
+## Open (3)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-11](docs/backlog/B-11-tls.md) `[~]` | TLS on both arms | P1 | M | B-07 |
 | [B-12](docs/backlog/B-12-publish-snapshots.md) `[ ]` | Publish snapshots to reposilite | P1 | S | B-09 |
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (10)
+## Closed (11)
 
 **It builds, and a test can fail**
 
@@ -57,6 +56,10 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 - [B-07](docs/backlog/B-07-native-actual.md) `[x]` - The native actual: produce and delivery reports across the callback seam
 - [B-08](docs/backlog/B-08-suspend-on-backpressure.md) `[x]` - Suspend on backpressure instead of failing
 - [B-09](docs/backlog/B-09-accounting.md) `[x]` - Account for every record the caller handed in
+
+**Usable against a real deployment**
+
+- [B-11](docs/backlog/B-11-tls.md) `[x]` - TLS on both arms
 
 <!-- END INDEX -->
 

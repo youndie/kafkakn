@@ -354,6 +354,53 @@ only one arm can run leaves the other arm's guard unproven.
 against one broker in one pass, so a shared topic would add their two counts into a single number no
 assertion could attribute, and a reused topic makes the delta somebody else's.
 
+### 2.8 A fresh topic configuration silently dropped every topic-level property
+
+[B-11](../backlog/B-11-tls.md), measured 2026-09-17. The native arm created its topic handles with
+`rd_kafka_topic_conf_new()` and set only the partitioner on them. In librdkafka a **topic**
+configuration built that way starts from the defaults and inherits nothing from the global `conf`,
+so every topic-level property the caller had set went nowhere: `message.timeout.ms`, `acks`,
+`compression.codec`, `request.required.acks`.
+
+**It was invisible because the default agreed with the test.** librdkafka's default for
+`request.required.acks` is `-1`, which is `acks=all`, so the suite's `acks=all` assertions passed
+while the value never left the global configuration. What exposed it was a TLS test asking to fail
+in twenty seconds and hanging for a minute: `message.timeout.ms=20000` was being dropped and the
+default of five minutes applied instead.
+
+**The fix is to stop building one.** Every property goes on the global `conf`, where librdkafka
+applies topic-level ones to the default topic configuration it creates implicitly, and the topics
+are opened with `rd_kafka_topic_new(handle, name, NULL)` so that configuration is the one in force.
+The partitioner default rides along with the rest.
+
+**Consequence beyond the bug.** A configuration key that is accepted and dropped is the exact shape
+this project refuses everywhere else, and it was inside the library for four items. The refusal path
+was well guarded — an unknown key throws on both arms — and the silent path was not guarded at all,
+because it never looked like a key being refused.
+
+### 2.9 librdkafka's last error is the one that explains least
+
+`_ALL_BROKERS_DOWN` arrives after the error that caused it, and it is a summary: librdkafka's own
+header calls it informational and says not to treat it as fatal. A producer that keeps "the last
+error" therefore reports `Local: All broker connections are down: 1/1 brokers are down` for a
+certificate that cannot be verified, a port with nothing on it, and a broker that is genuinely
+down — the three cases a caller most needs to tell apart.
+
+Keeping the last error that is **not** that code gives, for the same failure:
+
+> `Local: SSL error: ssl://127.0.0.1:9094/bootstrap: SSL handshake failed: ... certificate verify
+> failed: broker certificate could not be verified, verify that ssl.ca.location is correctly
+> configured or root CA certificates are installed (install ca-certificates package)`
+
+**Consequence.** The error callback is not optional machinery for a producer over librdkafka. A
+record bound for a broker it cannot reach comes back as `Local: Message timed out` whatever the
+reason was, and the reason exists only on that callback.
+
+**Known limitation.** The slot is one per process: a `staticCFunction` captures nothing, so there is
+nowhere per-producer to write. It is cleared when a producer is constructed. Per-producer
+attribution means handing each producer's identity through `rd_kafka_conf_set_opaque` and keeping a
+second registry — the shape of the fix, if two producers ever fail at once here.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement

@@ -72,6 +72,23 @@ read as a success rate, which is precisely the number that reported complete suc
 records of 1 000 000 had never been queued. The reconciliation lives in the suite, against the
 broker's end offsets ([B-09](../backlog/B-09-accounting.md)).
 
+### TLS
+
+| Key | Meaning | On native | On the JVM |
+|---|---|---|---|
+| `security.protocol=SSL` | verbatim, both arms | librdkafka's own key | the Java client's own key |
+| `ssl.ca.location` | path to a PEM certificate authority | librdkafka's own key | translated to `ssl.truststore.location` + `ssl.truststore.type=PEM` |
+
+Certificate verification is **on** and this contract offers nothing that turns it off. librdkafka's
+`enable.ssl.certificate.verification` is still reachable as a raw key for whoever insists; what is
+refused is a named convenience pointing at it, because a library that offers one gets it used in
+production.
+
+A peer that cannot be verified makes `send` throw, and the message **names the certificate**. That
+is not free on the native side: the record is only enqueued, so it comes back as `Local: Message
+timed out` like any other unreachable broker, and the sentence that explains it arrived on the error
+callback ([research §2.9](../research/research-architecture.md)).
+
 ### `flush`
 
 Returns when every record handed to `send` on this producer has been acknowledged or has failed.
