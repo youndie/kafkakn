@@ -50,4 +50,32 @@ The contract sentence covers both, and a reader will assume the harder one
 - **Out of M2's budget**, and filed rather than started: M2 bought three days and RQ-A spent them. It
   is written down because a limitation a measurement discovered about itself is exactly the thing that
   is otherwise remembered as a green.
-- Anchors: `ci/b-19/run.sh`, `docs/research/research-architecture.md`, `docs/api/producer-contract.md`.
+- Anchors: `ci/b-23/run.sh`, `ci/b-19/run.sh`, `docs/research/research-architecture.md`,
+  `docs/api/producer-contract.md`.
+
+## Pre-registered, before any round ran
+
+The item's first criterion asks for the classification to be fixed in advance, so it is written here
+and in `ci/b-23/run.sh`'s header, and **the classifier is a line the service prints at the time**
+rather than a reading taken afterwards. `QueuedEventSink` announces each event id immediately before
+it hands the record to the producer; everything else follows from that line existing or not.
+
+| column | what it means | whose question |
+|---|---|---|
+| `producer` | the process **asked** the producer for it — the log says so — and it never arrived, and nothing reported it refused | **kafkakn's.** The rounds are judged on this number |
+| `outbox` | accepted, queued, and the process stopped before the producer was ever asked | **not this library's.** Whether a service should record its intent and reconcile later is a real question and a different one |
+| `refused` | the `send` threw | neither: the contract says *acknowledged, or its `send` throws*, so this is a legitimate non-delivery in both arms |
+
+**Why the split has to be pre-registered.** Both losses look identical from the outside — a row in
+`events` with nothing on the topic behind it. A run that decided afterwards which pile each belonged
+to could report an outbox defect as a producer defect, or the reverse, and either way the number
+would be an opinion. The green condition is `producer = 0`; `outbox` is reported next to it and kept
+out of the verdict on purpose.
+
+**The publisher is the same one B-19 used**, with one arm added rather than replaced:
+`XYK_KAFKA_QUEUE` is `0` in the shipping configuration, which is exactly the sink B-19 measured, and
+above zero it is a measurement arm in the same sense as that service's `xyk.outbound=noop`. Its own
+suite asserts the three properties a run through it depends on: `publish` returns while the delegate
+is still working, `close` drains rather than discards, and every record is announced **before** the
+delegate is asked — that last one is the classifier itself, and if it were announced afterwards a
+record the process stopped in the middle of would look like one it had never reached.
