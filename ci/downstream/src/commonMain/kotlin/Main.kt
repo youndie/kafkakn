@@ -5,7 +5,7 @@ import io.github.youndie.kafkakn.kafkaProducer
 import kotlinx.coroutines.runBlocking
 
 /**
- * The smallest thing that is honestly a consumer: it produces, with headers, and prints where each
+ * The smallest thing that is honestly a downstream build: it produces, with headers, and prints where each
  * record landed.
  *
  * It exists to fail. Nothing here is a product, and nothing found by running it is fixed here — a
@@ -15,7 +15,7 @@ import kotlinx.coroutines.runBlocking
 fun main(args: Array<String>) = runBlocking {
     val bootstrap = args.getOrElse(0) { "127.0.0.1:9092" }
     val topic = args.getOrElse(1) { "kafkakn" }
-    val stamp = args.getOrElse(2) { "consumer" }
+    val stamp = args.getOrElse(2) { "downstream" }
     val count = args.getOrElse(3) { "50" }.toInt()
 
     val producer = kafkaProducer(

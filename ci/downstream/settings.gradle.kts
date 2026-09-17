@@ -6,7 +6,7 @@
 //
 // What it knows is what a stranger knows: a coordinate and a repository URL.
 
-rootProject.name = "kafkakn-consumer"
+rootProject.name = "kafkakn-downstream"
 
 pluginManagement {
     repositories {
@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     repositories {
         // NO mavenLocal, and no project dependency. `~/.m2` is shared with every build on this
         // machine; resolving from it would prove the machine rather than the publication.
-        // The URL is a parameter so the same consumer can be aimed at a CANDIDATE publication
+        // The URL is a parameter so the same build can be aimed at a CANDIDATE publication
         // before it goes out - a repository on disk holds the same bytes the server will. Defaults
         // to the real one, which is what a stranger would use.
         maven(providers.gradleProperty("kafkakn.repo").getOrElse("https://reposilite.kotlin.website/snapshots")) {

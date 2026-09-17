@@ -25,7 +25,7 @@ val where = producer.send(
 producer.close()
 ```
 
-Something very close to that is [`ci/consumer`](ci/consumer/src/commonMain/kotlin/Main.kt), which is
+Something very close to that is [`ci/downstream`](ci/downstream/src/commonMain/kotlin/Main.kt), which is
 a build of its own: it resolves the published artefact from the network, links a native binary and
 runs it, and an independent reader counts what arrived.
 
@@ -83,7 +83,7 @@ arriving, and that price is not this library's.
 ### What the native artefact requires
 
 Measured 2026-09-17 by [`ci/b-16/run.sh`](ci/b-16/run.sh), on the binary a downstream build
-(`ci/consumer`) links against one built the same way with the dependency removed — not on this
+(`ci/downstream`) links against one built the same way with the dependency removed — not on this
 repository's own test binary, which was once linked with options no stranger had.
 
 - **Shared libraries: the same set, exactly.** `linux-vdso`, the loader, `libc`, `libcrypt`, `libdl`,
@@ -174,7 +174,7 @@ make check              # the documents
 ```
 
 Both run in CI. The suite itself needs the C bundle and a broker and runs on a Linux box — each
-item's `ci/b-NN/run.sh` is what runs it, and `ci/consumer` is a build outside this one that resolves
+item's `ci/b-NN/run.sh` is what runs it, and `ci/downstream` is a build outside this one that resolves
 the published artefact and runs it.
 
 ## License
