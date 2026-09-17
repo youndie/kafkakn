@@ -1,7 +1,7 @@
 ---
 id: B-13
 title: "Acceptance from outside: a consumer project that uses the published artefact"
-status: open
+status: wip
 priority: P1
 size: M
 stage: stage-3-usable-by-others
@@ -20,7 +20,7 @@ and produces to a broker. On both targets.
   version catalogue and the source set — three of the things that break on publication.
 - Not covered: anything that would make the consumer a product. It exists to fail.
 
-- AC: the consumer resolves `io.github.youndie:kafkakn-core` from reposilite with a **cold** Gradle
+- AC: the consumer resolves `io.github.youndie.kafkakn:kafkakn-core` from reposilite with a **cold** Gradle
   cache, builds for `jvm` and `linuxX64`, and produces records an independent reader can see.
 - AC: the native consumer's binary is **linked and run**, not merely compiled — the point is that a
   downstream link with our cinterop archives works.

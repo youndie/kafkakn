@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
+| [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[~]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 
 ## Closed (13)
 
