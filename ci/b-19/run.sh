@@ -37,6 +37,12 @@ HOOK=rq-a
 STREAM_SECONDS=${STREAM_SECONDS:-40}
 CONCURRENCY=${CONCURRENCY:-8}
 CONTAINER=kafkakn-broker
+# HOW DEEP THE QUEUE IN FRONT OF THE PRODUCER IS, and zero is what B-19 measured: no queue, the
+# publish happens inside the request and returns when the broker has acknowledged. Above zero the
+# publisher hands the record over and returns, which is the only shape in which `close` has anything
+# to flush - kafkakn's B-23, and `ci/b-23/run.sh` is the wrapper that sets it.
+QUEUE=${QUEUE:-0}
+TAG=${TAG:-rq-a}
 # A TOPIC NAME THAT CANNOT BE REUSED BETWEEN RUNS. The first version named topics after the round
 # alone, so the second run of the harness read the first run's records back and reported 2 612
 # records with no row behind them — a finding that was entirely the harness's own doing.
@@ -61,7 +67,7 @@ wait_for_ready() {
 # broker is still there when the signal arrives.
 round() {
     local label=$1 mode=$2 port=$3
-    local topic="xyk-rq-a-$RUN-$label"
+    local topic="xyk-$TAG-$RUN-$label"
     local db="$WORK/$label.db"
     local log="$WORK/$label.log"
     local gen="$WORK/$label.gen"
@@ -78,6 +84,7 @@ round() {
     XYK_BOOTSTRAP_SECRET=unused-by-the-none-scheme \
     XYK_KAFKA_BOOTSTRAP_SERVERS="$BOOTSTRAP" \
     XYK_KAFKA_TOPIC="$topic" \
+    XYK_KAFKA_QUEUE="$QUEUE" \
         "$BIN" > "$log" 2>&1 &
     local pid=$!
 
@@ -134,6 +141,15 @@ round() {
     local rows records missing extra refused silent deadline drain release
     rows=$(wc -l < "$WORK/$label.rows")
     records=$(wc -l < "$WORK/$label.keys")
+
+    # THE VACUITY GUARD, PER ROUND. Everything below compares two sets, and an empty left-hand side
+    # makes every comparison come out clean: no rows, nothing missing, nothing to answer for. The
+    # service answered requests in this round, so rows there must be.
+    if [ "$rows" -eq 0 ]; then
+        say "  $label: the database holds NO accepted events, so the reconciliation compares nothing."
+        say "          The generator saw: $(cat "$gen" 2>/dev/null)"
+        return 1
+    fi
     comm -23 "$WORK/$label.rows" "$WORK/$label.keys" > "$WORK/$label.missing"
     comm -13 "$WORK/$label.rows" "$WORK/$label.keys" > "$WORK/$label.extra"
     missing=$(wc -l < "$WORK/$label.missing")
@@ -148,6 +164,25 @@ round() {
     comm -23 "$WORK/$label.missing" "$WORK/$label.refused" > "$WORK/$label.silent"
     silent=$(wc -l < "$WORK/$label.silent")
 
+    # WHICH SIDE OF THE LINE EACH SILENT LOSS FALLS ON, and it is decided by a line the service
+    # printed at the time rather than by reading the number afterwards. With a queue in front of the
+    # producer there are two different losses wearing one shape: a record the producer was asked for
+    # and did not deliver, and a record the process stopped before ever asking about. The second is an
+    # OUTBOX question - should a service record its intent and reconcile later - and it is not about
+    # this library. With `QUEUE=0` nothing is ever queued, so `never_asked` is zero by construction
+    # and the column says so rather than being absent.
+    grep -o 'kafka queue asked [0-9a-f]*' "$log" | awk '{ print $4 }' | sort -u > "$WORK/$label.asked"
+    if [ "$QUEUE" -eq 0 ]; then
+        cp "$WORK/$label.silent" "$WORK/$label.lost_in_producer"
+        : > "$WORK/$label.never_asked"
+    else
+        comm -12 "$WORK/$label.silent" "$WORK/$label.asked" > "$WORK/$label.lost_in_producer"
+        comm -23 "$WORK/$label.silent" "$WORK/$label.asked" > "$WORK/$label.never_asked"
+    fi
+    local producer_lost never_asked
+    producer_lost=$(wc -l < "$WORK/$label.lost_in_producer")
+    never_asked=$(wc -l < "$WORK/$label.never_asked")
+
     # The word kore prints when a stage runs past its deadline. It is spelled the same way in the
     # transcript that this harness has watched happen, which is the only reason this line is not a
     # check that can never fire.
@@ -156,9 +191,9 @@ round() {
     drain=$(awk '/^DRAIN /{ print $4 }' "$log" | tail -1)
     release=$(awk '/^RELEASE_CONSUMERS /{ print $4 }' "$log" | tail -1)
 
-    printf '%-10s rows=%-6s records=%-6s missing=%-5s silent=%-5s extra=%-4s refused=%-4s stop=%-7s exit=%s %s drain=%s release=%s\n' \
-        "$label" "$rows" "$records" "$missing" "$silent" "$extra" "$refused" "${seconds}s" "$code" \
-        "$deadline" "${drain:--}" "${release:--}"
+    printf '%-10s rows=%-6s records=%-6s missing=%-5s producer=%-5s outbox=%-5s extra=%-4s refused=%-4s stop=%-7s exit=%s %s drain=%s release=%s\n' \
+        "$label" "$rows" "$records" "$missing" "$producer_lost" "$never_asked" "$extra" "$refused" \
+        "${seconds}s" "$code" "$deadline" "${drain:--}" "${release:--}"
 
     # TWO DIFFERENT VERDICTS, ON PURPOSE. An ordinary round is judged on `silent`, because a `send`
     # that throws is a non-delivery the contract allows and the service named out loud. The control is
@@ -168,14 +203,35 @@ round() {
     if [ "$mode" = control ]; then
         echo "$missing" > "$WORK/$label.verdict"
     else
-        echo "$silent" > "$WORK/$label.verdict"
+        # `producer`, not `silent`: with a queue, a record the process never asked the producer about
+        # is an outbox loss, and counting it here would report an outbox defect as a kafkakn one. It
+        # is not hidden - it has its own column and its own line in the summary.
+        echo "$producer_lost" > "$WORK/$label.verdict"
     fi
     return 0
 }
 
-say "RQ-A: close() inside a real ordered shutdown - $ROUNDS rounds plus one positive control"
+if [ "$QUEUE" -eq 0 ]; then
+    say "RQ-A: close() inside a real ordered shutdown - $ROUNDS rounds plus one positive control"
+    say "  the publisher awaits the broker inside the request: nothing is ever outstanding at close"
+else
+    say "RQ-A, queued arm: $ROUNDS rounds plus one positive control, queue $QUEUE deep"
+    say "  the publisher returns before the acknowledgement, so close() has something to flush"
+fi
 rm -rf "$WORK"
 mkdir -p "$WORK"
+
+# THE READING TOOLS, BEFORE ANYTHING IS MEASURED. `sqlite3` is not on PATH in a non-interactive
+# shell on this machine, and the first detached run of this harness found that out the expensive way:
+# the per-round read failed silently, every round reported `rows=0`, and every round therefore
+# reported `missing=0`. A reconciliation that cannot find one of its two sides is not green, it is
+# blind - and it looked exactly like green.
+for tool in sqlite3 docker curl python3; do
+    command -v "$tool" >/dev/null || {
+        say "  $tool is not on PATH - this harness reads its answers with it, so it will not start"
+        exit 1
+    }
+done
 
 bash "$BROKER" up || exit 1
 # The fixture has to be able to say no before anything it says yes to is worth reading.
@@ -197,10 +253,16 @@ round control control "$(( PORT + ROUNDS + 1 ))"
 say ""
 say "SUMMARY"
 lost=0
+outbox=0
 for f in "$WORK"/round-*.verdict; do
     [ -e "$f" ] || continue
     lost=$(( lost + $(cat "$f") ))
 done
+for f in "$WORK"/round-*.never_asked; do
+    [ -e "$f" ] || continue
+    outbox=$(( outbox + $(wc -l < "$f") ))
+done
 control=$(cat "$WORK/control.verdict" 2>/dev/null || echo "-")
-say "  accepted, missing from the topic, and nothing said about it - the ordinary rounds: $lost"
+say "  asked of the producer, missing, and nothing said about it - the ordinary rounds: $lost"
+say "  accepted but never asked of the producer - an OUTBOX question, not this library's: $outbox"
 say "  the positive control saw missing: $control  (a control that saw nothing invalidates the rounds above)"

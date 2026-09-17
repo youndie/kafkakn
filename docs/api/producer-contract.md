@@ -146,15 +146,23 @@ Implemented natively as `rd_kafka_outq_len` reaching zero, **not** as the return
 Flushes, then releases. A record accepted by `send` before `close` is either acknowledged or its
 `send` throws; `close` does not discard silently.
 
-**Measured 2026-09-17, and only half of that sentence has been.** Twenty `SIGTERM`s at unplanned
-moments inside a real service's ordered shutdown — 91 149 accepted events, none missing from the
-topic ([research §2.14](../research/research-architecture.md)). That publisher awaits the broker's
-acknowledgement inside each request, so nothing was ever outstanding when `close` ran: what the
-rounds show is that an ordered shutdown does not cut a request mid-`send`. The other half — `close`
-answering for records already queued when the signal arrives — needs a caller that returns before the
-acknowledgement, and is [B-23](../backlog/B-23-the-sink-that-does-not-wait.md). The distinction is
-written here rather than left to the reader, because this sentence covers both shapes and the harder
-one is the one a reader assumes.
+**Measured 2026-09-17, both halves of it.** Twenty `SIGTERM`s at unplanned moments inside a real
+service's ordered shutdown, through each of the two shapes a caller can have:
+
+* the publisher that **awaits the acknowledgement inside the request** — 91 149 accepted events, none
+  missing ([research §2.14](../research/research-architecture.md)). Nothing is ever outstanding when
+  `close` runs, so what those rounds show is that an ordered shutdown does not cut a request
+  mid-`send`;
+* the publisher whose **`publish` returns first**, with a queue in front of the producer — 17 644
+  accepted, none missing, and this is the shape in which `close` has records of its own to flush
+  ([§2.17](../research/research-architecture.md), [B-23](../backlog/B-23-the-sink-that-does-not-wait.md)).
+
+**What the second run also establishes is where this promise stops.** With the broker gone, its
+control lost 129 records: **one** the producer had been asked for, and **127 that the service was
+still holding and had not handed over** when its shutdown deadlines expired. The second number is not
+about this contract — a record `send` was never called for is the caller's, and whether a service
+should write its intent and reconcile later is an outbox question. The distinction is written here
+because the sentence above covers both shapes and a reader will assume the harder one.
 
 ## Configuration
 

@@ -76,14 +76,13 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (2)
+## Open (1)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[?]` | REFUTED: the accounting guard does not time out — it was run without its fixture | P1 | S | - |
-| [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
-## Closed (22)
+## Closed (23)
 
 **It builds, and a test can fail**
 
@@ -121,6 +120,7 @@ verdict.
 - [B-19](docs/backlog/B-19-close-under-a-real-shutdown.md) `[x]` - RQ-A: does close() keep its promise inside a real ordered shutdown?
 - [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[x]` - RQ-C: does the artefact resolve and link on a machine that has never seen this repository?
 - [B-21](docs/backlog/B-21-does-anyone-want-this.md) `[-]` - RQ-B: does anyone outside this portfolio want it?
+- [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[x]` - The publish that returns before the acknowledgement — the shape RQ-A could not reach
 
 <!-- END INDEX -->
 

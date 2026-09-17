@@ -678,6 +678,54 @@ offset** — its context was written against a slightly different neighbourhood.
 is no longer swallowed by the bundle build, because "succeeded with fuzz 1" is how a patch says its
 context has begun to drift, long before it becomes one of the three refusals.
 
+### 2.17 The other half of `close`, measured — and the control is where the answer is
+
+[§2.14](#214-rq-a-measured-the-shutdown-order-held-and-what-that-green-does-not-cover) ended by
+naming what its twenty rounds did not cover: the publisher awaited the acknowledgement inside the
+request, so a record was either inside somebody's `send` or finished, never sitting in the producer
+with its `send` already returned — which is the state `close` exists to answer for.
+[B-23](../backlog/B-23-the-sink-that-does-not-wait.md) is the same harness with a bounded queue in
+front of the producer: `publish` hands the record over and returns, a coroutine of the sink's own
+calls `send`, and `close` drains what is queued.
+
+**Two kinds of loss become possible, and they wear one shape from outside** — a row in the service's
+table with nothing on the topic behind it. So the classification was fixed **before the run**, and
+the classifier is a line the service prints at the time rather than a reading taken afterwards: the
+sink announces every event id immediately before it asks the producer.
+
+**Measured 2026-09-17**, `ci/b-23/run.sh`, 64-deep queue, 64 concurrent senders, on a machine
+restarted minutes earlier:
+
+| | 20 rounds | the control (broker stopped before the signal) |
+|---|---|---|
+| accepted | **17 644** (525–1 266 per round) | 1 259 |
+| asked of the producer and lost | **0** | **1** |
+| accepted, queued, never asked | **0** | **127** |
+| refused (`send` threw) | 0 | 1 |
+| shutdown | 2.26 s, drain 12–40 ms | **15.07 s, DEADLINE_EXCEEDED** |
+
+**The green is the smaller half of the result.** What the control says is the part worth keeping:
+with the broker gone, the drain stage ran to exactly **10.000 s** and the release stage to exactly
+**3.000 s** — both their deadlines — kore cut them, and the **127 records still in the queue were
+never handed to the producer at all**. One record was in the producer and lost; one `send` threw.
+
+Without the split, that control reads *"129 records lost"* and the number gets attributed to this
+library. **Two of the 129 are about the producer. The other 127 are an outbox question** — whether a
+service should write its intent and reconcile later — and they are not about kafkakn at all. That
+distinction is the whole reason the item insisted the classification be pre-registered; decided
+afterwards, it would have been an opinion.
+
+**What the queued shape costs, unasked but visible.** The same harness at the same concurrency
+accepted **17 644** events across twenty rounds against §2.14's **130 681**: a single consumer in
+front of the producer serialises what was 64 concurrent `send`s, so the service's own throughput
+falls by roughly 7×. That is a property of the shape, not of the library — and it is the trade a
+service makes when it decides a webhook's `200` must not wait for Kafka.
+
+**Consequence for the contract.** Both halves of the `close` sentence have now been exercised: a
+record the producer holds when the signal arrives is flushed (twenty rounds, zero lost), and a record
+the *service* holds and has not yet handed over is the service's problem, which the contract never
+claimed otherwise but which nothing had ever separated before.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
