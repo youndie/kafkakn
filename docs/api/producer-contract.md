@@ -65,6 +65,13 @@ This is the whole point of [feature-backpressure-and-accounting](../features/fea
 The native implementation of it is not obvious — the underlying `rd_kafka_produce` has exactly the
 third outcome this contract forbids — and that is why the contract is written down before the code.
 
+**No member of this surface counts deliveries**, and that is a gate rather than a habit:
+`scripts/no_delivery_counters.py` fails the build on a declaration in `commonMain` whose name pairs
+a delivery word with a quantity word. A `sentCount` would be truthful about what was enqueued and
+read as a success rate, which is precisely the number that reported complete success while 264 826
+records of 1 000 000 had never been queued. The reconciliation lives in the suite, against the
+broker's end offsets ([B-09](../backlog/B-09-accounting.md)).
+
 ### `flush`
 
 Returns when every record handed to `send` on this producer has been acknowledged or has failed.

@@ -32,7 +32,7 @@ backpressure, and the contract says `send` suspends
 - AC: cancelling a suspended `send` does not leave the record queued.
 - AC: **H4 settled in writing** — whether the suspending shape costs throughput against the blocking
   one, measured as a ratio on one host with the spread beside it, or recorded as not measured.
-- Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/NativeProducer.kt`,
+- Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/BackpressureTest.kt`.
 
 ---

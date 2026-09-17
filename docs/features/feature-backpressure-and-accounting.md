@@ -23,7 +23,9 @@ native library makes that outcome the easy one to build by accident: a measured 
 **264 826 of 1 000 000** records with every indicator green
 ([research §1.4](../research/research-architecture.md)).
 
-**`status: draft`: nothing here is built.** Every scenario is *target*.
+**Built and measured**, except where a scenario below says ***target***. The accounting is checked
+against the broker's end offsets, and the check has been watched failing against a producer that
+drops records ([research §2.7](../research/research-architecture.md)).
 
 ## 2. Business rules
 
@@ -38,18 +40,20 @@ native library makes that outcome the easy one to build by accident: a measured 
 
 ## 3. Scenarios (BDD / test cases)
 
-Every one is **target**: nothing is built.
-
 ### Scenario: Producing past the queue bound loses nothing
 * **Given:** a producer whose queue bound is lowered to 1 000 records, and a broker slow enough that
   the queue fills.
 * **When:** 100 000 records are sent.
 * **Then:** every `send` returns normally or throws, and the topic's end offsets have grown by
   exactly 100 000.
-* **Automated:** `BackpressureTest.producing_past_the_queue_bound_loses_nothing` on both arms, with
-  the broker side checked by `ci/b-08/run.sh`. Run at 3 000 records against a queue bound of 100,
-  which overruns it many times over and finishes in a test.
-* *The assertion that would have caught the measured loss of 264 826 records.*
+* **Automated:** `AccountingTest.the_broker_holds_every_record_the_caller_handed_in` and
+  `BackpressureTest.producing_past_the_queue_bound_loses_nothing` on both arms, with the broker side
+  checked by `ci/b-09/run.sh` and `ci/b-08/run.sh`. Run at 3 000 records against a queue bound of
+  100, which overruns it many times over and finishes in a test.
+* *The assertion that would have caught the measured loss of 264 826 records.* The end offsets are
+  read by the script rather than asserted inside the test: a producer verified by a consumer of ours
+  could be wrong in both directions at once, and there is no consumer here to be wrong with.
+  Measured 2026-09-17: 3 000 handed in, end offsets 0 -> 3 000, on each arm.
 
 ### Scenario: A full queue suspends rather than failing
 * **Given:** a producer at its queue bound.
@@ -65,8 +69,22 @@ Every one is **target**: nothing is built.
 * **Given:** the same 100 000 records and the same queue bound.
 * **When:** they are produced by the JVM actual and by the native actual.
 * **Then:** both report the same number of successes, and the broker's end offsets agree with both.
+* **Automated:** `AccountingTest.the_broker_holds_every_record_the_caller_handed_in`, per arm on its
+  own topic, reconciled by `ci/b-09/run.sh`. Run at 3 000 records rather than 100 000.
 * *The JVM client blocks on `max.block.ms` and librdkafka refuses; the contract flattens both into
   "suspends", and this is where that flattening is checked.*
+
+### Scenario: The accounting is red when records are dropped
+* **Given:** the same test, and a producer that counts an enqueue refusal and moves on — answering
+  every `send` with a `RecordMetadata` for a record it never sent.
+* **When:** the run is repeated against it.
+* **Then:** the test fails on **both** arms, and the topic's end offsets are short by exactly the
+  number the dropping producer admits to.
+* **Automated:** the second pass of `ci/b-09/run.sh`, which fails if that pass is green. Measured
+  2026-09-17: 100 of 3 000 landed on the jvm arm, 103 on the native arm, shortfall equal to the
+  drops on both.
+* *A guard nobody has watched fail is a guard whose failure mode is unknown, and four checks in this
+  repository have passed while testing nothing.*
 
 ### Scenario: flush waits for the queue, not for a return code
 * **Given:** records in flight.
@@ -89,6 +107,13 @@ Every one is **target**: nothing is built.
 - **A small round trip cannot find any of this.** The queue bound is 100 000 records by default; a
   2 000-record test never reaches it. The bound is lowered in the suite so the case is reachable in
   a test that finishes.
+- **The accounting topic is fresh, and per arm.** The oracle is a delta on end offsets, and a delta
+  is only attributable while nothing else writes to the topic — both arms run against one broker in
+  one pass, so a shared topic would add their two counts into a number no assertion could check.
+- **The deliberately naive producer is a test-only wrapper, not a second binding.** It simulates the
+  refusal with a permit count, so it says nothing about librdkafka's refusal path; what it
+  reproduces is the condition the guard catches, identically on both arms
+  ([research §2.7](../research/research-architecture.md)).
 - **A record that was never queued produces no delivery report at all.** This is the mechanism that
   makes the loss invisible: the callback is correct, the count is correct, and the question they
   answer is the wrong one.
@@ -99,6 +124,10 @@ Every one is **target**: nothing is built.
 
 | What | Where |
 |---|---|
-| the suspending seam on the native side | `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/NativeProducer.kt` |
+| the suspending seam on the native side | `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt` |
 | the scenarios above | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/BackpressureTest.kt` |
+| the accounting against the broker | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/AccountingTest.kt` |
+| the producer that drops, so the guard can be seen failing | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/NaiveProducer.kt` |
+| the reconciliation against end offsets | `ci/b-09/run.sh` |
+| the surface may not offer a delivery count | `scripts/no_delivery_counters.py` |
 | the contract they hold both actuals to | [producer-contract](../api/producer-contract.md) |

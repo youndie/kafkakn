@@ -48,6 +48,12 @@ rm -rf "$OBS" "$RESULTS"
 KAFKAKN_ACCOUNTING_TOPIC=$PREFIX \
     ./gradlew --no-daemon --console=plain jvmTest linuxX64Test --rerun-tasks 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "SUITE FAILED - accounting cannot be read off a red run"; exit 1; }
+for arm in jvmTest linuxX64Test; do
+    t=$(grep -ho 'tests="[0-9]*"' "$RESULTS/$arm"/TEST-*.xml | grep -oE '[0-9]+' | paste -sd+ | bc)
+    f=$(grep -ho 'failures="[0-9]*"' "$RESULTS/$arm"/TEST-*.xml | grep -oE '[0-9]+' | paste -sd+ | bc)
+    printf '  %-14s tests=%-4s failures=%s\n' "$arm" "$t" "$f"
+    [ "$f" -eq 0 ] || exit 1
+done
 
 echo
 echo "=== the accounting: handed in, answered, and what the broker holds ==="
