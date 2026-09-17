@@ -69,6 +69,34 @@ platform's shape — and that is a finding for the research document, not someth
   version.** Several in the research document came from measurement here; the rest say where they
   came from.
 
+## The loop merges its own pull requests, but only on green
+
+An iteration that closes a backlog item opens its pull request **and** merges it (squash, the item
+id in the footer, branch deleted), then moves on. Without this the loop stalls after one or two
+items: statuses on `main` change only when a pull request merges, so every later item stays blocked
+on a blocker that still reads `open`.
+
+**It merges only when the checks have PASSED**, which is not the same statement as "the checks have
+finished". A run that is still queued, one that was cancelled, and one that never started all look
+alike from a distance, and this repository is public precisely so that its checks actually run —
+wait for `conclusion=success`, not for the absence of red.
+
+What does not change: the gate is green before the merge, an item is `done` only if its acceptance
+was exercised, and a `question` item waits for a person. A pull request opened by anything other
+than this loop — a dependency bot included — is not the loop's to merge.
+
+## Where the work runs
+
+`linuxX64` builds, the C bundle and the broker run on the Linux box through `wsl-run`; the mutagen
+session is named `kafkakn`. **Edits are made in this checkout on the Mac** — the Linux side is a
+one-way replica, so anything written there is erased on the next cycle, including build output,
+certificates and logs. A log that matters is captured on the Mac by redirecting the remote command,
+never written on the far side.
+
+Because the session exists, `git`, `make` and the documentation scripts in this repository need a
+`LOCAL=1` prefix: they belong on the Mac, and git on the replica is meaningless anyway — the session
+is `--ignore-vcs` and there is no `.git` over there.
+
 ## Checks
 
 ```bash
