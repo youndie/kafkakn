@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(wip.plugins.kotlinMultiplatform) apply false
 }
 
 // group and version come from gradle.properties, which Gradle applies to every project. Repeating

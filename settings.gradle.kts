@@ -6,18 +6,14 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
-
-        // Where this project PUBLISHES, declared here as well because the consumer acceptance in
-        // B-13 resolves from it. The content filter is not politeness: an unfiltered repository is
-        // asked about every dependency in the build, so an outage at this host would fail the
-        // resolution of Kotlin and coroutines too - measured in a sibling project, where an
-        // unreachable third-party repository broke the resolution of OUR artefact.
+        // Written out by hand, and it cannot be otherwise: `pluginManagement` is evaluated before
+        // any settings plugin is applied - including the one that is fetched through it.
         maven("https://reposilite.kotlin.website/snapshots") {
-            // The ACCOUNT's namespace, not this project's `io.github.youndie.kafkakn`, and
-            // deliberately: the filter exists to keep this host out of every other resolution, and
-            // a portfolio library added here later would otherwise need the filter widened at the
-            // same time as the dependency - two edits, one of which gets forgotten.
-            content { includeGroupAndSubgroups("io.github.youndie") }
+            name = "wip-snapshots"
+            // The filter is not politeness. An unfiltered repository is asked for EVERY coordinate
+            // the build resolves, which costs a round trip per miss and lets an unrelated group be
+            // answered by the wrong server.
+            content { includeGroupByRegex("io\\.github\\.youndie.*") }
         }
     }
 }
@@ -26,14 +22,20 @@ plugins {
     // Resolves a JDK for the toolchain rather than depending on whichever one happens to be on the
     // machine. The two arms must compile the same way on a laptop and on a build box.
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+
+    // The portfolio's settings half: the resolution repositories with their content filters, and
+    // the shared `wip` catalogue beside this repository's own `libs`.
+    //
+    // The MODULE conventions - `sborka.kmp`, `sborka.lint`, `sborka.publish` - are deliberately not
+    // taken here. They move the toolchain, the formatter and the whole publication block, and this
+    // repository's publication is what B-12 and B-15 just finished measuring. That is its own
+    // migration, with its own run of the acceptance.
+    id("io.github.youndie.sborka.settings") version "0.4.0.86"
 }
 
-dependencyResolutionManagement {
-    repositories {
-        // Maven Central is where this project READS from - Kotlin, coroutines, kafka-clients live
-        // nowhere else. "No Maven Central" is a statement about where this project PUBLISHES, which
-        // is reposilite and nothing else (research D7); the two are easy to confuse and this comment
-        // exists so nobody resolves the confusion by breaking the build.
-        mavenCentral()
-    }
-}
+// `dependencyResolutionManagement` belongs to the settings plugin now: Maven Central and the
+// snapshot repository - with the content filter this file used to spell out twice - are declared
+// there, once, for every repository in the portfolio.
+//
+// "No Maven Central" was always a statement about where this project PUBLISHES (research D7), never
+// about where it reads from. Kotlin, coroutines and kafka-clients live nowhere else.

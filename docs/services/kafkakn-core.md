@@ -82,6 +82,16 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
   `reposilite.kotlin.website/snapshots` and `ci/publish/verify-published.sh` compiles a separate
   build against them after every upload. An upload that returned 2xx is not a publication — a
   `.module` naming a variant that was never uploaded answers 200 just as well.
+- **Versions come from two catalogues.** `wip` is the portfolio's, brought in by the
+  `io.github.youndie.sborka.settings` plugin, and holds what more than one repository has to agree
+  on — Kotlin and coroutines. `libs` is this repository's own and holds what is nobody else's
+  business: `kafka-clients`, the broker image tag, and the librdkafka version that `ci/librdkafka`
+  reads. A klib published here carries metadata a build on another compiler version refuses, which
+  is why the compiler is the shared one rather than a number typed in this repository.
+
+  The **module** conventions (`sborka.kmp`, `sborka.lint`, `sborka.publish`) are deliberately not
+  taken: they move the toolchain, the formatter and the whole publication block, and the publication
+  is what B-12 and B-15 measured. That is its own migration with its own run of the acceptance.
 - The coordinate lives in `gradle.properties` and nowhere else. Gradle applies `group` and `version`
   to every project, so a module cannot publish under a different one by forgetting to set it.
 

@@ -2,9 +2,11 @@
 # a range makes "which version did that" unanswerable. What actually resolved is read off the
 # dependency tree in the run, because a catalogue states an intent and a build states a fact.
 
+# Kotlin and coroutines are NOT here: they are in the portfolio's shared `wip` catalogue, because a
+# klib this project publishes carries metadata that a build on another compiler version refuses.
+# What stays is what is this project's own and nobody else's business.
+
 [versions]
-kotlin = "2.4.20"
-coroutines = "1.11.0"
 # The JVM arm delegates to this, and it is the same release as the broker below - one variable fewer
 # in the differential suite.
 kafka-clients = "4.3.1"
@@ -15,9 +17,4 @@ librdkafka = "2.13.0"
 kafka-image = "apache/kafka:4.3.1"
 
 [libraries]
-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
-
-[plugins]
-kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
