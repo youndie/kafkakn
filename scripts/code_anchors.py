@@ -204,7 +204,15 @@ def load_trees(repos_root, skip=()):
     skip = {os.path.realpath(p) for p in skip}
     for name in sorted(os.listdir(repos_root)):
         path = os.path.join(repos_root, name)
-        if not os.path.isdir(path) or name.startswith(".") or name in IGNORED_DIRS:
+        # `.github` is the exception to the dot rule. Dot-directories are skipped because `.git`,
+        # `.gradle` and `.idea` are not code to resolve anchors against - but when `--repos` is the
+        # repository itself, its subdirectories ARE the trees, and `.github/workflows/*.yaml` is a
+        # path documents legitimately cite. Without this, an anchor at a file that plainly exists is
+        # reported rotten for ever, and a report with a permanent false entry is a report nobody
+        # reads.
+        if not os.path.isdir(path) or name in IGNORED_DIRS:
+            continue
+        if name.startswith(".") and name != ".github":
             continue
         if os.path.realpath(path) in skip:
             continue

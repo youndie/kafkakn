@@ -15,9 +15,30 @@ public class ProducerRecord(
     public val topic: String,
     public val value: ByteArray,
     public val key: ByteArray? = null,
+    public val headers: List<RecordHeader> = emptyList(),
 ) {
     override fun toString(): String =
-        "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=${value.size} bytes)"
+        "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=${value.size} bytes, " +
+            "headers=${headers.size})"
+}
+
+/**
+ * One header on a record: a name, and bytes that mean whatever the reader agrees they mean.
+ *
+ * **A list, not a map**, and that is Kafka's shape rather than a simplification of it. The protocol
+ * carries an ordered sequence in which **a name may appear more than once**, and a consumer reading
+ * `headers.lastHeader(name)` gets a different answer from one iterating them. Flattening that into a
+ * `Map<String, ByteArray>` would silently drop entries — for tracing baggage and schema identifiers,
+ * exactly the entries somebody put there on purpose.
+ *
+ * [value] is nullable because the protocol says so: a header may carry a null value, which is not
+ * the same as an empty one, and a consumer can tell them apart.
+ */
+public class RecordHeader(
+    public val name: String,
+    public val value: ByteArray?,
+) {
+    override fun toString(): String = "RecordHeader($name=${value?.size ?: "null"} bytes)"
 }
 
 /**

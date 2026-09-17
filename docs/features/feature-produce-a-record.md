@@ -70,6 +70,25 @@ Every one is **target**: nothing is built.
 * **When:** it is sent and read back by an independent consumer.
 * **Then:** the bytes read are identical to the bytes sent.
 
+### Scenario: Headers reach the broker with their bytes intact
+* **Given:** a record carrying `trace=1`, `schema=kafkakn.v1`, `trace=2` — a duplicate name, in that
+  order.
+* **When:** it is produced on either arm.
+* **Then:** an independent reader sees all three, in that order, with the same bytes.
+* **Automated:** `HeadersTest.headers_reach_the_broker_with_their_bytes_intact`, read back by
+  `ci/b-10/run.sh` with `kafka-console-consumer --property print.headers=true`; the two arms'
+  renderings are held against each other as well.
+* *Kafka's headers are an ordered sequence in which a name may repeat. A client that stored them in
+  a map would answer this with two entries instead of three, and a consumer reading `lastHeader`
+  would get a different value from one that iterates.*
+
+### Scenario: A header with no value is not a header with an empty one
+* **Given:** a record with `absent` carrying no value and `empty` carrying zero bytes.
+* **When:** it is produced on either arm.
+* **Then:** the two remain distinguishable to a reader.
+* **Automated:** `HeadersTest.a_header_with_no_value_is_not_a_header_with_an_empty_one`; the script
+  asserts that the two render **differently**, rather than asserting how either one renders.
+
 ### Scenario: acks reaches the broker and is honoured
 * **Given:** a topic whose `min.insync.replicas` exceeds the in-sync set, and a producer with
   `acks=all`.

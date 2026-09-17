@@ -7,8 +7,12 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.COpaquePointer
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.cstr
+import kotlinx.cinterop.get
 import kotlinx.cinterop.convert
+import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.refTo
@@ -36,16 +40,18 @@ import rdkafka.rd_kafka_conf_set_error_cb
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_flush
-import rdkafka.rd_kafka_last_error
 import rdkafka.rd_kafka_message_t
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_outq_len
 import rdkafka.rd_kafka_poll
-import rdkafka.rd_kafka_produce
+import rdkafka.rd_kafka_error_code
+import rdkafka.rd_kafka_error_destroy
+import rdkafka.rd_kafka_produceva
+import rdkafka.rd_kafka_resp_err_t
+import rdkafka.rd_kafka_vtype_t
+import rdkafka.rd_kafka_vu_t
 import rdkafka.rd_kafka_t
-import rdkafka.rd_kafka_topic_destroy
 import rdkafka.rd_kafka_topic_name
-import rdkafka.rd_kafka_topic_new
 import rdkafka.rd_kafka_type_t
 
 /**
@@ -190,6 +196,11 @@ private val deliveryReport = staticCFunction<
     }
 }
 
+
+/** A scope-lived pointer to [bytes]; an empty array still needs an address librdkafka can hold. */
+private fun MemScope.bytes(bytes: ByteArray): CPointer<ByteVar> =
+    if (bytes.isEmpty()) allocArray(1) else bytes.refTo(0).getPointer(this)
+
 /** A failure reported by librdkafka for one record. */
 public class KafkaProduceException(message: String) : RuntimeException(message)
 
@@ -229,7 +240,6 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
         lastConnectionError.value = null
     }
 
-    private val topics = mutableMapOf<String, CPointer<rdkafka.rd_kafka_topic_t>>()
     private val pump = CoroutineScope(Dispatchers.Default)
 
     init {
@@ -259,23 +269,17 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
      *
      * A caller who sets `partitioner` explicitly keeps their choice; the default is a default.
      */
-    private fun topicHandle(name: String) = topics.getOrPut(name) {
-        // NULL, deliberately: librdkafka then uses the default topic configuration built from the
-        // global conf above, so the caller's topic-level properties are the ones in force. Handing
-        // a freshly created topic conf here instead is what dropped them.
-        rd_kafka_topic_new(handle, name, null) ?: error("rd_kafka_topic_new failed for $name")
-    }
+
 
     override suspend fun send(record: ProducerRecord): RecordMetadata {
         val id = nextId.addAndGet(1)
-        val topic = topicHandle(record.topic)
         val slot = CompletableDeferred<RecordMetadata>()
 
         // Parked BEFORE the record is enqueued, because the delivery report can arrive before this
         // function returns. A registry filled afterwards races with the very callback it is for.
         park(id, slot)
         try {
-            enqueue(id, topic, record)
+            enqueue(id, record)
         } catch (failure: Throwable) {
             unpark(id)
             throw failure
@@ -296,22 +300,11 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
      * Cancelling while suspended here means the record was **never queued**, which is the one moment
      * at which cancellation is clean.
      */
-    private suspend fun enqueue(id: Long, topic: CPointer<rdkafka.rd_kafka_topic_t>, record: ProducerRecord) {
+    private suspend fun enqueue(id: Long, record: ProducerRecord) {
         var waited = 0L
         while (true) {
-            val rc = rd_kafka_produce(
-                topic,
-                RD_KAFKA_PARTITION_UA,
-                RD_KAFKA_MSG_F_COPY,
-                record.value.refTo(0),
-                record.value.size.convert(),
-                record.key?.refTo(0),
-                (record.key?.size ?: 0).convert(),
-                id.toCPointer<CPointed>(),
-            )
-            if (rc != -1) return
-
-            val error = rd_kafka_last_error()
+            val error = produceOnce(id, record)
+            if (error == RD_KAFKA_RESP_ERR_NO_ERROR) return
             if (error != RD_KAFKA_RESP_ERR__QUEUE_FULL) {
                 throw KafkaProduceException(
                     "${record.topic}: ${rd_kafka_err2str(error)?.toKString()}",
@@ -331,6 +324,69 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
         }
     }
 
+    /**
+     * One attempt, through `rd_kafka_produceva` — the path that can carry headers.
+     *
+     * **`rd_kafka_producev` is variadic and unusable through cinterop** (research §1.5), and that was
+     * taken for years as "librdkafka's header path needs a C shim". It does not:
+     * `rd_kafka_produceva` takes the same tagged fields as an **array** of `rd_kafka_vu_t` and is an
+     * ordinary function. This project therefore still contains no C of its own (research §2.10).
+     *
+     * `RD_KAFKA_VTYPE_HEADER` per header rather than one `VTYPE_HEADERS` list, and the difference is
+     * ownership: with a `rd_kafka_headers_t` librdkafka takes it over **on success only**, so every
+     * error path would have to remember to destroy it, and a queue-full retry loop is exactly where
+     * that is forgotten. Mixing the two returns `_CONFLICT`, so this picks one.
+     *
+     * Everything the array points at lives in [memScoped] and outlives the call, which is enough:
+     * `RD_KAFKA_MSG_F_COPY` means librdkafka has copied the payload by the time the call returns.
+     */
+    private fun produceOnce(id: Long, record: ProducerRecord): rd_kafka_resp_err_t = memScoped {
+        val count = 4 + (if (record.key != null) 1 else 0) + record.headers.size
+        val vus = allocArray<rd_kafka_vu_t>(count)
+        var at = 0
+
+        vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_TOPIC
+        vus[at].u.cstr = record.topic.cstr.getPointer(this)
+        at++
+
+        vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_MSGFLAGS
+        vus[at].u.i = RD_KAFKA_MSG_F_COPY
+        at++
+
+        vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_VALUE
+        vus[at].u.mem.ptr = bytes(record.value)
+        vus[at].u.mem.size = record.value.size.convert()
+        at++
+
+        record.key?.let { key ->
+            vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_KEY
+            vus[at].u.mem.ptr = bytes(key)
+            vus[at].u.mem.size = key.size.convert()
+            at++
+        }
+
+        // The way back to the suspended caller, and the only thing the delivery callback receives.
+        vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_OPAQUE
+        vus[at].u.ptr = id.toCPointer<CPointed>()
+        at++
+
+        record.headers.forEach { header ->
+            vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_HEADER
+            vus[at].u.header.name = header.name.cstr.getPointer(this)
+            // A NULL value is -1, not 0. Kafka distinguishes a header with no value from one whose
+            // value is empty, and a consumer can see the difference.
+            vus[at].u.header.`val` = header.value?.let { bytes(it) }
+            vus[at].u.header.size = (header.value?.size ?: -1).convert()
+            at++
+        }
+
+        val failure = rd_kafka_produceva(handle, vus, count.convert())
+            ?: return@memScoped RD_KAFKA_RESP_ERR_NO_ERROR
+        val code = rd_kafka_error_code(failure)
+        rd_kafka_error_destroy(failure)
+        code
+    }
+
     override suspend fun flush() {
         // rd_kafka_flush returns an ERROR CODE, not a count. Reading it as "how many are left" is
         // how a sibling measurement printed -185, which is a timeout wearing a quantity's clothes.
@@ -345,8 +401,6 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
     override suspend fun close() {
         flush()
         pump.cancel()
-        topics.values.forEach { rd_kafka_topic_destroy(it) }
-        topics.clear()
         rd_kafka_destroy(handle)
     }
 

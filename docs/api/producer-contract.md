@@ -72,6 +72,24 @@ read as a success rate, which is precisely the number that reported complete suc
 records of 1 000 000 had never been queued. The reconciliation lives in the suite, against the
 broker's end offsets ([B-09](../backlog/B-09-accounting.md)).
 
+### Headers
+
+`ProducerRecord.headers` is a **list** of `RecordHeader(name, value)`, and every part of that
+sentence is Kafka's shape rather than a convenience:
+
+| | |
+|---|---|
+| ordered | the reader sees them in the order they were given |
+| duplicate names allowed | `lastHeader(name)` and an iterating consumer legitimately disagree |
+| `value` nullable | a null value is not an empty one, and a consumer can tell |
+
+A `Map<String, ByteArray>` would drop entries — for tracing baggage and schema identifiers, exactly
+the entries somebody added on purpose.
+
+On the native side these travel through `rd_kafka_produceva`, which is **not** variadic and needs no
+C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_producev`, the one
+§1.5 rules out, is a different function.
+
 ### TLS
 
 | Key | Meaning | On native | On the JVM |

@@ -211,7 +211,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | # | Hypothesis | Settled by |
 |---|---|---|
 | H1 | ~~The same common test suite can express every producer assertion in a way both actuals satisfy~~ — **settled 2026-09-17, with a qualification: see §2.1** | [B-05](../backlog/B-05-differential-harness.md) `done` |
-| H2 | Per-message headers can be carried without `rd_kafka_producev` (§1.5) | [B-10](../backlog/B-10-record-headers.md) |
+| H2 | ~~Per-message headers can be carried without `rd_kafka_producev` (§1.5)~~ — **settled 2026-09-17: `rd_kafka_produceva` takes the same fields as an array, see §2.10** | [B-10](../backlog/B-10-record-headers.md) `done` |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
 | H5 | `linuxArm64` costs a matrix row and no code (D6) | not scheduled; claimed nowhere until it is |
@@ -400,6 +400,35 @@ reason was, and the reason exists only on that callback.
 nowhere per-producer to write. It is cleared when a producer is constructed. Per-producer
 attribution means handing each producer's identity through `rd_kafka_conf_set_opaque` and keeping a
 second registry — the shape of the fix, if two producers ever fail at once here.
+
+### 2.10 H2, settled: the non-variadic path exists, and no C of ours is needed
+
+`rd_kafka_produceva(rk, vus, cnt)` takes exactly the fields `rd_kafka_producev` takes, as an
+**array** of `rd_kafka_vu_t`, and is an ordinary function. Verified in `rdkafka.h` 2.13.0 and then by
+producing through it on both arms ([B-10](../backlog/B-10-record-headers.md)).
+
+**§1.5 is narrower than it was being read.** It says `rd_kafka_producev` is variadic and unusable
+through cinterop, which is true; the conclusion drawn from it — that headers need a C shim of our
+own — does not follow. The item's fallback was a small C wrapper compiled into the bundle. It is not
+needed, and this project still contains no C of its own.
+
+**Consequences.**
+
+- The whole produce path moved to `produceva`, not only the header case. Two paths, one of them
+  taken by the few callers who use headers, is how the less-travelled one rots.
+- `produceva` names the topic directly, so the topic-handle cache is gone — and with it the last of
+  the machinery that dropped topic-level configuration in §2.8.
+- It returns an `rd_kafka_error_t *` rather than `-1` plus `rd_kafka_last_error()`: no global to
+  read, and a queue-full refusal is the same value every time.
+- `RD_KAFKA_VTYPE_HEADER` per header rather than one `VTYPE_HEADERS` list. librdkafka takes
+  ownership of a `rd_kafka_headers_t` **on success only**, so every error path would have to destroy
+  it — and a queue-full retry loop is exactly where that is forgotten. Mixing the two returns
+  `_CONFLICT`, so one has to be chosen.
+
+**And the headers themselves.** A duplicate name survives, in order, on both arms; a null value and
+an empty one stay distinguishable through the broker, on both arms. Kafka's headers are an ordered
+sequence rather than a map, so `RecordHeader` is carried in a list: a client that stored them in a
+map would have answered a three-header record with two.
 
 ## 4. Risks, with the machinery that would catch them
 
