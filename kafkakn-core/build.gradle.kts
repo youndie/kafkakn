@@ -74,10 +74,3 @@ kotlin {
     }
 }
 
-// ProduceTest needs a producer, and the native one does not exist yet (B-07). The exclusion is
-// named, temporary, and GUARDED: NativeArmStillAStubTest asserts the native factory still returns
-// the stub, so the day B-07 lands this filter stops being warranted loudly rather than quietly.
-// Delete both together.
-tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
-    filter.excludeTestsMatching("io.github.youndie.kafkakn.ProduceTest")
-}

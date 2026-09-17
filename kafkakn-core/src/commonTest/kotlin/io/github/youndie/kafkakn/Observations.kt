@@ -19,6 +19,18 @@ package io.github.youndie.kafkakn
  */
 internal expect fun recordObservation(key: String, value: String)
 
+/**
+ * A fact that belongs to **this** arm and is not expected to match the other.
+ *
+ * Stamps and counts are per-arm by construction — each run makes its own — so comparing them would
+ * report a disagreement on every run and the comparison would stop being read. They go to a separate
+ * file, which the per-item scripts use to ask the broker what happened.
+ *
+ * The split is the point: a file where everything must agree is a file whose disagreements mean
+ * something.
+ */
+internal expect fun recordArmFact(key: String, value: String)
+
 /** The arm this test is running on, as it names itself in the observation file. */
 internal expect val armName: String
 

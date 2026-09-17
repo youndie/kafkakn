@@ -10,7 +10,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 cd "$ROOT" || exit 3
 H=ci/harness/broker.sh
-OBS=kafkakn-core/build/observations/jvm.txt
+OBS=kafkakn-core/build/observations/jvm-local.txt
 TOPIC=kafkakn
 STRICT=kafkakn-strict
 
