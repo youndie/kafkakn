@@ -1,0 +1,34 @@
+RQ-A: close() inside a real ordered shutdown - 20 rounds plus one positive control
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+selftest: the broker check fails against a dead port, as it must
+building the publisher (release, so a deadline that is exceeded is not a debug binary's fault)
+  cf779757de555fb6 19350584 bytes
+  resolved: kafkakn-core-linuxx64-0.1.0-SNAPSHOT-cinterop-rdkafka.klib
+  resolved: kafkakn-core-linuxx64-0.1.0-SNAPSHOT.klib
+round-01   rows=4235   records=4235   missing=0     silent=0     extra=0    refused=0    stop=5.85s   exit=0 ok drain=in release=in
+round-02   rows=5158   records=5158   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-03   rows=3049   records=3049   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-04   rows=3226   records=3226   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-05   rows=4908   records=4908   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-06   rows=4201   records=4201   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-07   rows=3087   records=3087   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-08   rows=4143   records=4143   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-09   rows=5973   records=5973   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-10   rows=3597   records=3597   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-11   rows=4564   records=4564   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-12   rows=5345   records=5345   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-13   rows=5932   records=5932   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-14   rows=4365   records=4365   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-15   rows=4992   records=4992   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-16   rows=5712   records=5712   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-17   rows=3273   records=3273   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-18   rows=4887   records=4887   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-19   rows=5760   records=5760   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+round-20   rows=4742   records=4742   missing=0     silent=0     extra=0    refused=0    stop=2.26s   exit=0 ok drain=in release=in
+control    rows=5511   records=5503   missing=8     silent=0     extra=0    refused=8    stop=8.28s   exit=0 ok drain=in release=in
+
+SUMMARY
+  accepted, missing from the topic, and nothing said about it - the ordinary rounds: 0
+  the positive control saw missing: 8  (a control that saw nothing invalidates the rounds above)

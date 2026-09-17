@@ -520,6 +520,73 @@ not the count.
 honestly mean over a blocking client: the caller's dispatcher stays free, and the wait happens on a
 thread that exists for waiting. The native arm reaches the same promise by never blocking at all.
 
+### 2.14 RQ-A, measured: the shutdown order held, and what that green does not cover
+
+**The subject is a service this repository does not own** — a webhook gateway on Kotlin/Native with
+an HTTP ingress, a SQLite database, `kore`'s ordered stop and a Kafka sink behind a flag. That is the
+point of it: every earlier test of `close` was written by the same hands as the promise and decided
+for itself when the shutdown happened.
+
+**The oracle is the gateway's own table, not the producer.** Its `events` rows record what it
+accepted before this library was involved; the topic's keys, read by `kafka-console-consumer`, say
+what arrived. A producer asked whether it delivered what it delivered answers yes.
+
+Two things were fixed in writing before any round ran, because settling them afterwards would settle
+the result:
+
+* **the row is committed before the publish is attempted**, which is what makes a loss visible at
+  all — a row with nothing behind it;
+* **`SIGTERM` only, never `SIGKILL`.** A process killed outright cannot run `close`, and the gap
+  between the row and the send is then an **outbox** question rather than a question about this
+  library. Conflating the two would let an outbox defect be reported as a kafkakn one.
+
+**Measured 2026-09-17**, `ci/b-19/run.sh`, release binary, broker in Docker, `acks=all`, three
+partitions, a fresh topic and a fresh database per round, the signal landing at a random point three
+to eight seconds into a steady stream:
+
+| | |
+|---|---|
+| rounds | 20, plus one positive control |
+| accepted events | **91 149** (3 049–5 973 per round) |
+| accepted and missing from the topic | **0** |
+| shutdown, signal to exit | **2.26 s** in 19 rounds, 5.85 s in one, against a 30 s grace period |
+| positive control (broker stopped before the signal) | **8 missing, and the service named all 8** |
+
+The shutdown time is almost entirely `preDrainWait`: two seconds the gateway spends announcing that
+it is going away before it drains anything. Nothing in the release stages came near its deadline, so
+the pre-registered **amber** — no loss but an overrun — did not occur.
+
+**The same twenty rounds again with eight times the concurrency**, because a drain that finishes
+instantly may simply never have been asked anything: 64 concurrent senders instead of 8, **130 681**
+accepted events (2 748–10 441 per round), **0** missing, the same 2.26 s shutdown, and a drain of
+**12–82 ms** every time.
+
+**The control of that sweep is what says how much those milliseconds are worth.** With the broker
+stopped, it lost exactly **64** records — one per concurrent sender, each named by the service. So
+the set of requests sitting inside `send` when the world changes is the concurrency, and the
+ordinary rounds were draining up to 64 of them each: about **1 280 requests caught mid-`send`**
+across the sweep, every one of them finished before the producer was closed. The drain is short
+because a publish is milliseconds, not because there was nothing in it.
+
+**What this green does not cover, and the reason is in the sink rather than in the library.** The
+gateway's publish awaits the broker's acknowledgement inside the request, so a record is either
+inside somebody's `send` or finished — it is never sitting in the producer with its `send` already
+returned, which is the state `close` exists to answer for. What these twenty rounds exercise is therefore the
+**order** — that the drain finishes before the producer is closed, so a request mid-`send` is not cut
+— and not `close` rescuing records already queued. A sink that returned before the acknowledgement
+would be the one that tests the flush, and that sink is the outbox shape the item ruled out of M2. It
+is worth writing down which of the two was measured, because the contract sentence covers both and a
+reader would reasonably assume the harder one. The second shape is
+[B-23](../backlog/B-23-the-sink-that-does-not-wait.md), filed and not started: M2 bought three days
+and this spent them.
+
+**The harness was wrong twice before it was right, and both times it was wrong by being green.** A
+topic named after the round alone replayed the *previous* run's records, and the second run reported
+2 612 records with no row behind them — a finding entirely of the harness's own making. And a port is
+not free the moment its process is: the control round died of `EADDRINUSE` seconds after a clean
+exit, and a round that never started reads exactly like a round that passed. Both are why the control
+round exists at all: a reconciliation that has never come out non-zero has not been shown able to.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement

@@ -121,6 +121,14 @@ case "${1:-}" in
         --property headers.separator=, --property key.separator=$'\t' 2>/dev/null \
         | grep -a "$3" | head -1
     ;;
+  keys)
+    # Every key on the topic, one per line, read by the broker's own consumer. This is the oracle for
+    # "which records actually landed": counting offsets would answer a weaker question, because a
+    # count cannot say WHICH event is the one that is missing.
+    kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
+        --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
+        --formatter-property print.key=true --formatter-property print.value=false 2>/dev/null
+    ;;
   produce)
     # Reads stdin. Note kci, not kc.
     kci /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP" \
@@ -135,7 +143,7 @@ case "${1:-}" in
     echo "selftest: the broker check fails against a dead port, as it must"
     ;;
   *)
-    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest" >&2
+    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|keys <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest" >&2
     exit 2
     ;;
 esac
