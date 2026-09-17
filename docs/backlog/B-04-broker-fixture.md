@@ -1,7 +1,7 @@
 ---
 id: B-04
 title: "The broker fixture: KRaft, three partitions, auto-create off"
-status: open
+status: wip
 priority: P0
 size: S
 stage: stage-0-it-builds
