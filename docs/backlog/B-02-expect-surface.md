@@ -1,7 +1,7 @@
 ---
 id: B-02
 title: "The expect surface, compiling and throwing"
-status: open
+status: wip
 priority: P0
 size: S
 stage: stage-0-it-builds
