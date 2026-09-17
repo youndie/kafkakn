@@ -101,7 +101,7 @@ class ProduceTest {
             // its own ConfigException, before any broker is contacted (measured in B-06). So the probe
             // is a VALID value the broker cannot satisfy - `acks=all` against a topic whose
             // min.insync.replicas is 2 on a single-broker cluster.
-            val strict = testEnv("KAFKAKN_STRICT_TOPIC") ?: "kafkakn-strict"
+            val strict = strictTopic
 
             val refusing = kafkaProducer(producerConfig("acks" to "all"))
             try {

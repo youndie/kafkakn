@@ -484,6 +484,42 @@ cannot pass the suite either. A check that exercises a path only the library's o
 is a check that cannot see this class of defect, and this is the second one it hid
 ([§2.8](#28-a-fresh-topic-configuration-silently-dropped-every-topic-level-property) was the first).
 
+### 2.13 "Suspends" was a claim about the thread, and on the JVM arm it was false
+
+The contract flattens two behaviours at the queue bound into one word: `kafka-clients` blocks,
+librdkafka refuses, and both are promised as "suspends". That word is about the **caller's thread**,
+and the JVM actual was not keeping it — `delegate.send(...)` ran on whatever dispatcher the caller
+was on, and `kafka-clients` waits inside `send` for metadata it does not have and for room in the
+record accumulator.
+
+**Measured 2026-09-17**, on a single-threaded dispatcher with no broker at the address: three records
+held the thread for **6 019 ms** while a coroutine asking for it every 2 ms got nothing. `flush` and
+`close` were worse — they wait outright.
+
+**Why the suite could not see it.** `BackpressureTest` produces 3 000 records concurrently on
+`Dispatchers.Default`, a pool: the blocking is invisible until every thread in it is taken, and the
+broker kept draining faster than that. A guard for this has to name the resource it is about — one
+thread — which is why `JvmDispatcherSeamTest` builds its own dispatcher.
+
+**Two fixtures failed before one worked**, and both failed by being green:
+
+1. the ordinary topic — the broker acknowledged faster than records could pile up, so nothing ever
+   waited;
+2. the strict topic (`min.insync.replicas=2`, where nothing can be acknowledged) — the broker
+   **refuses** those records immediately, and a refusal drains the accumulator exactly as well as an
+   acknowledgement does.
+
+What holds the client is metadata it cannot get. That fixture needs no broker at all.
+
+**And the first assertion was wrong too.** It counted ticks and asked for more than one, which is
+true of a thread that was held for six seconds: between two blocking calls the dispatcher comes free
+for a moment and the ticker gets its turn. The measurement is the **gap** — the longest silence —
+not the count.
+
+**Consequence.** The JVM actual does its waiting on `Dispatchers.IO`. That is what "suspends" can
+honestly mean over a blocking client: the caller's dispatcher stays free, and the wait happens on a
+thread that exists for waiting. The native arm reaches the same promise by never blocking at all.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
