@@ -1,7 +1,7 @@
 ---
 id: B-23
 title: "The publish that returns before the acknowledgement — the shape RQ-A could not reach"
-status: wip
+status: done
 priority: P3
 size: M
 stage: stage-4-a-real-user
@@ -52,6 +52,47 @@ The contract sentence covers both, and a reader will assume the harder one
   is otherwise remembered as a green.
 - Anchors: `ci/b-23/run.sh`, `ci/b-19/run.sh`, `docs/research/research-architecture.md`,
   `docs/api/producer-contract.md`.
+
+## What happened
+
+**Green on the number the item is judged on, and the control is where the result is.**
+`ci/b-23/run.sh`, 64-deep queue, 64 concurrent senders, on a machine restarted minutes earlier:
+
+| | 20 rounds | the control, broker stopped before the signal |
+|---|---|---|
+| accepted | **17 644** (525–1 266 per round) | 1 259 |
+| `producer` — asked of the producer and lost | **0** | **1** |
+| `outbox` — accepted, queued, never asked | **0** | **127** |
+| `refused` — the `send` threw | 0 | 1 |
+| shutdown | 2.26 s, drain 12–40 ms | **15.07 s, DEADLINE_EXCEEDED** |
+
+With the broker gone the drain stage ran to exactly **10.000 s** and the release stage to exactly
+**3.000 s** — both their deadlines — kore cut them, and the 127 records still in the queue were never
+handed to the producer. **Without the pre-registered split that control reads "129 records lost" and
+the number lands on this library.** Two of them are about the producer; the other 127 are the outbox
+question, which is not.
+
+**The cost of the shape, visible without being asked.** The same harness at the same concurrency
+accepted 17 644 events where [B-19](B-19-close-under-a-real-shutdown.md)'s synchronous arm accepted
+130 681 — a single consumer in front of the producer serialises what was 64 concurrent `send`s, so
+the service's own throughput falls about sevenfold. That is the trade a service makes when it decides
+a webhook's `200` must not wait for Kafka, and it is a property of the shape rather than of the
+library.
+
+**The harness lied green twice before any of this was true, and neither time was caught by reading.**
+
+1. **`rows=0` in every round, and therefore `missing=0` in every round.** `sqlite3` is not on `PATH`
+   in a non-interactive shell on that machine, the per-round database read failed silently, and a
+   reconciliation with an empty left-hand side comes out clean whatever happened. It was visible only
+   because `extra=707` — records on the topic with no row behind them — is the one column an empty
+   read cannot make zero. The harness now checks the tools it reads answers with **before** measuring
+   anything, and a round whose database holds no accepted events is red with a sentence.
+2. **The publisher's own drain test passed with the drain removed** (`youndie/xyk#7`): with an instant
+   delegate, closing the channel let the queue finish before the assertion looked. Twenty records at
+   twenty milliseconds cannot finish by accident; with the wait gone, two tests now fail.
+
+The machine also dropped its ssh connections twice mid-run and was restarted; the run that produced
+these numbers was detached from the session that started it, which is why it survived.
 
 ## Pre-registered, before any round ran
 
