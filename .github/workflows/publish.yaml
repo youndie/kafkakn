@@ -1,0 +1,61 @@
+# Snapshots to reposilite, and the whole of the artefact side even when it cannot upload.
+#
+# The job always builds the C bundle and publishes to a Maven repository on disk, listing what it
+# produced coordinate by coordinate. Only the last step needs credentials. That split is deliberate:
+# a publish workflow that can only be exercised by someone holding the secrets is a workflow nobody
+# can check, and its first real run is then also its first test.
+#
+# `-Pkafkakn.noKafkaC` is NOT used here. It drops the cinterop, and the artefact it produces is a
+# different one wearing the same coordinate - a measurement aid, never something to publish.
+
+name: publish
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # The bundle is built in a manylinux2014 container and takes minutes; it changes only when the
+      # librdkafka version in the catalogue does, which is what the key is.
+      - id: bundle
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/kafkakn
+          key: kafkakn-c-bundle-${{ hashFiles('gradle/libs.versions.toml', 'ci/librdkafka/**') }}
+
+      - if: steps.bundle.outputs.cache-hit != 'true'
+        run: bash ci/librdkafka/build.sh
+
+      # Everything except the upload. A failure here is about the artefacts, not about credentials.
+      - run: bash ci/publish/run.sh
+
+      # The upload, and the only step that needs anything secret. Skipped rather than failed when
+      # the secrets are absent, so the rest of this workflow stays checkable by anyone.
+      - name: publish to reposilite
+        if: env.REPOSILITE_USER != ''
+        env:
+          REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
+          ORG_GRADLE_PROJECT_REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
+          ORG_GRADLE_PROJECT_REPOSILITE_SECRET: ${{ secrets.REPOSILITE_SECRET }}
+        run: |
+          ./gradlew --no-daemon --console=plain :kafkakn-core:publishAllPublicationsToWipRepository
+          echo "published io.github.youndie:kafkakn-core{,-jvm,-linuxx64}:$(sed -n 's/^version=//p' gradle.properties)"
+
+      - name: say so when it did not upload
+        if: env.REPOSILITE_USER == ''
+        env:
+          REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
+        run: |
+          echo "::warning::REPOSILITE_USER / REPOSILITE_SECRET are not set on this repository."
+          echo "::warning::The artefacts were built and checked; nothing was uploaded."
