@@ -141,6 +141,15 @@ round() {
     local rows records missing extra refused silent deadline drain release
     rows=$(wc -l < "$WORK/$label.rows")
     records=$(wc -l < "$WORK/$label.keys")
+
+    # THE VACUITY GUARD, PER ROUND. Everything below compares two sets, and an empty left-hand side
+    # makes every comparison come out clean: no rows, nothing missing, nothing to answer for. The
+    # service answered requests in this round, so rows there must be.
+    if [ "$rows" -eq 0 ]; then
+        say "  $label: the database holds NO accepted events, so the reconciliation compares nothing."
+        say "          The generator saw: $(cat "$gen" 2>/dev/null)"
+        return 1
+    fi
     comm -23 "$WORK/$label.rows" "$WORK/$label.keys" > "$WORK/$label.missing"
     comm -13 "$WORK/$label.rows" "$WORK/$label.keys" > "$WORK/$label.extra"
     missing=$(wc -l < "$WORK/$label.missing")
@@ -211,6 +220,18 @@ else
 fi
 rm -rf "$WORK"
 mkdir -p "$WORK"
+
+# THE READING TOOLS, BEFORE ANYTHING IS MEASURED. `sqlite3` is not on PATH in a non-interactive
+# shell on this machine, and the first detached run of this harness found that out the expensive way:
+# the per-round read failed silently, every round reported `rows=0`, and every round therefore
+# reported `missing=0`. A reconciliation that cannot find one of its two sides is not green, it is
+# blind - and it looked exactly like green.
+for tool in sqlite3 docker curl python3; do
+    command -v "$tool" >/dev/null || {
+        say "  $tool is not on PATH - this harness reads its answers with it, so it will not start"
+        exit 1
+    }
+done
 
 bash "$BROKER" up || exit 1
 # The fixture has to be able to say no before anything it says yes to is worth reading.
