@@ -18,11 +18,14 @@ taking an item, because the obvious thing here is wrong in at least four documen
 snapshots are on reposilite with a build outside this one that resolves them, links a native binary
 and runs it.
 
-Stage 4 is a different kind of question and is budgeted like one — **three working days of build and
-a six-week observation window, hard stop**. What the project lacks is not a second target but a
-first real user, and two of its claims have never met one: that `close` keeps its promise inside an
-ordered shutdown, and that a stranger can get from the README to a running binary. The third
-question is whether anybody outside this portfolio wants it at all.
+Stage 4 is a different kind of question and is budgeted like one — **three working days of build,
+hard stop**. What the project lacks is not a second target but a first real user, and two of its
+claims have never met one: that `close` keeps its promise inside an ordered shutdown, and that a
+stranger can get from the README to a running binary.
+
+The third question — whether anybody outside this portfolio wants it — **is not asked**. It had one
+mechanism, announcing, and nothing from this project is posted anywhere; the item that held it is
+dropped with the cost of dropping it written down ([B-21](docs/backlog/B-21-does-anyone-want-this.md)).
 
 ### Kill criteria for stage 4
 
@@ -32,14 +35,15 @@ disappointment:
 1. **RQ-A red** — a record accepted by the publisher and missing from the topic. Stop, fix the
    contract, publish the negative result. Nothing is announced about a library that can lose a
    record on shutdown.
-2. **RQ-C red twice** — the artefact is not shippable, and announcing it would spend the only first
-   impression this project gets.
+2. **RQ-C red twice** — the artefact is not shippable. Nobody is being invited to try it either way,
+   which makes this a correctness stop rather than a reputational one.
 3. **Day three ends with RQ-A unmeasured** — the integration is too big for the budget; fall back to
    a smaller publisher and re-plan rather than extending.
 
-The expected outcome is written down too, so that it cannot be claimed afterwards: **RQ-A green and
-RQ-B amber** — correct and unwanted. That is a fine place to leave a repository, and the freeze is
-itself a published result.
+The expected outcome is written down too, so that it cannot be claimed afterwards: **RQ-A green,
+and demand unknown** — correct, and nobody asked. That is a fine place to leave a repository; what
+it is not is evidence either way, and the backlog says so rather than letting silence read as a
+verdict.
 
 ## Stages
 
@@ -65,10 +69,10 @@ itself a published result.
 | [B-16](docs/backlog/B-16-readme-says-what-was-measured.md) `[ ]` | The README says what was measured, not what sounded right | P1 | S | - |
 | [B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md) `[ ]` | Certificate verification: the README and the contract disagree | P1 | S | - |
 | [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[ ]` | RQ-C: does the artefact resolve and link on a machine that has never seen this repository? | P1 | S | - |
-| [B-21](docs/backlog/B-21-does-anyone-want-this.md) `[ ]` | RQ-B: does anyone outside this portfolio want it? | P1 | M | B-16, B-19, B-20 |
+| [B-22](docs/backlog/B-22-a-dead-patch-must-say-so.md) `[ ]` | A bump that makes the patch dead must say so, not merely fail | P1 | S | - |
 | [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 
-## Closed (15)
+## Closed (16)
 
 **It builds, and a test can fail**
 
@@ -96,6 +100,10 @@ itself a published result.
 - [B-12](docs/backlog/B-12-publish-snapshots.md) `[x]` - Publish snapshots to reposilite
 - [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[x]` - Acceptance from outside: a consumer project that uses the published artefact
 - [B-15](docs/backlog/B-15-native-klib-carries-no-c.md) `[x]` - The published native klib does not carry its C dependency
+
+**Somebody actually runs it**
+
+- [B-21](docs/backlog/B-21-does-anyone-want-this.md) `[-]` - RQ-B: does anyone outside this portfolio want it?
 
 <!-- END INDEX -->
 

@@ -30,8 +30,10 @@ link the artefact at all.
   ([B-03](B-03-c-bundle-old-glibc.md), [D4](../research/research-architecture.md)); and the bundle
   carries a one-line local patch to `rdrand.c`.
 - **No CI badge**, though both halves of the gate run there.
-- **The README links D7 for "snapshots only" and never says when that ends.** One sentence naming
-  the condition — which is [B-21](B-21-does-anyone-want-this.md), not a date.
+- **The README links D7 for "snapshots only" and never says when that ends.** One sentence naming a
+  **condition and not a date**: a user arriving of their own accord. There is no announcement to
+  bring one — [B-21](B-21-does-anyone-want-this.md) was dropped because nothing is posted anywhere —
+  so the sentence says that plainly instead of implying a plan.
 
 - **The decision and its reason.** The review that produced this list also asked for "the upstream
   PR status" for the patch. **There is no PR and there will not be one**: nothing from this project
