@@ -1,7 +1,7 @@
 ---
 id: B-17
 title: "`ci/consumer` is the wrong word in a Kafka repository"
-status: open
+status: wip
 priority: P2
 size: XS
 stage: stage-3-usable-by-others
