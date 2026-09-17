@@ -1,7 +1,7 @@
 ---
 id: B-10
 title: "Record headers without rd_kafka_producev"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-2-real-use
