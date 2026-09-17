@@ -1,7 +1,7 @@
 ---
 id: B-18
 title: "Certificate verification: the README and the contract disagree"
-status: open
+status: done
 priority: P1
 size: S
 stage: stage-2-real-use
@@ -53,4 +53,38 @@ implementation that was never meant to be trusted alone.
   otherwise.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/jvmMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.jvm.kt`,
+  `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/TlsKeys.kt`,
   `docs/api/producer-contract.md`, `README.md`.
+
+## What happened
+
+**The decision stands and is implemented in common code.** `checkTlsKeys` lives in `commonMain` and
+both actuals call it before they touch anything: a rule enforced on one arm is a rule the caller
+meets for the first time on the platform they do not run locally. `enable.ssl.certificate.
+verification` is refused whatever it is set to, and the message names the key.
+
+**Watched failing first, on the arm that had the hole.** Before the rule existed, the native arm
+accepted the key and constructed a producer — the two refusal tests failed there and passed on the
+JVM, where `kafka-clients` had never heard of the key anyway. That asymmetry is the item's argument,
+and it was visible in the suite for one run.
+
+**The second key was not portable, which this item assumed it was.** Measured 2026-09-17: handed the
+empty string `kafka-clients` documents as "off", librdkafka answers *"Configuration property
+`ssl.endpoint.identification.algorithm` cannot be set to empty value"*. The **key** is shared; the
+**value** that disables is not. So the contract spells off as `none` — librdkafka's spelling, and
+the one an environment variable that expanded to nothing cannot produce by accident — the JVM arm
+translates it, and the empty string is refused on both arms.
+
+`TranslateForJavaTest` asserts the translation directly rather than through a producer that
+constructs, because `kafka-clients` accepts `none` too: JSSE does not know that algorithm and
+quietly enforces nothing, so a test that only watched construction succeed would have passed on the
+untranslated map.
+
+**A guard caught the first version of the code.** `common_is_platform_free.py` refused the refusal
+message for naming librdkafka outside a comment — common code that knows which platform is which has
+stopped being common. The message says "only one of the two clients has it" instead, which is what
+the caller needs anyway.
+
+**Found on the way, not fixed here:** `AccountingTest` times out after `runTest`'s default minute on
+the jvm arm. It fails on `main` as well — reproduced there twice with none of this branch in the
+tree — so it is [B-24](B-24-the-central-guard-times-out.md) rather than a change here.

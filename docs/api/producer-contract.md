@@ -98,11 +98,37 @@ C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_p
 |---|---|---|---|
 | `security.protocol=SSL` | verbatim, both arms | librdkafka's own key | the Java client's own key |
 | `ssl.ca.location` | path to a PEM certificate authority | librdkafka's own key | translated to `ssl.truststore.location` + `ssl.truststore.type=PEM` |
+| `ssl.endpoint.identification.algorithm` | `https` (the default) or `none` — **hostname** checking | librdkafka's own key, and its own spelling of off | `none` is translated to the empty string the Java client documents |
 
-Certificate verification is **on** and this contract offers nothing that turns it off. librdkafka's
-`enable.ssl.certificate.verification` is still reachable as a raw key for whoever insists; what is
-refused is a named convenience pointing at it, because a library that offers one gets it used in
-production.
+#### Certificate trust cannot be turned off, and hostname checking can
+
+**`enable.ssl.certificate.verification` is refused at construction on both arms, by decision**
+([B-18](../backlog/B-18-verification-cannot-be-turned-off.md)), and the message names the key.
+
+The reason is the configuration rule above rather than a view about security. The key exists only in
+librdkafka — `kafka-clients` has no equivalent, since
+`ssl.endpoint.identification.algorithm` turns off hostname checking and never trust — so it is a
+**platform** key, and its platform is the one with no oracle. A caller who turned trust off would be
+alone with the implementation this whole project exists to check, and the suite could not tell them
+anything about it. Refusing it on both arms is also what makes the README's sentence true rather than
+nearly true.
+
+A named convenience pointing at the same thing (`verifyCertificates = false`) is refused for the
+older reason: a library that offers one gets it used in production.
+
+**Hostname checking is a different question and gets the opposite answer.**
+`ssl.endpoint.identification.algorithm` exists on both arms, carries Kafka's own name, and what it
+does happens where the oracle can see it — so it travels. It is **the one remaining way to weaken
+TLS through this API**, and it is named here so that "verification is on and cannot be turned off" is
+read exactly as far as it is true: trust cannot be turned off, hostname matching can.
+
+**Measured 2026-09-17, and it is the value rather than the key that differs.** Handed the empty
+string that `kafka-clients` documents as "off", librdkafka answers *"Configuration property
+`ssl.endpoint.identification.algorithm` cannot be set to empty value"*. The contract therefore spells
+off as **`none`**, librdkafka's spelling, and the JVM arm translates it — the same shape as
+`ssl.ca.location`, and for the same reason: a value that must be spelled differently per platform is
+one the caller gets wrong on the arm they do not run locally. An empty value is refused on both arms,
+which also happens to be what an environment variable that expanded to nothing looks like.
 
 A peer that cannot be verified makes `send` throw, and the message **names the certificate**. That
 is not free on the native side: the record is only enqueued, so it comes back as `Local: Message
