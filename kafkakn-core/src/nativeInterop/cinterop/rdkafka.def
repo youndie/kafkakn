@@ -1,0 +1,12 @@
+# The C surface the native arm is built on.
+#
+# No paths here on purpose: the include directory and the static archives are handed in by
+# build.gradle.kts, so this file is the same whoever builds it and wherever their cache lives - and
+# a second native target costs a build-matrix row rather than an edit (research D6).
+#
+# rd_kafka_producev is deliberately never used: it is variadic, and a variadic C function has no
+# usable shape through cinterop (research §1.5). rd_kafka_produce is the non-variadic equivalent.
+
+headers = librdkafka/rdkafka.h
+headerFilter = librdkafka/**
+package = rdkafka
