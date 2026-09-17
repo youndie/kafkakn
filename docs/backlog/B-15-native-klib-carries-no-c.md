@@ -1,7 +1,7 @@
 ---
 id: B-15
 title: "The published native klib does not carry its C dependency"
-status: open
+status: done
 priority: P0
 size: M
 stage: stage-3-usable-by-others
@@ -58,3 +58,30 @@ published klib says a word about `librdkafka-static.a`. `rdkafka.def` carries `i
 - AC: whatever the klib grows by is measured and written down, not estimated.
 - Anchors: `kafkakn-core/src/nativeInterop/cinterop/rdkafka.def`, `kafkakn-core/build.gradle.kts`,
   `ci/consumer/build.gradle.kts`.
+
+## Outcome — 2026-09-17
+
+`staticLibraries = librdkafka-static.a libssl.a libcrypto.a libz.a libzstd.a` in `rdkafka.def`, with
+the two directories passed from Gradle as `-libraryPath` so the file stays machine-independent.
+Option 1, as recommended.
+
+**The same consumer, the same version string, two repositories:**
+
+| | the server, pre-fix | the candidate, post-fix |
+|---|---|---|
+| `linkReleaseExecutableLinuxX64` | **14 undefined symbols** | a 9.6 MB binary |
+| running it | nothing to run | 50/50 records, headers intact, both arms |
+| `…-cinterop-rdkafka.klib` | 76 952 bytes | 11 280 633 bytes |
+
+That A/B is the positive control, and it cost nothing: the server still held the artefact this item
+exists to condemn. An earlier attempt at a control — pinning the consumer to the previous
+**timestamped** snapshot — failed with `Could not find …:0.1.0-20260917.151134-1`, which is red for
+the wrong reason and was not counted.
+
+**The estimate in the item above was the wrong quantity.** It quoted 8.26 MB from research §1.2 —
+that is the measured *binary* delta after the linker discards what is unused, not the size of the
+archives. The archives are 46 MB on disk and 11 MB inside the klib, which is a zip.
+
+**The guard is a removal.** `linkerOpts` is gone from `build.gradle.kts`, so this project's test
+binaries link exactly the way a stranger's does; an artefact that cannot be linked now fails the
+suite. While they were there, eleven items passed over a published artefact nobody could use.

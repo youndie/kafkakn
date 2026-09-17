@@ -27,26 +27,15 @@ kotlin {
             compilations.getByName("main").cinterops.create("rdkafka") {
                 definitionFile.set(file("src/nativeInterop/cinterop/rdkafka.def"))
                 includeDirs("$bundle/include")
+                // Where the archives named in the .def are found. cinterop copies them INTO the
+                // klib, so a consumer links against the published artefact and nothing else - which
+                // is what B-13 found this project could not do.
+                extraOpts("-libraryPath", "$bundle/lib", "-libraryPath", "$bundle/lib64")
             }
-            binaries.withType<org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable>().configureEach {
-                // Absolute paths to the archives, not -l. `-lssl` would take a shared libssl
-                // wherever one is installed and the binary would quietly stop being self-contained,
-                // with nothing failing to say so.
-                //
-                // No -Xoverride-konan-properties and no extra -L: the C side was built against
-                // glibc 2.17, so the toolchain's own sysroot is enough. That is the claim B-03
-                // exists to check (research §1.3, D4).
-                linkerOpts(
-                    "$bundle/lib/librdkafka-static.a",
-                    "$bundle/lib64/libssl.a",
-                    "$bundle/lib64/libcrypto.a",
-                    "$bundle/lib/libz.a",
-                    "$bundle/lib/libzstd.a",
-                    "-lpthread",
-                    "-ldl",
-                    "-lm",
-                )
-            }
+            // NO linkerOpts, and their absence is the check. The archives now travel inside the
+            // cinterop klib (`staticLibraries` in rdkafka.def), so this project's own test binaries
+            // link exactly the way a stranger's binary does. While they were named here, the suite
+            // linked and the published artefact did not - and nothing in the gate could tell.
         }
     }
     // linuxArm64 is designed for and not declared (research D6). Adding it is a line here and a

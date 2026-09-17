@@ -87,6 +87,14 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
 
 ## Quirks — the ones that will bite
 
+- **The klib carries the C archives, and that is why it is 11 MB.** `staticLibraries` in
+  `rdkafka.def` makes cinterop copy `librdkafka-static.a`, OpenSSL, zlib and zstd into the klib, so a
+  consumer links against the published artefact and nothing else. Before that it was 76 KB of
+  bindings with no implementation and a stranger got 14 undefined symbols
+  ([research §2.12](../research/research-architecture.md)).
+- **There are no `linkerOpts` in `build.gradle.kts`, deliberately.** While they were there the
+  suite's own test binaries linked in a way no consumer could reproduce, and the gate could not see
+  the difference. Their absence is the check.
 - **The C bundle is not built by Gradle.** It is produced by a script into a cache outside the
   source tree and consumed by cinterop as static archives. Building it inside the Gradle graph
   would put a multi-minute Docker build on every clean checkout.
