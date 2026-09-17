@@ -1,7 +1,7 @@
 ---
 id: B-23
 title: "The publish that returns before the acknowledgement — the shape RQ-A could not reach"
-status: open
+status: wip
 priority: P3
 size: M
 stage: stage-4-a-real-user

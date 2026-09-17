@@ -81,7 +81,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[?]` | REFUTED: the accounting guard does not time out — it was run without its fixture | P1 | S | - |
-| [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
+| [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[~]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
 ## Closed (22)
 
