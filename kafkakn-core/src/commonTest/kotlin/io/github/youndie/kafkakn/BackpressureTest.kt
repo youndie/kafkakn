@@ -26,79 +26,84 @@ import kotlin.test.assertTrue
  * waits for room with `delay` and virtual time would skip exactly the wait being tested.
  */
 class BackpressureTest {
-
     @Test
-    fun producing_past_the_queue_bound_loses_nothing() = runTest {
-        val stamp = "backpressure-$armName-${randomSuffix()}"
-        val producer = kafkaProducer(
-            ProducerConfig(
-                buildMap {
-                    put("bootstrap.servers", bootstrap)
-                    put("acks", "all")
-                    putAll(smallQueueConfig())
-                },
-            ),
-        )
-        var delivered = 0
-        try {
-            withContext(Dispatchers.Default) {
-                coroutineScope {
-                    (0 until RECORDS).map { index ->
-                        async {
-                            producer.send(ProducerRecord(testTopic, "$stamp:$index".encodeToByteArray()))
-                        }
-                    }.awaitAll()
+    fun producing_past_the_queue_bound_loses_nothing() =
+        runTest {
+            val stamp = "backpressure-$armName-${randomSuffix()}"
+            val producer =
+                kafkaProducer(
+                    ProducerConfig(
+                        buildMap {
+                            put("bootstrap.servers", bootstrap)
+                            put("acks", "all")
+                            putAll(smallQueueConfig())
+                        },
+                    ),
+                )
+            var delivered = 0
+            try {
+                withContext(Dispatchers.Default) {
+                    coroutineScope {
+                        (0 until RECORDS)
+                            .map { index ->
+                                async {
+                                    producer.send(ProducerRecord(testTopic, "$stamp:$index".encodeToByteArray()))
+                                }
+                            }.awaitAll()
+                    }
                 }
-            }
-            delivered = RECORDS
-            producer.flush()
-        } finally {
-            producer.close()
-        }
-
-        assertEquals(RECORDS, delivered, "every send must return or throw, never drop")
-        recordArmFact("backpressure.stamp", stamp)
-        recordArmFact("backpressure.count", RECORDS.toString())
-
-        val waits = backpressureWaitCount()
-        if (waits >= 0) {
-            // Only the native arm can report this. Zero would mean the bound was never reached and
-            // the test proved nothing about backpressure at all.
-            assertTrue(waits > 0, "the queue bound was never reached - this test is vacuous")
-        }
-    }
-
-    @Test
-    fun flush_waits_for_the_queue_rather_than_for_a_return_code() = runTest {
-        val stamp = "flush-$armName-${randomSuffix()}"
-        val producer = kafkaProducer(
-            ProducerConfig(
-                buildMap {
-                    put("bootstrap.servers", bootstrap)
-                    put("acks", "all")
-                    putAll(smallQueueConfig())
-                },
-            ),
-        )
-        try {
-            withContext(Dispatchers.Default) {
-                coroutineScope {
-                    (0 until FLUSH_RECORDS).map { index ->
-                        async {
-                            producer.send(ProducerRecord(testTopic, "$stamp:$index".encodeToByteArray()))
-                        }
-                    }.awaitAll()
-                }
+                delivered = RECORDS
                 producer.flush()
+            } finally {
+                producer.close()
             }
-            // After flush every record is accounted for, which is what makes the next assertion -
-            // made by the script against the broker - a statement about flush and not about timing.
-        } finally {
-            producer.close()
+
+            assertEquals(RECORDS, delivered, "every send must return or throw, never drop")
+            recordArmFact("backpressure.stamp", stamp)
+            recordArmFact("backpressure.count", RECORDS.toString())
+
+            val waits = backpressureWaitCount()
+            if (waits >= 0) {
+                // Only the native arm can report this. Zero would mean the bound was never reached and
+                // the test proved nothing about backpressure at all.
+                assertTrue(waits > 0, "the queue bound was never reached - this test is vacuous")
+            }
         }
-        recordArmFact("flush.stamp", stamp)
-        recordArmFact("flush.count", FLUSH_RECORDS.toString())
-    }
+
+    @Test
+    fun flush_waits_for_the_queue_rather_than_for_a_return_code() =
+        runTest {
+            val stamp = "flush-$armName-${randomSuffix()}"
+            val producer =
+                kafkaProducer(
+                    ProducerConfig(
+                        buildMap {
+                            put("bootstrap.servers", bootstrap)
+                            put("acks", "all")
+                            putAll(smallQueueConfig())
+                        },
+                    ),
+                )
+            try {
+                withContext(Dispatchers.Default) {
+                    coroutineScope {
+                        (0 until FLUSH_RECORDS)
+                            .map { index ->
+                                async {
+                                    producer.send(ProducerRecord(testTopic, "$stamp:$index".encodeToByteArray()))
+                                }
+                            }.awaitAll()
+                    }
+                    producer.flush()
+                }
+                // After flush every record is accounted for, which is what makes the next assertion -
+                // made by the script against the broker - a statement about flush and not about timing.
+            } finally {
+                producer.close()
+            }
+            recordArmFact("flush.stamp", stamp)
+            recordArmFact("flush.count", FLUSH_RECORDS.toString())
+        }
 
     private companion object {
         // Enough to overrun a 100-record queue many times over, few enough to finish quickly.

@@ -20,8 +20,9 @@ plugins {
 // how a genuinely Kafka-free binary is produced to compare `ldd` against. It is a measurement aid,
 // not a supported build.
 val kafkaC: Boolean = findProperty("kafkakn.noKafkaC") == null
-val bundle: String = (findProperty("kafkakn.bundle") as String?)
-    ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}"
+val bundle: String =
+    (findProperty("kafkakn.bundle") as String?)
+        ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}"
 
 kotlin {
     jvm()

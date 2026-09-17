@@ -15,7 +15,6 @@ import kotlin.test.assertEquals
  * It is verified by reading the two result files, not by watching a build print BUILD SUCCESSFUL.
  */
 class HarnessTest {
-
     @Test
     fun the_common_suite_runs_on_this_target() {
         assertEquals(4, 2 + 2)

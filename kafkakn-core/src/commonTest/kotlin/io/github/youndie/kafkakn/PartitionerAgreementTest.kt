@@ -16,42 +16,48 @@ import kotlin.test.assertEquals
  * project where that stops being true.
  */
 class PartitionerAgreementTest {
-
     @Test
-    fun the_partition_chosen_for_each_key_is_recorded_for_comparison() = runTest {
-        val producer = kafkaProducer(
-            ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"),
-        )
-        try {
-            KEYS.forEach { key ->
-                val metadata = producer.send(
-                    ProducerRecord(testTopic, "partitioner:$key".encodeToByteArray(), key.encodeToByteArray()),
+    fun the_partition_chosen_for_each_key_is_recorded_for_comparison() =
+        runTest {
+            val producer =
+                kafkaProducer(
+                    ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"),
                 )
-                recordObservation("partitioner.$key", metadata.partition.toString())
+            try {
+                KEYS.forEach { key ->
+                    val metadata =
+                        producer.send(
+                            ProducerRecord(testTopic, "partitioner:$key".encodeToByteArray(), key.encodeToByteArray()),
+                        )
+                    recordObservation("partitioner.$key", metadata.partition.toString())
+                }
+                producer.flush()
+            } finally {
+                producer.close()
             }
-            producer.flush()
-        } finally {
-            producer.close()
         }
-    }
 
     @Test
-    fun the_same_key_goes_to_the_same_partition_twice() = runTest {
-        val producer = kafkaProducer(
-            ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"),
-        )
-        try {
-            val first = producer.send(
-                ProducerRecord(testTopic, "once".encodeToByteArray(), "stable".encodeToByteArray()),
-            )
-            val second = producer.send(
-                ProducerRecord(testTopic, "twice".encodeToByteArray(), "stable".encodeToByteArray()),
-            )
-            assertEquals(first.partition, second.partition)
-        } finally {
-            producer.close()
+    fun the_same_key_goes_to_the_same_partition_twice() =
+        runTest {
+            val producer =
+                kafkaProducer(
+                    ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"),
+                )
+            try {
+                val first =
+                    producer.send(
+                        ProducerRecord(testTopic, "once".encodeToByteArray(), "stable".encodeToByteArray()),
+                    )
+                val second =
+                    producer.send(
+                        ProducerRecord(testTopic, "twice".encodeToByteArray(), "stable".encodeToByteArray()),
+                    )
+                assertEquals(first.partition, second.partition)
+            } finally {
+                producer.close()
+            }
         }
-    }
 
     private companion object {
         // Enough keys that an accidental agreement is unlikely, few enough that the run stays short.

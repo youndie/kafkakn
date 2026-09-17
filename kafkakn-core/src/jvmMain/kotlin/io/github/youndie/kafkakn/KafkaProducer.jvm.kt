@@ -1,13 +1,13 @@
 package io.github.youndie.kafkakn
 
 import kotlinx.coroutines.suspendCancellableCoroutine
-import org.apache.kafka.clients.producer.ProducerConfig as ApacheProducerConfig
-import org.apache.kafka.clients.producer.ProducerRecord as ApacheRecord
-import org.apache.kafka.common.header.internals.RecordHeader as ApacheHeader
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import org.apache.kafka.clients.producer.ProducerConfig as ApacheProducerConfig
+import org.apache.kafka.clients.producer.ProducerRecord as ApacheRecord
+import org.apache.kafka.common.header.internals.RecordHeader as ApacheHeader
 
 /**
  * The JVM arm — and therefore the oracle.
@@ -34,14 +34,16 @@ public actual fun kafkaProducer(config: ProducerConfig): KafkaProducer = JvmKafk
  */
 internal fun translateForJava(properties: Map<String, String>): Map<String, String> {
     val ca = properties["ssl.ca.location"] ?: return properties
-    return properties - "ssl.ca.location" + mapOf(
-        "ssl.truststore.location" to ca,
-        "ssl.truststore.type" to "PEM",
-    )
+    return properties - "ssl.ca.location" +
+        mapOf(
+            "ssl.truststore.location" to ca,
+            "ssl.truststore.type" to "PEM",
+        )
 }
 
-internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
-
+internal class JvmKafkaProducer(
+    config: ProducerConfig,
+) : KafkaProducer {
     private val properties = translateForJava(config.properties)
 
     init {
@@ -59,13 +61,14 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
         }
     }
 
-    private val delegate = org.apache.kafka.clients.producer.KafkaProducer<ByteArray, ByteArray>(
-        Properties().apply {
-            properties.forEach { (key, value) -> setProperty(key, value) }
-        },
-        ByteArraySerializer(),
-        ByteArraySerializer(),
-    )
+    private val delegate =
+        org.apache.kafka.clients.producer.KafkaProducer<ByteArray, ByteArray>(
+            Properties().apply {
+                properties.forEach { (key, value) -> setProperty(key, value) }
+            },
+            ByteArraySerializer(),
+            ByteArraySerializer(),
+        )
 
     /**
      * Bridges the client's callback into a suspension.
@@ -79,10 +82,15 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
         suspendCancellableCoroutine { continuation ->
             delegate.send(record.toApache()) { metadata, failure ->
                 when {
-                    failure != null -> continuation.resumeWithException(failure)
-                    else -> continuation.resume(
-                        RecordMetadata(metadata.topic(), metadata.partition(), metadata.offset()),
-                    )
+                    failure != null -> {
+                        continuation.resumeWithException(failure)
+                    }
+
+                    else -> {
+                        continuation.resume(
+                            RecordMetadata(metadata.topic(), metadata.partition(), metadata.offset()),
+                        )
+                    }
                 }
             }
         }
@@ -94,14 +102,15 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
      * three-argument form did. The headers are handed over in order and duplicates are kept: the
      * Java client stores an ordered list too, so nothing has to be reconciled here.
      */
-    private fun ProducerRecord.toApache(): ApacheRecord<ByteArray, ByteArray> = ApacheRecord(
-        topic,
-        null,
-        null,
-        key,
-        value,
-        headers.map { ApacheHeader(it.name, it.value) },
-    )
+    private fun ProducerRecord.toApache(): ApacheRecord<ByteArray, ByteArray> =
+        ApacheRecord(
+            topic,
+            null,
+            null,
+            key,
+            value,
+            headers.map { ApacheHeader(it.name, it.value) },
+        )
 
     override suspend fun flush() {
         delegate.flush()

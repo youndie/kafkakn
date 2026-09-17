@@ -18,7 +18,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalForeignApi::class)
 class CinteropLinkTest {
-
     @Test
     fun librdkafka_is_linked_and_answers() {
         val version = rd_kafka_version_str()?.toKString()

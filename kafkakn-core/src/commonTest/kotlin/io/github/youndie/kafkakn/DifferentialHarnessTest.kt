@@ -15,7 +15,6 @@ import kotlin.test.assertEquals
  * is shown failing; a differential oracle nobody has seen disagree is a diagram.
  */
 class DifferentialHarnessTest {
-
     @Test
     fun both_arms_record_what_they_see_of_the_surface() {
         val config = ProducerConfig("bootstrap.servers" to "127.0.0.1:9092", "acks" to "all")
@@ -37,8 +36,7 @@ class DifferentialHarnessTest {
      * Returns [value] unchanged, unless this arm was named by `kafkakn.skewArm` — in which case it
      * returns something else, so the comparison between the arms must fail.
      */
-    private fun skewed(value: String): String =
-        if (skewedArm() == armName) "$value-skewed" else value
+    private fun skewed(value: String): String = if (skewedArm() == armName) "$value-skewed" else value
 }
 
 internal expect fun skewedArm(): String?
