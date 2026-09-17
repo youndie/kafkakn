@@ -1,7 +1,7 @@
 ---
 id: B-14
 title: "CI: make check on every pull request"
-status: open
+status: wip
 priority: P0
 size: XS
 stage: stage-0-it-builds
