@@ -1,0 +1,51 @@
+=== the C bundle ===
+
+=== with the C bundle: link, run, and keep the binary ===
+BUILD SUCCESSFUL in 10s
+7 actionable tasks: 5 executed, 2 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  linuxX64Test tests=6 failures=0
+  CinteropLinkTest is among them, so librdkafka was linked AND called
+
+=== without it: the same build, Kafka-free, for the comparison ===
+BUILD SUCCESSFUL in 14s
+6 actionable tasks: 5 executed, 1 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  the baseline has no CinteropLinkTest, as it must
+
+=== the two binaries ===
+  with           34412128 bytes  md5=a297ef14f4956fd3453b6e122eb36c30
+  without        10221168 bytes  md5=d1b521483d56ede3d9bd6b96c1e3722f
+
+=== RQ: does linking librdkafka add anything to what is resolved at runtime? ===
+  Kafka-free:
+    /lib64/ld-linux-x86-64.so.2
+    libc.so.6
+    libcrypt.so.1
+    libdl.so.2
+    libgcc_s.so.1
+    libm.so.6
+    libpthread.so.0
+    libresolv.so.2
+    librt.so.1
+    libutil.so.1
+    linux-vdso.so.1
+  with librdkafka:
+    /lib64/ld-linux-x86-64.so.2
+    libc.so.6
+    libcrypt.so.1
+    libdl.so.2
+    libgcc_s.so.1
+    libm.so.6
+    libpthread.so.0
+    libresolv.so.2
+    librt.so.1
+    libutil.so.1
+    linux-vdso.so.1
+  LDD: identical - librdkafka, OpenSSL, zlib and zstd resolve nothing at runtime
+
+=== and no toolchain override was used ===
+  -Xoverride-konan-properties outside comments: 0
+
+=== verdict ===
+B-03: the bundle links with no overrides, and adds nothing to the runtime set

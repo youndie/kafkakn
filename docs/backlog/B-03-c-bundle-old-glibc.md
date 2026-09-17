@@ -1,7 +1,7 @@
 ---
 id: B-03
 title: "The C bundle, built against glibc 2.17, consumed by cinterop"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-0-it-builds

@@ -1,0 +1,33 @@
+Guard the <sys/random.h> include the way its call site is already guarded.
+
+librdkafka's src/rdrand.c includes <sys/random.h> under `#ifndef _WIN32` only, while the
+getentropy() call the header exists for is guarded by HAVE_GETENTROPY - which configure correctly
+leaves undefined on an older glibc. <sys/random.h> arrived in glibc 2.25, so on anything older
+configure succeeds and make dies on the include.
+
+This project builds the C bundle against glibc 2.17 so that nothing references a symbol newer than
+the 2.19 Kotlin/Native ships (docs/research/research-architecture.md §1.3), which makes this the one
+thing standing in the way.
+
+It is a FILE rather than a sed inside the build script on purpose: when librdkafka is bumped, a
+patch that no longer applies is a conflict somebody sees, and a sed that no longer matches is a
+silent no-op followed by a confusing compile error.
+
+Nothing is reported upstream from this project, so the patch is carried here.
+
+--- a/src/rdrand.c
++++ b/src/rdrand.c
+@@ -31,10 +31,12 @@
+ #include "rdtime.h"
+ #include "rdmurmur2.h"
+ #ifndef _WIN32
+ /* getentropy() can be present in one of these two */
+ #include <unistd.h>
++#if defined(HAVE_GETENTROPY)
+ #include <sys/random.h>
++#endif
+ #endif
+ 
+ #ifdef HAVE_OSSL_SECURE_RAND_BYTES
+ #include <openssl/rand.h>
+ #endif

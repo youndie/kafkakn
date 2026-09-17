@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[ ]` | The C bundle, built against glibc 2.17, consumed by cinterop | P0 | M | B-01 |
+| [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[~]` | The C bundle, built against glibc 2.17, consumed by cinterop | P0 | M | B-01 |
 | [B-05](docs/backlog/B-05-differential-harness.md) `[ ]` | The differential harness: one suite, both actuals, one broker | P0 | M | B-02, B-04 |
 | [B-06](docs/backlog/B-06-jvm-actual.md) `[ ]` | The JVM actual over kafka-clients | P0 | M | B-05 |
 | [B-07](docs/backlog/B-07-native-actual.md) `[ ]` | The native actual: produce and delivery reports across the callback seam | P0 | L | B-03, B-06 |
