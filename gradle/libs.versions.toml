@@ -1,0 +1,23 @@
+# Exact versions, never ranges. The deliverable of this project is a library other people pin, and
+# a range makes "which version did that" unanswerable. What actually resolved is read off the
+# dependency tree in the run, because a catalogue states an intent and a build states a fact.
+
+[versions]
+kotlin = "2.4.20"
+coroutines = "1.11.0"
+# The JVM arm delegates to this, and it is the same release as the broker below - one variable fewer
+# in the differential suite.
+kafka-clients = "4.3.1"
+# Not a Gradle dependency: the C library the native arm links. Pinned here so one file names the
+# whole environment; ci/librdkafka reads it.
+librdkafka = "2.13.0"
+# A moving tag would silently re-point the environment between runs.
+kafka-image = "apache/kafka:4.3.1"
+
+[libraries]
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
