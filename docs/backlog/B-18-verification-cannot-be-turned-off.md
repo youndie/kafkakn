@@ -33,13 +33,24 @@ implementation that was never meant to be trusted alone.
 - The second rejected alternative is a named convenience (`verifyCertificates = false`). Worse than
   the raw key: a library that offers one gets it used in production
   ([B-11](B-11-tls.md)).
-- Not covered: hostname verification policy, mTLS, and certificate rotation — unchanged from B-11.
+- **The second key of the same family is decided here too, and differently.**
+  `ssl.endpoint.identification.algorithm` exists on **both** arms with the same meaning — empty or
+  `none` turns off **hostname** verification, `https` is the default — so it is a portable key by
+  this contract's own rule, it carries Kafka's own name, and whatever it does happens where the
+  oracle can see it. It passes. What it must not do is pass *quietly*: the contract names it as
+  **the one remaining way to weaken TLS through this API**, so that the README's "verification is on
+  and cannot be turned off" is read exactly as far as it is true — trust cannot be turned off,
+  hostname checking can.
+- Not covered: mTLS and certificate rotation — unchanged from B-11.
 
 - AC: constructing a producer with that key throws on **both** arms, and the message names the key.
 - AC: the test is shown failing against the arm as it is today — on native the key is accepted now,
   so the guard has to be watched catching it.
 - AC: the README sentence and the contract's *Configuration* section say the same thing, and the
   contract records this as a decision with the asymmetry as its reason.
+- AC: `ssl.endpoint.identification.algorithm` is accepted on both arms, named in the contract as the
+  only remaining weakening knob, and the README sentence is worded so that it does not claim
+  otherwise.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/jvmMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.jvm.kt`,
   `docs/api/producer-contract.md`, `README.md`.

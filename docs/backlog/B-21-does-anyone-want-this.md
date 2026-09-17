@@ -1,19 +1,38 @@
 ---
 id: B-21
 title: "RQ-B: does anyone outside this portfolio want it?"
-status: open
+status: dropped
 priority: P1
 size: M
 stage: stage-4-a-real-user
-blocked_by: [B-16, B-19, B-20]
 ---
 
 # B-21 — RQ-B: does anyone outside this portfolio want it?
 
-Every question this project has answered so far was about correctness, and it answered them all
-green. None of them is evidence that the library should exist. This item is the demand test, with
-its window and its verdicts fixed **before** the first announcement so that the answer cannot be
-re-read afterwards.
+**Dropped 2026-09-17, before any of it ran: nothing is posted anywhere.** The rule that keeps this
+project out of other people's repositories covers announcements too, and an announcement is the only
+mechanism this item had.
+
+What it was for is still true — every question answered so far was about correctness and every
+answer was green, and none of them is evidence that the library should exist. The rest of this file
+is kept as the design of a test that was not run, because the alternative is re-inventing it badly
+later.
+
+## What dropping it costs, and what it settles
+
+- **The amber outcome becomes the standing state rather than a finding.** The pre-registered
+  expectation was "correct and unwanted"; without a window, that is simply where the repository is,
+  and nobody will be able to say afterwards whether a demand existed.
+- **Maven Central stays gated**, and on nothing this project can perform: the condition is a user
+  arriving of their own accord, which is now the only way one can.
+- **`linuxArm64` stays closed** for the same reason it was closed — a second target is engineering
+  with no signal behind it, and there will be no signal.
+- The README's snapshot sentence ([B-16](B-16-readme-says-what-was-measured.md)) therefore names a
+  **condition**, not a date, and this file is where it points for why there is no date.
+
+---
+
+*The design below was written before the item was dropped. It is preserved, not active.*
 
 - **The decision and its reason.** Announced **once each**, one week apart: Kotlin Slack
   (`#kotlin-native`, `#server`), r/Kotlin, then a Show HN. The Show HN is built on **the two
@@ -41,6 +60,6 @@ re-read afterwards.
 - AC: no coordinate, target or release decision is taken before that date on the strength of early
   signal.
 
-**Who does this.** The announcements are posts under a person's name in communities that have
-opinions about being announced to; they are the owner's to make, not an agent's. What can be
-prepared here is the text, the links and the note that will hold the verdict.
+**Who would have done this.** The announcements are posts under a person's name in communities that
+have opinions about being announced to — the owner's to make, never an agent's. That was true while
+the item was open and it is the shape of the rule that closed it.
