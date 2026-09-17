@@ -58,14 +58,30 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
 - Snapshots to `reposilite.kotlin.website/snapshots` under a **content filter**, so an outage there
   cannot fail the resolution of anything else ([D7](../research/research-architecture.md)).
 - **No Maven Central**, no release, no version promise.
-- Gradle conventions from the portfolio's shared plugin where they fit; nothing published until
-  [B-12](../backlog/B-12-publish-snapshots.md).
+- **Three coordinates, not one.** A KMP module has as many as it has targets, and a route that
+  covers one covers none of the others:
+
+  | Coordinate | What a consumer gets |
+  |---|---|
+  | `io.github.youndie:kafkakn-core` | the metadata module — what common code asks for |
+  | `io.github.youndie:kafkakn-core-jvm` | the jvm variant |
+  | `io.github.youndie:kafkakn-core-linuxx64` | the native variant, with the cinterop klib beside it |
+
+  `ci/publish/run.sh` names all three after a publish and then compiles a **separate build** against
+  them from a cache purged of this group — and requires that same probe to fail against an empty
+  repository, because "it resolved" says nothing about where it resolved from.
+- The coordinate lives in `gradle.properties` and nowhere else. Gradle applies `group` and `version`
+  to every project, so a module cannot publish under a different one by forgetting to set it.
 
 ## Quirks — the ones that will bite
 
 - **The C bundle is not built by Gradle.** It is produced by a script into a cache outside the
   source tree and consumed by cinterop as static archives. Building it inside the Gradle graph
   would put a multi-minute Docker build on every clean checkout.
+- **Publishing the native variant needs the C bundle.** `-Pkafkakn.noKafkaC` produces a module
+  without the cinterop — a different artefact wearing the same coordinate. It is a measurement aid
+  and never a publication route, which is why `.github/workflows/publish.yaml` builds the bundle
+  rather than dropping it.
 - **The cinterop definition names no target.** Paths arrive from the build script, so a second
   native target is a matrix row ([D6](../research/research-architecture.md)).
 - **The native actual cannot use `rd_kafka_producev`** — it is variadic

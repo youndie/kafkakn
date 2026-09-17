@@ -6,6 +6,15 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
+
+        // Where this project PUBLISHES, declared here as well because the consumer acceptance in
+        // B-13 resolves from it. The content filter is not politeness: an unfiltered repository is
+        // asked about every dependency in the build, so an outage at this host would fail the
+        // resolution of Kotlin and coroutines too - measured in a sibling project, where an
+        // unreachable third-party repository broke the resolution of OUR artefact.
+        maven("https://reposilite.kotlin.website/snapshots") {
+            content { includeGroupAndSubgroups("io.github.youndie") }
+        }
     }
 }
 

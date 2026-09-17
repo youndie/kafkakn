@@ -5,6 +5,7 @@
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    `maven-publish`
 }
 
 // The C bundle, built by ci/librdkafka/build.sh into a cache outside the source tree. It is not
@@ -74,3 +75,48 @@ kotlin {
     }
 }
 
+// A KMP module has as many coordinates as it has targets, and a publication route that covers one
+// does not cover the others. The Kotlin plugin creates all three publications itself:
+//
+//   io.github.youndie:kafkakn-core           the metadata module - what a common consumer asks for
+//   io.github.youndie:kafkakn-core-jvm       the jvm variant
+//   io.github.youndie:kafkakn-core-linuxx64  the native variant
+//
+// `ci/publish/run.sh` asserts all three are present after a publish, because "it published" is a
+// statement about a task, not about what a consumer can resolve.
+publishing {
+    publications.withType<MavenPublication>().configureEach {
+        pom {
+            name.set("kafkakn")
+            description.set("A Kafka producer for Kotlin Multiplatform: librdkafka on native, the official client on the JVM")
+            url.set("https://github.com/youndie/kafkakn")
+            licenses {
+                license {
+                    name.set("The Apache License, Version 2.0")
+                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                }
+            }
+            scm { url.set("https://github.com/youndie/kafkakn") }
+        }
+    }
+    repositories {
+        // A real Maven repository on disk. It is what the publication proof resolves from, and it
+        // is deliberately NOT mavenLocal: `~/.m2` is shared with everything else on the machine, so
+        // a consumer resolving from it can succeed on an artefact that was never published here.
+        maven {
+            name = "local"
+            url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
+        }
+        maven {
+            name = "wip"
+            url = uri("https://reposilite.kotlin.website/snapshots")
+            credentials {
+                // Gradle properties, which ORG_GRADLE_PROJECT_* supplies in CI. `orNull` rather
+                // than `get()`: a developer without the credentials must still be able to configure
+                // the build and publish to `local`.
+                username = providers.gradleProperty("REPOSILITE_USER").orNull
+                password = providers.gradleProperty("REPOSILITE_SECRET").orNull
+            }
+        }
+    }
+}
