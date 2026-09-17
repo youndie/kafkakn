@@ -14,7 +14,32 @@ exists so the native arm can be proved right. The architecture and the evidence 
 [docs/research/research-architecture.md](docs/research/research-architecture.md); read it before
 taking an item, because the obvious thing here is wrong in at least four documented ways.
 
-Nothing is built yet. Every layer document says `status: draft` and means it.
+**Stages 0 to 3 are closed**: both arms produce, the differential suite runs on one broker, and
+snapshots are on reposilite with a build outside this one that resolves them, links a native binary
+and runs it.
+
+Stage 4 is a different kind of question and is budgeted like one — **three working days of build and
+a six-week observation window, hard stop**. What the project lacks is not a second target but a
+first real user, and two of its claims have never met one: that `close` keeps its promise inside an
+ordered shutdown, and that a stranger can get from the README to a running binary. The third
+question is whether anybody outside this portfolio wants it at all.
+
+### Kill criteria for stage 4
+
+They are written down before the work so that a bad result is a result rather than a
+disappointment:
+
+1. **RQ-A red** — a record accepted by the publisher and missing from the topic. Stop, fix the
+   contract, publish the negative result. Nothing is announced about a library that can lose a
+   record on shutdown.
+2. **RQ-C red twice** — the artefact is not shippable, and announcing it would spend the only first
+   impression this project gets.
+3. **Day three ends with RQ-A unmeasured** — the integration is too big for the budget; fall back to
+   a smaller publisher and re-plan rather than extending.
+
+The expected outcome is written down too, so that it cannot be claimed afterwards: **RQ-A green and
+RQ-B amber** — correct and unwanted. That is a fine place to leave a repository, and the freeze is
+itself a published result.
 
 ## Stages
 
@@ -23,7 +48,8 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 | `stage-0-it-builds` | It builds, and a test can fail | Targets, the `expect` surface, the C bundle, the broker, and the differential harness — before any producer exists. |
 | `stage-1-produce` | It produces, and loses nothing | Both actuals, backpressure, and the accounting that catches the defect this project is shaped around. |
 | `stage-2-real-use` | Usable against a real deployment | Headers and TLS. |
-| `stage-3-usable-by-others` | Someone else can use it | Snapshots, and a consumer outside this repository that proves it. |
+| `stage-3-usable-by-others` | Someone else can use it | Snapshots, and a build outside this repository that proves it. |
+| `stage-4-a-real-user` | Somebody actually runs it | A publisher in a deployment no test harness controls, a stranger's first ten minutes, and whether anyone outside the portfolio wants it. |
 
 ## Marks
 
@@ -31,9 +57,16 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (6)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-19](docs/backlog/B-19-close-under-a-real-shutdown.md) `[ ]` | RQ-A: does close() keep its promise inside a real ordered shutdown? | P0 | L | - |
+| [B-16](docs/backlog/B-16-readme-says-what-was-measured.md) `[ ]` | The README says what was measured, not what sounded right | P1 | S | - |
+| [B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md) `[ ]` | Certificate verification: the README and the contract disagree | P1 | S | - |
+| [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[ ]` | RQ-C: does the artefact resolve and link on a machine that has never seen this repository? | P1 | S | - |
+| [B-21](docs/backlog/B-21-does-anyone-want-this.md) `[ ]` | RQ-B: does anyone outside this portfolio want it? | P1 | M | B-16, B-19, B-20 |
+| [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 
 ## Closed (15)
 

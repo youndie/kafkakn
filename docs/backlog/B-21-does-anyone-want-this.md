@@ -1,0 +1,46 @@
+---
+id: B-21
+title: "RQ-B: does anyone outside this portfolio want it?"
+status: open
+priority: P1
+size: M
+stage: stage-4-a-real-user
+blocked_by: [B-16, B-19, B-20]
+---
+
+# B-21 — RQ-B: does anyone outside this portfolio want it?
+
+Every question this project has answered so far was about correctness, and it answered them all
+green. None of them is evidence that the library should exist. This item is the demand test, with
+its window and its verdicts fixed **before** the first announcement so that the answer cannot be
+re-read afterwards.
+
+- **The decision and its reason.** Announced **once each**, one week apart: Kotlin Slack
+  (`#kotlin-native`, `#server`), r/Kotlin, then a Show HN. The Show HN is built on **the two
+  findings** — the glibc 2.19 sysroot, and `flush` returning success with a quarter of the input
+  lost — rather than on the library: the findings are the part a stranger gains something from
+  whether or not they ever use this.
+- The rejected alternative is announcing first and deciding what counts later. The whole value of a
+  demand test is that the bar was set while the answer was unknown.
+- Not covered: paid promotion, cross-posting the same text, and announcing before
+  [B-19](B-19-close-under-a-real-shutdown.md) is green — nothing is said about a library that can
+  lose a record on shutdown.
+
+**The window is six weeks from the first announcement**, and the verdicts are:
+
+| | What it takes | What follows |
+|---|---|---|
+| **green** | one external issue or PR, **or** one stranger describing their own use case — "nice work" is not one | Maven Central is unlocked and `linuxArm64` re-opens as an item |
+| **amber** | stars and comments only | snapshots stay, nothing new is built |
+| **red** | nothing | the repository is frozen at the producer, the README says so, **and the freeze is the published result** |
+
+- AC: three announcements, one week apart, in that order, each linked from the research note.
+- AC: at week six the verdict is written into `docs/research/2026-10-xx-m2-publisher.md` **whichever
+  colour it is**, with the links, and the README's snapshot sentence ([B-16](B-16-readme-says-what-was-measured.md))
+  points at it.
+- AC: no coordinate, target or release decision is taken before that date on the strength of early
+  signal.
+
+**Who does this.** The announcements are posts under a person's name in communities that have
+opinions about being announced to; they are the owner's to make, not an agent's. What can be
+prepared here is the text, the links and the note that will hold the verdict.
