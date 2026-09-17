@@ -609,6 +609,43 @@ not free the moment its process is: the control round died of `EADDRINUSE` secon
 exit, and a round that never started reads exactly like a round that passed. Both are why the control
 round exists at all: a reconciliation that has never come out non-zero has not been shown able to.
 
+### 2.15 RQ-C, measured: the README did not compile, and the toolchain is most of the wait
+
+**Measured 2026-09-17**, [B-20](../backlog/B-20-a-strangers-first-ten-minutes.md), `ci/b-20/run.sh`.
+The machine is a container with a JDK, Gradle and nothing else: no clone, no Gradle cache, no
+`~/.konan`, and no knowledge of this repository beyond what the README prints. The project it builds
+is **extracted from the README itself** rather than written here, because a scaffold written by this
+repository is exactly the part a stranger does not have.
+
+**The first run was red in 25 seconds, and the reason was the README.** Its *Getting it* block showed
+a `repositories { }` fragment and a top-level `dependencies { implementation(...) }` one. There is no
+`implementation` configuration at the top level of a multiplatform project — which is the only kind
+of project that can link the native artefact — so the build failed at script compilation:
+`Unresolved reference 'implementation'`. The block was also missing `mavenCentral()`, so nothing else
+would have resolved either. The README now carries a **whole build file**, and the check pastes it
+verbatim rather than into a scaffold; a scaffold would have hidden this for ever.
+
+**Then green, twice:**
+
+| | run 1 | run 2 |
+|---|---|---|
+| total, `gradle` to a record on the topic | **106 s** | **109 s** |
+| of which the Kotlin/Native toolchain arriving | 74 s | 78 s |
+| everything after it | 32 s | 31 s |
+
+Against a ten-minute budget, with **~70% of it Kotlin/Native downloading its own LLVM, sysroot and
+libffi**. The split is why that is legible: a first run that overran because of the download would
+otherwise be argued about afterwards rather than read off the log.
+
+**Two things this number is not.** It is a container on the build machine, so the CPU and the network
+are that machine's and not a stranger's — it is a floor, not a universal figure. And the toolchain
+lands inside the container rather than in the mounted home, which is what keeps every run cold; a
+stranger's second build does not pay the 74 s again.
+
+**The red run is also the positive control, and it arrived without being arranged.** A check whose
+subject is "did it work" passes just as well when it is not looking, and this one was watched failing
+for a real reason before it was watched passing.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement

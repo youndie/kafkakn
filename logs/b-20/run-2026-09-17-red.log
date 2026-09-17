@@ -1,0 +1,108 @@
+=== environment ===
+2026-09-17T22:20:12+02:00
+  image: gradle:9.2.0-jdk21, kotlin: 2.4.20, budget: 600s
+
+=== the broker, outside the clock ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-stranger	TopicId: uNYxPnC5QfaZkalAQieAoA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== the project, written from the README ===
+  extracted 9 lines from README.md
+  | repositories {
+  |     maven("https://reposilite.kotlin.website/snapshots") {
+  |         content { includeGroupAndSubgroups("io.github.youndie") }
+  |     }
+  | }
+  | 
+  | dependencies {
+  |     implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT")
+  | }
+
+=== the clock starts ===
+     0  Unable to find image 'gradle:9.2.0-jdk21' locally
+     1  9.2.0-jdk21: Pulling from library/gradle
+     2  bc6e70242c7c: Pulling fs layer
+     2  54b92ed1102d: Pulling fs layer
+     2  4f4fb700ef54: Pulling fs layer
+     2  79fa7d8e025e: Pulling fs layer
+     2  8c0224069196: Pulling fs layer
+     2  a08fea813a13: Pulling fs layer
+     2  919c22d58535: Pulling fs layer
+     2  b7f312f519fb: Pulling fs layer
+     2  388658fb69f5: Pulling fs layer
+     2  4f4fb700ef54: Already exists
+     3  54b92ed1102d: Download complete
+     3  7de225aea786: Download complete
+     3  8c0224069196: Download complete
+     3  919c22d58535: Download complete
+     3  bc6e70242c7c: Download complete
+    10  ff7eb37f82f6: Download complete
+    15  79fa7d8e025e: Download complete
+    15  b7f312f519fb: Download complete
+    15  b7f312f519fb: Pull complete
+    17  388658fb69f5: Download complete
+    18  388658fb69f5: Pull complete
+    18  54b92ed1102d: Pull complete
+    18  8c0224069196: Pull complete
+    18  919c22d58535: Pull complete
+    18  4f4fb700ef54: Pull complete
+    19  79fa7d8e025e: Pull complete
+    27  a08fea813a13: Download complete
+    28  bc6e70242c7c: Pull complete
+    28  bc6e70242c7c: Pull complete
+    28  a08fea813a13: Pull complete
+    28  Digest: sha256:f73b9e12248ea459a1118f40da095c5305e90e2ebb22b790bcf0bfb9fcb1e39b
+    28  Status: Downloaded newer image for gradle:9.2.0-jdk21
+    29  
+    29  Welcome to Gradle 9.2.0!
+    29  
+    29  Here are the highlights of this release:
+    29   - Windows ARM support
+    29   - Improved publishing APIs
+    29   - Better guidance for dependency verification failures
+    29  
+    29  For more details see https://docs.gradle.org/9.2.0/release-notes.html
+    29  
+    29  To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.2.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+    29  Daemon will be stopped at the end of the build 
+    54  
+    54  > Configure project :
+    54  e: file:///project/build.gradle.kts:18:5: Unresolved reference 'implementation'.
+    54  
+    54  FAILURE: Build failed with an exception.
+    54  
+    54  * Where:
+    54  Build file '/project/build.gradle.kts' line: 18
+    54  
+    54  * What went wrong:
+    54  Script compilation error:
+    54  
+    54    Line 18:     implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT")
+    54                 ^ Unresolved reference 'implementation'.
+    54  
+    54  1 error
+    54  
+    54  * Try:
+    54  > Run with --stacktrace option to get the stack trace.
+    54  > Run with --info or --debug option to get more log output.
+    54  > Run with --scan to generate a Build Scan (powered by Develocity).
+    54  > Get more help at https://help.gradle.org.
+    54  
+    54  BUILD FAILED in 25s
+
+=== the two numbers ===
+  toolchain arriving:   not seen in the log - either already present or named differently
+  everything after it:  54s
+  what the stranger waits: 54s of a 600s budget
+
+=== verdict ===
+RED: the binary never produced a record. What it needed that the README does not say is in
+     /tmp/kafkakn-b-20/run.log, and it becomes README text before anything else.
+      54  e: file:///project/build.gradle.kts:18:5: Unresolved reference 'implementation'.
+      54  FAILURE: Build failed with an exception.
+      54  Script compilation error:
+      54                 ^ Unresolved reference 'implementation'.
+      54  1 error
+      54  BUILD FAILED in 25s

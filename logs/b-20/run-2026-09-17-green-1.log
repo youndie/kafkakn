@@ -1,0 +1,98 @@
+=== environment ===
+2026-09-17T22:21:31+02:00
+  image: gradle:9.2.0-jdk21, budget: 600s
+  kotlin, as the README names it: kotlin("multiplatform") version "2.4.20"
+
+=== the broker, outside the clock ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-stranger	TopicId: uNYxPnC5QfaZkalAQieAoA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== the project, written from the README ===
+  extracted 20 lines from README.md
+  | plugins {
+  |     kotlin("multiplatform") version "2.4.20"
+  | }
+  | 
+  | repositories {
+  |     maven("https://reposilite.kotlin.website/snapshots") {
+  |         content { includeGroupAndSubgroups("io.github.youndie") }
+  |     }
+  |     mavenCentral()
+  | }
+  | 
+  | kotlin {
+  |     linuxX64("native") {
+  |         binaries.executable { entryPoint = "main" }
+  |     }
+  | 
+  |     sourceSets.commonMain.dependencies {
+  |         implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT")
+  |     }
+  | }
+
+=== the clock starts ===
+     1  
+     1  Welcome to Gradle 9.2.0!
+     1  
+     1  Here are the highlights of this release:
+     1   - Windows ARM support
+     1   - Improved publishing APIs
+     1   - Better guidance for dependency verification failures
+     1  
+     1  For more details see https://docs.gradle.org/9.2.0/release-notes.html
+     1  
+     1  To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.2.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+     2  Daemon will be stopped at the end of the build 
+    25  
+    25  > Configure project :
+    25  w: ⚠️ Default Kotlin Hierarchy Template Misconfiguration Due to Illegal Target Names
+    25  The Default Kotlin Hierarchy Template was not applied to 'root project 'stranger'':
+    25  Source sets created by the following targets will clash with source sets created by the template:
+    25  [native]
+    25  
+    25  Consider renaming the targets or disabling the default template by adding
+    25      'kotlin.mpp.applyDefaultHierarchyTemplate=false'
+    25  to your gradle.properties
+    25  Solution: Please rename the targets or disable the default template.
+    25  Learn more about hierarchy templates: https://kotl.in/hierarchy-template
+    25  
+    25  
+    25  > Task :kmpPartiallyResolvedDependenciesChecker
+    26  > Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+    49  
+    49  > Task :downloadKotlinNativeDistribution
+    49  Kotlin/Native bundle directory /home/gradle/.konan/kotlin-native-prebuilt-linux-x86_64-2.4.20 is not empty. Native bundle files will be overwritten.
+    52  Downloading native dependencies (LLVM, sysroot etc). This is a one-time action performed only on the first run of the compiler.
+    52  Downloading dependency https://download.jetbrains.com/kotlin/native/x86_64-unknown-linux-gnu-gcc-8.3.0-glibc-2.19-kernel-4.9-2.tar.gz to /home/gradle/.konan/dependencies/cache/x86_64-unknown-linux-gnu-gcc-8.3.0-glibc-2.19-kernel-4.9-2.tar.gz
+    57  Done.
+    57  Extracting dependency: /home/gradle/.konan/dependencies/cache/x86_64-unknown-linux-gnu-gcc-8.3.0-glibc-2.19-kernel-4.9-2.tar.gz into /home/gradle/.konan/dependencies
+    59  Downloading dependency https://download.jetbrains.com/kotlin/native/lldb-4-linux.tar.gz to /home/gradle/.konan/dependencies/cache/lldb-4-linux.tar.gz
+    61  Done.
+    61  Extracting dependency: /home/gradle/.konan/dependencies/cache/lldb-4-linux.tar.gz into /home/gradle/.konan/dependencies
+    61  Downloading dependency https://download.jetbrains.com/kotlin/native/resources/llvm/21-x86_64-linux/llvm-21-x86_64-linux-essentials-116.tar.gz to /home/gradle/.konan/dependencies/cache/llvm-21-x86_64-linux-essentials-116.tar.gz
+    72  Done.
+    72  Extracting dependency: /home/gradle/.konan/dependencies/cache/llvm-21-x86_64-linux-essentials-116.tar.gz into /home/gradle/.konan/dependencies
+    74  Downloading dependency https://download.jetbrains.com/kotlin/native/libffi-3.2.1-2-linux-x86-64.tar.gz to /home/gradle/.konan/dependencies/cache/libffi-3.2.1-2-linux-x86-64.tar.gz
+    74  Done.
+    74  Extracting dependency: /home/gradle/.konan/dependencies/cache/libffi-3.2.1-2-linux-x86-64.tar.gz into /home/gradle/.konan/dependencies
+    84  
+    84  > Task :compileKotlinNative
+    99  > Task :linkReleaseExecutableNative
+    99  
+    99  [Incubating] Problems report is available at: file:///project/build/reports/problems/problems-report.html
+    99  
+    99  BUILD SUCCESSFUL in 1m 38s
+    99  4 actionable tasks: 4 executed
+    99  Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.2.0/userguide/configuration_cache_enabling.html
+    99  STRANGER-OK kafkakn-stranger-1@0
+
+=== the two numbers ===
+  toolchain arriving:   74s
+  everything after it:  32s
+  what the stranger waits: 106s of a 600s budget
+
+=== verdict ===
+  the topic's end offsets: 0 -> 1
+GREEN: from an empty machine to a record on the topic in 106s
