@@ -2,7 +2,7 @@
 id: feature-secure-connection
 title: Connect to a broker over TLS
 type: feature
-status: draft
+status: active
 owner: unassigned
 involved_services:
   - kafkakn-core

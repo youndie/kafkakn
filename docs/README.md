@@ -14,9 +14,15 @@ does.
 
 ## The rule that governs the documents
 
-**`main` describes what exists.** Nothing is built, so every layer document is `status: draft` and
-every scenario is marked *target*. A document that flips to `active` without a test behind it is a
-lie the next reader will believe.
+**`main` describes what exists**, and `status: draft` is reserved for a document living in an open
+pull request — the checker enforces that on the default branch. A design-only repository does not
+get to mark everything `draft` and call it honest: the documents here are `status: active`, and what
+is not built is labelled ***target*** in the text, scenario by scenario. That is the format's answer
+and it is a better one, because the status field then says where a document is in the workflow while
+the prose says what is true.
+
+Today every scenario in every feature carries *target* and nothing is implemented. A scenario that
+loses that marker without a test behind it is a lie the next reader will believe.
 
 ## Coverage map
 

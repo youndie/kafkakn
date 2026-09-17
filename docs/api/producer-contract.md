@@ -2,7 +2,7 @@
 id: producer-contract
 title: The producer contract — the expect surface and what it promises
 type: api_endpoints
-status: draft
+status: active
 services:
   - kafkakn-core
 contract_source:

@@ -60,7 +60,11 @@ platform's shape — and that is a finding for the research document, not someth
   identical to one that worked. Unknown keys fail at construction.
 - **Do not name a private project.** This repository is public. The work it starts from was done in
   one that is not: quote the measurements with their method, never the repository.
-- **Do not mark a document `active` without a test behind it.** `main` describes what exists.
+- **Do not set `status: draft` on the default branch.** It is reserved for a document in an open
+  pull request and the checker rejects it on `main`. A document that is not built yet is `active`
+  with its unbuilt parts marked ***target*** in the text — see [docs/README.md](docs/README.md).
+- **Do not drop a *target* marker without a test behind it.** `main` describes what exists, and the
+  marker is where that is said.
 - **Do not trust a gotcha inherited from a sibling project without re-checking it at the pinned
   version.** Several in the research document came from measurement here; the rest say where they
   came from.

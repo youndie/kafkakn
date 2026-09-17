@@ -2,7 +2,7 @@
 id: feature-backpressure-and-accounting
 title: Backpressure, and accounting for every record
 type: feature
-status: draft
+status: active
 owner: unassigned
 involved_services:
   - kafkakn-core

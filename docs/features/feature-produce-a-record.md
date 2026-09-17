@@ -2,7 +2,7 @@
 id: feature-produce-a-record
 title: Produce a record
 type: feature
-status: draft
+status: active
 owner: unassigned
 involved_services:
   - kafkakn-core
