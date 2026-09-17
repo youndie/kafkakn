@@ -31,3 +31,10 @@ internal actual fun skewedArm(): String? = testEnv("KAFKAKN_SKEW_ARM")
 
 internal actual fun randomSuffix(): String = platform.posix.time(null).toString() +
     platform.posix.getpid().toString(36)
+
+
+internal actual fun smallQueueConfig(): Map<String, String> = mapOf(
+    "queue.buffering.max.messages" to "100",
+)
+
+internal actual fun backpressureWaitCount(): Long = backpressureWaits.value

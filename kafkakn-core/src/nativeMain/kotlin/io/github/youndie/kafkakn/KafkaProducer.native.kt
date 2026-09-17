@@ -16,18 +16,15 @@ import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toCPointer
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.toLong
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.concurrent.AtomicLong
 import kotlin.concurrent.AtomicReference
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR__QUEUE_FULL
@@ -73,17 +70,20 @@ private const val RD_KAFKA_MSG_F_COPY: Int = 0x2
  * reachable from nowhere in particular. The map is replaced wholesale under compare-and-set, which
  * is enough for a registry written by producer threads and read by poll threads.
  */
-private val waiting = AtomicReference<Map<Long, Continuation<RecordMetadata>>>(emptyMap())
+private val waiting = AtomicReference<Map<Long, CompletableDeferred<RecordMetadata>>>(emptyMap())
 private val nextId = AtomicLong(1)
 
-private fun park(id: Long, continuation: Continuation<RecordMetadata>) {
+/** How often a caller has had to wait for room. Read by the suite; not public API. */
+internal val backpressureWaits = AtomicLong(0)
+
+private fun park(id: Long, slot: CompletableDeferred<RecordMetadata>) {
     while (true) {
         val current = waiting.value
-        if (waiting.compareAndSet(current, current + (id to continuation))) return
+        if (waiting.compareAndSet(current, current + (id to slot))) return
     }
 }
 
-private fun unpark(id: Long): Continuation<RecordMetadata>? {
+private fun unpark(id: Long): CompletableDeferred<RecordMetadata>? {
     while (true) {
         val current = waiting.value
         val found = current[id] ?: return null
@@ -120,7 +120,7 @@ private val deliveryReport = staticCFunction<
     // thrown on librdkafka's thread does NOT terminate the process and surfaces nowhere - it simply
     // leaves the continuation parked, and the caller stays suspended for ever. A hang is a worse
     // failure than a crash, because nothing reports it.
-    val continuation = unpark(record._private.toLong()) ?: return@staticCFunction
+    val slot = unpark(record._private.toLong()) ?: return@staticCFunction
     try {
         if (crashInDeliveryCallback.value) {
             val nothing: String? = null
@@ -129,21 +129,21 @@ private val deliveryReport = staticCFunction<
         val error = record.err
         val topic = rd_kafka_topic_name(record.rkt)?.toKString() ?: "<unknown topic>"
         if (error == RD_KAFKA_RESP_ERR_NO_ERROR) {
-            continuation.resume(
+            slot.complete(
                 RecordMetadata(topic = topic, partition = record.partition, offset = record.offset),
             )
         } else {
             // The topic is spelled into the message deliberately. rd_kafka_err2str gives
             // "Broker: Unknown topic or partition" and names nothing, so a caller with several
             // topics in flight learns which one failed only if we say.
-            continuation.resumeWithException(
+            slot.completeExceptionally(
                 KafkaProduceException("$topic: ${rd_kafka_err2str(error)?.toKString()}"),
             )
         }
     } catch (failure: Throwable) {
         // Whatever went wrong here, the caller is waiting. Resuming it with the failure is the only
         // outcome that is not a hang.
-        continuation.resumeWithException(
+        slot.completeExceptionally(
             KafkaProduceException("delivery callback failed: ${failure::class.simpleName}: ${failure.message}"),
         )
     }
@@ -218,36 +218,64 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
     override suspend fun send(record: ProducerRecord): RecordMetadata {
         val id = nextId.addAndGet(1)
         val topic = topicHandle(record.topic)
-        return suspendCancellableCoroutine { continuation ->
-            park(id, continuation)
-            var queued = false
-            while (!queued) {
-                val rc = rd_kafka_produce(
-                    topic,
-                    RD_KAFKA_PARTITION_UA,
-                    RD_KAFKA_MSG_F_COPY,
-                    record.value.refTo(0),
-                    record.value.size.convert(),
-                    record.key?.refTo(0),
-                    (record.key?.size ?: 0).convert(),
-                    id.toCPointer<CPointed>(),
+        val slot = CompletableDeferred<RecordMetadata>()
+
+        // Parked BEFORE the record is enqueued, because the delivery report can arrive before this
+        // function returns. A registry filled afterwards races with the very callback it is for.
+        park(id, slot)
+        try {
+            enqueue(id, topic, record)
+        } catch (failure: Throwable) {
+            unpark(id)
+            throw failure
+        }
+        // Cancelling here stops the caller waiting. It does not recall a record librdkafka has
+        // already accepted, and the contract does not pretend otherwise.
+        return slot.await()
+    }
+
+    /**
+     * Hands the record to librdkafka, **suspending** while its queue is full.
+     *
+     * `rd_kafka_produce` refuses with `QUEUE_FULL` when the queue is at
+     * `queue.buffering.max.messages`. That refusal is backpressure, not an error: the caller is not
+     * told to try again, and the thread is not held while we wait. Returning a failure the caller may
+     * ignore is what lost 264 826 records of 1 000 000 in the measurement this project starts from.
+     *
+     * Cancelling while suspended here means the record was **never queued**, which is the one moment
+     * at which cancellation is clean.
+     */
+    private suspend fun enqueue(id: Long, topic: CPointer<rdkafka.rd_kafka_topic_t>, record: ProducerRecord) {
+        var waited = 0L
+        while (true) {
+            val rc = rd_kafka_produce(
+                topic,
+                RD_KAFKA_PARTITION_UA,
+                RD_KAFKA_MSG_F_COPY,
+                record.value.refTo(0),
+                record.value.size.convert(),
+                record.key?.refTo(0),
+                (record.key?.size ?: 0).convert(),
+                id.toCPointer<CPointed>(),
+            )
+            if (rc != -1) return
+
+            val error = rd_kafka_last_error()
+            if (error != RD_KAFKA_RESP_ERR__QUEUE_FULL) {
+                throw KafkaProduceException(
+                    "${record.topic}: ${rd_kafka_err2str(error)?.toKString()}",
                 )
-                if (rc != -1) {
-                    queued = true
-                } else if (rd_kafka_last_error() == RD_KAFKA_RESP_ERR__QUEUE_FULL) {
-                    // Backpressure, not an error - and this is the CRUDE handling of it. Draining
-                    // the queue from inside a non-suspending block is what B-08 replaces; here it
-                    // exists so that this item can be about the callback seam and nothing else.
-                    rd_kafka_poll(handle, QUEUE_FULL_POLL_MS)
-                } else {
-                    unpark(id)
-                    continuation.resumeWithException(
-                        KafkaProduceException(
-                            "${record.topic}: ${rd_kafka_err2str(rd_kafka_last_error())?.toKString()}",
-                        ),
-                    )
-                    return@suspendCancellableCoroutine
-                }
+            }
+            backpressureWaits.addAndGet(1)
+            // The poll is what drains the queue; the delay is what makes this a suspension rather
+            // than a spin. Neither blocks the thread.
+            rd_kafka_poll(handle, 0)
+            delay(BACKPRESSURE_DELAY_MS)
+            waited += BACKPRESSURE_DELAY_MS
+            if (waited > BACKPRESSURE_LIMIT_MS) {
+                throw KafkaProduceException(
+                    "${record.topic}: the producer queue stayed full for ${waited}ms",
+                )
             }
         }
     }
@@ -275,6 +303,9 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
         const val ERRSTR = 512
         const val FLUSH_MS = 30_000
         const val POLL_IDLE_MS = 2L
-        const val QUEUE_FULL_POLL_MS = 50
+        const val BACKPRESSURE_DELAY_MS = 1L
+        // Not a retry budget the caller can ignore: a queue that never drains is a broken producer,
+        // and hanging for ever would be worse than saying so.
+        const val BACKPRESSURE_LIMIT_MS = 120_000L
     }
 }

@@ -22,3 +22,16 @@ internal actual fun testEnv(name: String): String? = System.getenv(name)
 internal actual fun skewedArm(): String? = testEnv("KAFKAKN_SKEW_ARM")
 
 internal actual fun randomSuffix(): String = System.nanoTime().toString(36)
+
+
+internal actual fun smallQueueConfig(): Map<String, String> = mapOf(
+    // The Java client has no record-count bound: it bounds the buffer in BYTES and blocks up to
+    // max.block.ms waiting for room. 32 KiB is small enough that a few thousand 1 KiB records
+    // cannot all fit at once.
+    "buffer.memory" to "32768",
+    "max.block.ms" to "60000",
+)
+
+// The JVM client does its waiting inside send(); there is no counter to read, and inventing one
+// would mean adding logic to the arm whose value is that it is not ours.
+internal actual fun backpressureWaitCount(): Long = -1

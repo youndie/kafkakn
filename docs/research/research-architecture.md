@@ -213,7 +213,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H1 | ~~The same common test suite can express every producer assertion in a way both actuals satisfy~~ — **settled 2026-09-17, with a qualification: see §2.1** | [B-05](../backlog/B-05-differential-harness.md) `done` |
 | H2 | Per-message headers can be carried without `rd_kafka_producev` (§1.5) | [B-10](../backlog/B-10-record-headers.md) |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
-| H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | [B-08](../backlog/B-08-suspend-on-backpressure.md) |
+| H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
 | H5 | `linuxArm64` costs a matrix row and no code (D6) | not scheduled; claimed nowhere until it is |
 
 ### 2.1 H1, settled: three kinds of assertion, and only one of them needs machinery
@@ -284,6 +284,52 @@ did so as `UncompletedCoroutinesError`, a timeout, and only because the suite ha
 **Consequence.** The callback unparks the continuation **before** doing anything else and wraps
 everything after it in a catch that resumes exceptionally. Whatever goes wrong in there, the caller
 is waiting, and resuming it with the failure is the only outcome that is not a hang.
+
+### 2.4 H4 is not measured, and the reason is better than a number would be
+
+The hypothesis asked whether the suspending `send` costs throughput against the blocking shape. It
+is recorded as **not measured**, for two reasons that are worth more than the figure:
+
+**There is no second arm of the comparison.** The blocking shape was replaced, not kept. Measuring
+it would mean maintaining two implementations of the central path in order to compare them, and the
+one that exists is the one the contract requires — a blocking retry loop holds a thread on a runtime
+built around coroutines, which is wrong regardless of what it measures.
+
+**The available stand cannot support the claim.** Both suites end to end take about two minutes on a
+shared machine whose timings move by more than the difference being asked about. D5 already says
+throughput here is a ratio with a spread or nothing, and a ratio needs the second arm this project
+has deliberately not got.
+
+**What it would take**, if the question becomes live: an isolated host, the blocking shape restored
+behind a build flag, paired interleaved runs, and the ratio published with its spread and the
+absolute figures beside it. That is a measurement item, not a line in a producer item, and nobody
+has asked for it.
+
+### 2.5 A serial `send` cannot experience backpressure, and that shapes how it is used
+
+Found by a vacuity guard in [B-08](../backlog/B-08-suspend-on-backpressure.md): the first
+backpressure test sent 3 000 records one at a time and never filled a queue of 100, because `send`
+awaits the broker's acknowledgement and a caller awaiting each record has exactly one in flight.
+
+**Consequence for the test.** Backpressure is only reachable with concurrent sends, so the suite
+launches them concurrently. Without the guard the test would have passed while exercising nothing —
+the exact shape of the defect this project exists to prevent.
+
+**Consequence for the API.** A caller who wants throughput has to supply the concurrency. That is a
+real property of a `send` that waits for an acknowledgement, not an accident, and it is the argument
+somebody will make for a batching entry point later. None is offered today.
+
+### 2.6 The two clients name the queue bound differently
+
+librdkafka bounds its outbound queue by `queue.buffering.max.messages` — a **record count**. The
+Java client bounds it by `buffer.memory` in **bytes** and waits `max.block.ms` for room. There is no
+common spelling to give them, and the contract keeps Kafka's own names rather than inventing a
+third.
+
+**Consequence.** "The same configuration on both arms" is achievable for most keys and not for this
+one. The suite makes the queue small through a per-arm helper, which is the honest shape: a common
+test with a platform-specific fixture, rather than a common key that silently means something
+different on each side.
 
 ## 4. Risks, with the machinery that would catch them
 

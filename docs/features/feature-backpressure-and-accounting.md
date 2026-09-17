@@ -46,6 +46,9 @@ Every one is **target**: nothing is built.
 * **When:** 100 000 records are sent.
 * **Then:** every `send` returns normally or throws, and the topic's end offsets have grown by
   exactly 100 000.
+* **Automated:** `BackpressureTest.producing_past_the_queue_bound_loses_nothing` on both arms, with
+  the broker side checked by `ci/b-08/run.sh`. Run at 3 000 records against a queue bound of 100,
+  which overruns it many times over and finishes in a test.
 * *The assertion that would have caught the measured loss of 264 826 records.*
 
 ### Scenario: A full queue suspends rather than failing
@@ -69,9 +72,20 @@ Every one is **target**: nothing is built.
 * **Given:** records in flight.
 * **When:** `flush` is called.
 * **Then:** it returns only after the outbound queue length is zero.
+* **Automated:** `BackpressureTest.flush_waits_for_the_queue_rather_than_for_a_return_code`.
 
 ## 4. Quirks
 
+- **A serial caller cannot find any of this either.** `send` awaits the acknowledgement, so a caller
+  that awaits each record has one in flight and never fills a queue of any size. The first version
+  of the test was serial and exercised nothing; the vacuity guard is what said so
+  ([research §2.5](../research/research-architecture.md)).
+- **The two clients name the bound differently** — librdkafka counts records
+  (`queue.buffering.max.messages`), the Java client counts bytes (`buffer.memory`) and waits
+  (`max.block.ms`). The suite lowers it through a per-arm helper because there is no common spelling
+  to give them ([research §2.6](../research/research-architecture.md)).
+- **`runTest`'s virtual time skips the wait being tested.** The backpressure tests run on
+  `Dispatchers.Default` for that reason.
 - **A small round trip cannot find any of this.** The queue bound is 100 000 records by default; a
   2 000-record test never reaches it. The bound is lowered in the suite so the case is reachable in
   a test that finishes.
