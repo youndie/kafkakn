@@ -1,7 +1,7 @@
 ---
 id: B-18
 title: "Certificate verification: the README and the contract disagree"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-2-real-use
