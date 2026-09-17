@@ -1,7 +1,12 @@
-# One gate, and CI runs exactly this target.
+# The documentation gate, and CI runs exactly this target.
 #
 # A local check set that differs from the CI one turns "green here, red there" into the normal state
-# of affairs, and then neither is read. Whatever is not in `make check` is not a gate.
+# of affairs, and then neither is read.
+#
+# SINCE THE CONVENTIONS ARRIVED THE GATE HAS TWO HALVES, and this file is one of them. The other is
+# `./gradlew ktlintCheck`, which CI runs as its own step: it needs a JDK, this target needs python,
+# and putting a Gradle invocation inside a documentation target would make `make check` minutes
+# slower for everyone who only touched a document. `.github/workflows/check.yaml` runs both.
 #
 # NOT docs-bootstrap's own Makefile, which is parameterised for its `example/` tree: copied verbatim
 # it printed "no docs tree - nothing checked" three times and would have gone green having checked

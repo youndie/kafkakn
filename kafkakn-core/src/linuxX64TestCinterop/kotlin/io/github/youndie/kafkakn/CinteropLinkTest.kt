@@ -4,6 +4,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import rdkafka.rd_kafka_version_str
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -20,8 +21,10 @@ import kotlin.test.assertTrue
 class CinteropLinkTest {
     @Test
     fun librdkafka_is_linked_and_answers() {
-        val version = rd_kafka_version_str()?.toKString()
-        assertTrue(version != null && version.isNotEmpty(), "librdkafka reported no version")
-        assertTrue(version!!.startsWith("2."), "unexpected librdkafka version: $version")
+        // `assertNotNull` rather than a boolean assert and a `!!`: it returns the value, so the
+        // next line needs no assertion of its own about nullability - and -Werror was what said the
+        // `!!` had stopped carrying its weight.
+        val version = assertNotNull(rd_kafka_version_str()?.toKString(), "librdkafka reported no version")
+        assertTrue(version.startsWith("2."), "unexpected librdkafka version: $version")
     }
 }
