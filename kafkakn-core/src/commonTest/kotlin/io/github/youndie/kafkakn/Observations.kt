@@ -87,6 +87,15 @@ internal val accountingTopic: String get() = (testEnv("KAFKAKN_ACCOUNTING_TOPIC"
 internal fun naiveProducerRequested(): Boolean = testEnv("KAFKAKN_NAIVE") == "1"
 
 /**
+ * A topic nothing can be acknowledged on: `min.insync.replicas=2` on a single-broker cluster.
+ *
+ * The fixture for every question that only has an answer while a producer is stuck - a buffer that
+ * drains never fills, and a test against the ordinary topic measures how fast the broker is rather
+ * than what the client does when it cannot proceed.
+ */
+internal val strictTopic: String get() = testEnv("KAFKAKN_STRICT_TOPIC") ?: "kafkakn-strict"
+
+/**
  * The broker's TLS listener, which sits **beside** the plaintext one rather than replacing it.
  *
  * Both are always up (`ci/harness/broker.sh up`). A fixture with a plaintext mode and a TLS mode

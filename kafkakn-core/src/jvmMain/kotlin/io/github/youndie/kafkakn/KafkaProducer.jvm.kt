@@ -1,6 +1,8 @@
 package io.github.youndie.kafkakn
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 import kotlin.coroutines.resume
@@ -79,17 +81,30 @@ internal class JvmKafkaProducer(
      * otherwise.
      */
     override suspend fun send(record: ProducerRecord): RecordMetadata =
-        suspendCancellableCoroutine { continuation ->
-            delegate.send(record.toApache()) { metadata, failure ->
-                when {
-                    failure != null -> {
-                        continuation.resumeWithException(failure)
-                    }
+        // `Dispatchers.IO`, and this is the whole of what "suspends" means on this arm.
+        //
+        // `kafka-clients`' `send` WAITS inside the client before it returns: for metadata it does
+        // not have, and for room in the record accumulator up to `max.block.ms`. Called straight
+        // from a coroutine it holds that coroutine's thread - measured at 6 019 ms of silence on a
+        // single-threaded dispatcher while three records waited on metadata, with a coroutine asking
+        // for the thread every 2 ms and getting nothing (`JvmDispatcherSeamTest`).
+        //
+        // So the wait happens on a thread that exists for waiting. The caller's dispatcher stays
+        // free, which is what the contract's "suspends" promises and what librdkafka's arm does by
+        // never blocking at all.
+        withContext(Dispatchers.IO) {
+            suspendCancellableCoroutine { continuation ->
+                delegate.send(record.toApache()) { metadata, failure ->
+                    when {
+                        failure != null -> {
+                            continuation.resumeWithException(failure)
+                        }
 
-                    else -> {
-                        continuation.resume(
-                            RecordMetadata(metadata.topic(), metadata.partition(), metadata.offset()),
-                        )
+                        else -> {
+                            continuation.resume(
+                                RecordMetadata(metadata.topic(), metadata.partition(), metadata.offset()),
+                            )
+                        }
                     }
                 }
             }
@@ -113,10 +128,12 @@ internal class JvmKafkaProducer(
         )
 
     override suspend fun flush() {
-        delegate.flush()
+        // Blocking too, and for longer: it waits for every record in flight.
+        withContext(Dispatchers.IO) { delegate.flush() }
     }
 
     override suspend fun close() {
-        delegate.close()
+        // `close` flushes first, so it inherits the same wait.
+        withContext(Dispatchers.IO) { delegate.close() }
     }
 }

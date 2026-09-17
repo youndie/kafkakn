@@ -12,9 +12,11 @@ parent_feature: feature-produce-a-record
 
 # The producer contract
 
-**`status: draft`: nothing below is built.** This is the contract the tests are written against —
+**Built on both arms and published.** This is the contract the tests are written against —
 [D5](../research/research-architecture.md) says a test cites a place here or in the Kafka protocol
-documentation, and a test that cites neither is not accepted.
+documentation, and a test that cites neither is not accepted. Where the two arms turned out to
+differ, it says so rather than promising the difference away; those places are marked **measured**
+and carry the date.
 
 It is an `api` document rather than prose inside a feature because it is the thing two independent
 implementations have to agree on. The JVM actual and the native actual are checked against *this*,
@@ -121,13 +123,42 @@ Flushes, then releases. A record accepted by `send` before `close` is either ack
 ## Configuration
 
 One map, keys named as Kafka names them, passed through to whichever client is underneath:
-`bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`,
-`queue.buffering.max.messages`. Keys are **not** renamed into a Kotlin vocabulary — an operator
-reading a kafkakn configuration should be able to search Kafka's documentation for the key they see.
+`bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`. Keys are
+**not** renamed into a Kotlin vocabulary — an operator reading a kafkakn configuration should be able
+to search Kafka's documentation for the key they see.
+
+That list is deliberately shorter than it was: `queue.buffering.max.messages` used to be in it, and
+it is not portable — see below.
 
 A key neither actual honours is a **failure at construction**, not a silently ignored entry. The
 prior art's sibling lesson applies: an option accepted and dropped looks identical to one that
 worked, right up until it matters.
+
+### A key honoured by exactly one arm is the harder case, and it is not portable
+
+**Measured 2026-09-17.** `queue.buffering.max.messages` is librdkafka's, and the JVM arm refuses it
+at construction because `ProducerConfig.configNames()` has never heard of it. A configuration that
+works on native therefore cannot be handed to the oracle unchanged — and the oracle is the whole
+argument of this project.
+
+There is no third spelling. librdkafka bounds its queue by a **record count**; the Java client bounds
+it by `buffer.memory` in **bytes** and waits `max.block.ms` for room. Inventing `maxQueuedRecords`
+would mean this library deciding what the bound means on each side, which is exactly the "accepted
+and quietly reinterpreted" shape the rule above exists to refuse.
+
+So the contract splits the map in two, and says which half a key is in:
+
+| | |
+|---|---|
+| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location` — same name, same meaning, both arms |
+| **platform** | everything else: `queue.buffering.max.messages`, `partitioner` (native); `buffer.memory`, `max.block.ms`, `linger.ms` (jvm) |
+
+A platform key travels to the arm that owns it and is **refused by the other at construction**. That
+is deliberate: a producer that accepted `buffer.memory` on native and ignored it would be lying
+about a bound. Code meant to run on both arms passes the portable keys and supplies the platform
+ones per target — the suite does exactly that through a per-arm helper
+([research §2.6](../research/research-architecture.md)), and that helper is the honest shape rather
+than a workaround.
 
 ## Errors
 
@@ -137,11 +168,26 @@ worked, right up until it matters.
 | unknown topic, auto-creation off | `send` throws, and the message names the topic |
 | the client refuses a configuration **value** | construction throws — see below |
 | the broker refuses a configuration value | `send` throws, and the message carries the broker's own text |
-| TLS peer not verifiable | construction or the first `send` throws, and the message names certificate verification |
+| TLS peer not verifiable | `send` throws and the message names certificate verification — but **not promptly on native**, see below |
 | producer closed | `send` throws `IllegalStateException` |
 
 Error **text** is not part of the contract; error **type** and the fact that something is thrown at
 all are.
+
+**How long an unverifiable peer takes to fail is not the same on the two arms, and the contract says
+so rather than promising the faster one.** `rd_kafka_new` connects to nothing, and
+`rd_kafka_produce` only enqueues, so on native the record waits out `message.timeout.ms` — **300 000
+ms by default** — and comes back as `Local: Message timed out`. What makes it nameable is the error
+callback, which keeps the last connection error that is not `_ALL_BROKERS_DOWN`, so the message ends
+up carrying *"certificate verify failed: broker certificate could not be verified, verify that
+`ssl.ca.location` is correctly configured"* ([research §2.9](../research/research-architecture.md)).
+The JVM arm fails in seconds with `SslAuthenticationException`.
+
+A caller who wants a native failure in seconds rather than minutes sets `message.timeout.ms`, which
+is a platform key; the suite does exactly that. Failing pending sends the moment the error callback
+reports an SSL error would remove the difference, and it is not done: it would mean this library
+deciding that one class of librdkafka error is fatal, which is a policy librdkafka deliberately
+leaves to the application.
 
 **Where a configuration value is refused is not the same on both arms, and the contract does not
 pretend otherwise** (measured in [B-06](../backlog/B-06-jvm-actual.md)). `kafka-clients` validates
@@ -160,13 +206,41 @@ does is a *valid* value the broker cannot satisfy — `acks=all` against a topic
 This is the list the differential suite exists to check
 ([research §1.1](../research/research-architecture.md)):
 
-1. the partition a record with a given key lands in;
+1. **the partition a record with a given key lands in — and it took a decision to make true.** The
+   default partitioners do not agree: librdkafka's is `consistent_random`, a CRC32 of the key, and
+   the Java producer's is murmur2. Both are internally consistent, so neither implementation can
+   notice on its own — the same key simply goes somewhere else depending on which arm produced it.
+   librdkafka names the compatible option itself, `murmur2_random`, documented as "functionally
+   equivalent to the default partitioner in the Java Producer", and **the native actual sets it as
+   its default**. A caller who names `partitioner` keeps theirs. Found by the oracle on the first day
+   it existed ([research §2.2](../research/research-architecture.md)).
+
+   **Records with no key are excluded from this promise.** The Java client uses a sticky partitioner
+   there — one partition per batch, switching when the batch is sent — and librdkafka picks at
+   random. Neither is wrong and no setting reconciles them, so agreement is only claimed for keyed
+   records and `PartitionerAgreementTest` only produces those.
 2. the offset sequence a series of records produces on one partition;
 3. which situations throw and which suspend;
 4. the value of `RecordMetadata` for the same input;
-5. behaviour at the queue bound — the JVM client blocks by `max.block.ms`, librdkafka refuses, and
-   **this contract flattens both into "suspends"**. That flattening is the most likely place for the
-   two arms to diverge and gets the densest tests.
+5. **behaviour at the queue bound**, where the JVM client blocks and librdkafka refuses, and this
+   contract flattens both into "suspends".
+
+   That word is a claim about the **caller's thread**, not only about the outcome. `kafka-clients`
+   waits inside `send` — for metadata, or for room in the accumulator up to `max.block.ms` — so a
+   suspend signature wrapped straight around it blocks the thread it was called on. Measured
+   2026-09-17: on a single-threaded dispatcher, three records waiting on metadata held the thread
+   for **6 019 ms** while a coroutine asking for it every 2 ms got nothing. The JVM actual therefore
+   does its waiting on `Dispatchers.IO`, and `JvmDispatcherSeamTest` is what keeps it there.
+
+   The native arm reaches the same promise differently: `rd_kafka_produce` never blocks, and the
+   suspension is a `delay` between attempts.
+6. **`send` does not batch for you.** One `send` is one record and one acknowledgement, so a caller
+   awaiting each one in turn has exactly one record in flight and gets one round trip per record.
+   Throughput comes from calling it concurrently — both clients batch internally once records are in
+   flight together. That is a property of a `send` that waits for an acknowledgement rather than an
+   oversight, and it is also why the backpressure tests have to be concurrent to exercise anything
+   at all ([research §2.5](../research/research-architecture.md)). No batching entry point is
+   offered until an item asks for one.
 
 ## Code anchors
 
