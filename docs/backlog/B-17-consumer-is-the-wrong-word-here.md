@@ -57,6 +57,19 @@ worse:
    happened when the directory had that name, and editing evidence to match a later rename is how a
    log stops being evidence. It was rewritten by the first pass of the rename and put back.
 
+**The rename tripped a guard, and the guard was wrong.** `backlog_index.py --against origin/main`
+— which CI runs on every pull request — reported *"B-13: here B-13-external-downstream-acceptance.md,
+on origin/main already B-13-external-consumer-acceptance.md"*. Its rule is right for what it was
+written for: the same number under a different slug is how one branch steals a number another has
+already merged. A **rename** looks identical from there, and is the opposite situation.
+
+Nothing but git's own rename detection can tell them apart — a branch that stole a number and a
+branch that renamed a file both lack the other side's filename — so `--find-renames` now decides, and
+a pair git calls a rename is allowed. **Both outcomes were watched**: with the file's content
+replaced by an unrelated item, so that git sees a delete and an add rather than a rename, the check
+fires exactly as before. The same gap is in `docs-bootstrap`'s original copy of the script; it is
+recorded here rather than acted on, because that is a different repository and nobody asked.
+
 **Both acceptance scripts were run after the rename**, which is the other half of this item:
 `ci/publish/run.sh` — three coordinates, the probe compiles against them and fails against an empty
 repository; `ci/b-13/run.sh` — 50/50 on each arm from the published snapshot, headers intact. And
