@@ -40,6 +40,13 @@ The contract sentence covers both, and a reader will assume the harder one
 - AC: a positive control that loses records, as in B-19 — and for this shape it has to be able to lose
   them **in the producer**, which the broker-stopped control of B-19 already does.
 - AC: whichever colour comes out, it goes into `docs/research/` beside §2.14, including a red.
+- **It also waits on a merge that is not this repository's to make.** The publisher whose sink this
+  item adds a second arm to exists only on an open pull request — `youndie/xyk#5`, opened 2026-09-17
+  for [B-19](B-19-close-under-a-real-shutdown.md), still unreviewed. Building the queued arm on that
+  branch would stack unmerged work on unmerged work, and any number measured from it would be a
+  number about code that review can still change. Recorded here after an iteration picked this item
+  by the backlog's own rule and stopped: the rule sees `open` and no `blocked_by`, and neither of the
+  two things actually holding it up is expressible in that field.
 - **Out of M2's budget**, and filed rather than started: M2 bought three days and RQ-A spent them. It
   is written down because a limitation a measurement discovered about itself is exactly the thing that
   is otherwise remembered as a green.
