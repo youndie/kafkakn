@@ -1,7 +1,7 @@
 ---
 id: B-15
 title: "The published native klib does not carry its C dependency"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-3-usable-by-others

@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-15](docs/backlog/B-15-native-klib-carries-no-c.md) `[ ]` | The published native klib does not carry its C dependency | P0 | M | B-12 |
+| [B-15](docs/backlog/B-15-native-klib-carries-no-c.md) `[~]` | The published native klib does not carry its C dependency | P0 | M | B-12 |
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[~]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12, B-15 |
 
 ## Closed (13)
