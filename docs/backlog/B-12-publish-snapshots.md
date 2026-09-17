@@ -1,7 +1,7 @@
 ---
 id: B-12
 title: "Publish snapshots to reposilite"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-3-usable-by-others
