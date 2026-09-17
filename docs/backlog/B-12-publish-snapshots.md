@@ -60,6 +60,27 @@ group that is three routes now and a fourth for every target ever added — a cr
 a build-matrix row. Under the project's group it is one directory and one route.
 [research §2.11](../research/research-architecture.md).
 
+### Iteration 3 — the first real upload was refused, and it was refused where it was predicted
+
+Run [35237621184](https://github.com/youndie/kafkakn/actions/runs/35237621184), with the token
+issued: `403 Forbidden` on the first PUT of **`kafkakn-core-jvm`**. The token's route reaches
+`…/kafkakn/kafkakn-core/` and no sibling directory, which is what
+[research §2.11](../research/research-architecture.md) says a route is.
+
+**Nothing landed** — all three `maven-metadata.xml` answer 404 — so the version is not half
+published. That was task order rather than design, and the difference matters: publish the metadata
+module first and the same missing route leaves a coordinate that exists, answers, and carries one
+variant of three. `ci/publish/preflight.sh` now asks **every** coordinate before anything is
+uploaded, reading the list from the local publication rather than from a list kept by hand beside a
+growing set of targets.
+
+**What the token needs**, either way:
+
+- a route per coordinate — three today, a fourth the day `linuxArm64` is added; or
+- one route at `/snapshots/io/github/youndie/kafkakn/`, which covers the project and every target it
+  grows. `k8s/reposilite/token.sh` supports this as `--path`; the workflow that calls it exposes
+  only `coordinates` and `plugin-ids`, so it is an input away.
+
 ### What is not done, and why it is not something this loop can do
 
 **The upload needs credentials this repository does not have.** The portfolio's convention is the

@@ -40,6 +40,17 @@ jobs:
       # Everything except the upload. A failure here is about the artefacts, not about credentials.
       - run: bash ci/publish/run.sh
 
+      # EVERY coordinate is asked before ANY of them is written. A KMP module has one per target and
+      # a Reposilite route is a string prefix, so a token can legitimately hold the first and none of
+      # the rest — measured, 403 on `-jvm`. Whether that ends as a refusal or as a half-uploaded
+      # version is otherwise decided by Gradle's task order, which is not a thing to rely on.
+      - name: can the token write every coordinate
+        if: env.REPOSILITE_USER != ''
+        env:
+          REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
+          REPOSILITE_SECRET: ${{ secrets.REPOSILITE_SECRET }}
+        run: bash ci/publish/preflight.sh
+
       # The upload, and the only step that needs anything secret. Skipped rather than failed when
       # the secrets are absent, so the rest of this workflow stays checkable by anyone.
       - name: publish to reposilite
