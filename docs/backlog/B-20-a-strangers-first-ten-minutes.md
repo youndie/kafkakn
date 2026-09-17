@@ -1,7 +1,7 @@
 ---
 id: B-20
 title: "RQ-C: does the artefact resolve and link on a machine that has never seen this repository?"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-4-a-real-user
