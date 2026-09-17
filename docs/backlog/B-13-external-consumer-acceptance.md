@@ -1,7 +1,7 @@
 ---
 id: B-13
 title: "Acceptance from outside: a consumer project that uses the published artefact"
-status: wip
+status: done
 priority: P1
 size: M
 stage: stage-3-usable-by-others
@@ -54,3 +54,31 @@ line, so the value is never there. It would have failed on a correct producer.
 
 Resumes when B-15 lands: the consumer is written, the script is written, and the native path is one
 `linkReleaseExecutableLinuxX64` away from being a measurement.
+
+## Closed — 2026-09-17, against the network
+
+The same consumer, the same script, `ci/b-13/run.sh` with its default repository — the server:
+
+| | jvm | linuxX64 |
+|---|---|---|
+| resolved from reposilite, cache purged of the group | yes | yes |
+| built | an executable | a **linked** 9.6 MB binary |
+| ran | yes | yes |
+| what an independent reader counted | 50/50 | 50/50 |
+| the header it sent | `from:<stamp>` | `from:<stamp>` |
+
+The native binary carries no linker configuration of its own, which is the criterion that was
+failing: [B-15](B-15-native-klib-carries-no-c.md) put the archives inside the klib.
+
+**What this item bought.** One defect, and it was invisible from every other vantage point in the
+project: the library's own suite, the differential oracle, the publication proof and the gate were
+all green while the published native artefact could not be linked by anyone. It cost a build of its
+own — no shared source set, no shared catalogue, no `mavenLocal` — and that is exactly the price of
+noticing.
+
+**The second finding was in the harness**, not the library: the header check first grepped
+`^<stamp>:0$`, which cannot match, because `print.headers=true` puts the headers at the start of the
+line. It would have failed on a correct producer.
+
+**Not covered, as the item says.** Anything that would make the consumer a product. It produces 50
+records and prints where the last one landed.
