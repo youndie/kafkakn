@@ -23,12 +23,20 @@ hard stop**. What the project lacks is not a second target but a first real user
 claims had never met one: that `close` keeps its promise inside an ordered shutdown, and that a
 stranger can get from the README to a running binary.
 
-**The first is answered** ([B-19](docs/backlog/B-19-close-under-a-real-shutdown.md), 2026-09-17):
+**Both are answered.**
+
+**The first** ([B-19](docs/backlog/B-19-close-under-a-real-shutdown.md), 2026-09-17):
 forty `SIGTERM`s at unplanned moments inside a real service's ordered shutdown, 221 830 accepted
 events, none missing from the topic, and a positive control that loses exactly one record per
 concurrent sender. It also found the half of its own sentence it could not reach — a publisher whose
 `send` has already returned — which is [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) and
 is outside this budget.
+
+**The second** ([B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md), 2026-09-17): from a
+machine with a JDK, Gradle and nothing else, the README's own build file reaches a record on a topic
+in 106 and 109 seconds — against ten minutes, and about 70% of that is the Kotlin/Native toolchain
+downloading. It was **red first**: the README's snippet did not compile in the only kind of project
+that can link the artefact, which is the missing step the item existed to find.
 
 The third question — whether anybody outside this portfolio wants it — **is not asked**. It had one
 mechanism, announcing, and nothing from this project is posted anywhere; the item that held it is
@@ -68,17 +76,16 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (5)
+## Open (4)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[ ]` | RQ-C: does the artefact resolve and link on a machine that has never seen this repository? | P1 | S | - |
 | [B-22](docs/backlog/B-22-a-dead-patch-must-say-so.md) `[ ]` | A bump that makes the patch dead must say so, not merely fail | P1 | S | - |
 | [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[ ]` | The accounting guard times out on a loaded box, and a timeout reads as a lost record | P1 | S | - |
 | [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 | [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
-## Closed (19)
+## Closed (20)
 
 **It builds, and a test can fail**
 
@@ -112,6 +119,7 @@ verdict.
 **Somebody actually runs it**
 
 - [B-19](docs/backlog/B-19-close-under-a-real-shutdown.md) `[x]` - RQ-A: does close() keep its promise inside a real ordered shutdown?
+- [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[x]` - RQ-C: does the artefact resolve and link on a machine that has never seen this repository?
 - [B-21](docs/backlog/B-21-does-anyone-want-this.md) `[-]` - RQ-B: does anyone outside this portfolio want it?
 
 <!-- END INDEX -->

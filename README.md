@@ -39,21 +39,46 @@ one — the repository is not announced anywhere, and the item that would have t
 dropped for that reason ([B-21](docs/backlog/B-21-does-anyone-want-this.md)) — so the honest reading
 is that snapshots are where this stays until that happens by itself.
 
+The whole of a build file that links it, because the two halves that usually get shown on their own
+do not compose into a working one — measured, see [`ci/b-20/run.sh`](ci/b-20/run.sh):
+
 ```kotlin
+plugins {
+    kotlin("multiplatform") version "2.4.20"
+}
+
 repositories {
     maven("https://reposilite.kotlin.website/snapshots") {
         content { includeGroupAndSubgroups("io.github.youndie") }
     }
+    mavenCentral()
 }
 
-dependencies {
-    implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT")
+kotlin {
+    linuxX64("native") {
+        binaries.executable { entryPoint = "main" }
+    }
+
+    sourceSets.commonMain.dependencies {
+        implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT")
+    }
 }
 ```
 
 Three coordinates, because a KMP module has one per target: `kafkakn-core` (metadata),
 `kafkakn-core-jvm`, `kafkakn-core-linuxx64`. The native one carries librdkafka and its TLS stack
 **inside the klib**, so a downstream link needs no configuration of its own.
+
+**The Kotlin version is part of the instructions, not a detail.** A klib carries metadata that a
+build on another compiler refuses, so `2.4.20` above is the version this is known to work with rather
+than a placeholder. `send` suspends, and the coroutines runtime arrives with the dependency — the
+build file above compiles a caller that uses `runBlocking` with nothing else added.
+
+**Measured from an empty machine**: a container with a JDK, Gradle and nothing else — no clone, no
+Gradle cache, no `~/.konan` — gets from that build file to a record on a topic in **106 and 109
+seconds** across two runs, of which **74–78 s is the Kotlin/Native toolchain downloading** and about
+31 s is everything else ([`ci/b-20/run.sh`](ci/b-20/run.sh)). Most of a first build is Kotlin/Native
+arriving, and that price is not this library's.
 
 ### What the native artefact requires
 
