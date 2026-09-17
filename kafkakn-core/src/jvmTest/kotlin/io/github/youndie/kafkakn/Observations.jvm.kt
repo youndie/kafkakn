@@ -4,9 +4,13 @@ import java.io.File
 
 internal actual val armName: String = "jvm"
 
-internal actual fun recordObservation(key: String, value: String) {
+internal actual fun recordObservation(key: String, value: String) = append("$armName.txt", key, value)
+
+internal actual fun recordArmFact(key: String, value: String) = append("$armName-local.txt", key, value)
+
+private fun append(file: String, key: String, value: String) {
     val dir = File("build/observations").apply { mkdirs() }
-    File(dir, "$armName.txt").appendText("$key=$value\n")
+    File(dir, file).appendText("$key=$value\n")
 }
 
 // The ENVIRONMENT, not a system property: `-Dfoo` on the Gradle command line sets a property on the

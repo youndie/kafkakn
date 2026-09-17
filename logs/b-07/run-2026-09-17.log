@@ -1,0 +1,38 @@
+=== environment ===
+2026-09-17T15:14:36+02:00
+
+=== broker and topics ===
+  broker answers on 127.0.0.1:9092
+Topic: kafkakn	TopicId: fxACRpzdTsabAfOA5LPb1w	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+Topic: kafkakn-strict	TopicId: 1JrVuR7LS6ivl-CUY0MOtA	PartitionCount: 1	ReplicationFactor: 1	Configs: min.insync.replicas=2
+
+=== both arms, the same suite ===
+BUILD SUCCESSFUL in 1m 56s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest        tests=12   failures=0
+  linuxX64Test   tests=14   failures=0
+  end offsets moved 2052 -> 2373 while both arms produced
+
+=== the point of the whole design: do the two implementations agree? ===
+  jvm.txt: 14 observations
+  linuxX64.txt: 14 observations
+  THE ARMS AGREE on every observation
+  the partitioner answers compared above are the ones that disagreed before
+  librdkafka's default partitioner was set to murmur2_random; see the item
+
+=== the native arm used rd_kafka_produce, never the variadic producev ===
+  rd_kafka_producev outside comments: 0
+
+=== flush waits on the queue length, not on a return code ===
+  rd_kafka_outq_len used 2 time(s) outside comments
+
+=== positive control: a failure on librdkafka's thread must reach the caller ===
+(the first version of this control expected the process to die. Measuring it found something
+ worse: an exception in the callback does not terminate the process and surfaces nowhere - it
+ leaves the caller suspended for ever. The producer now unparks before anything else and
+ wraps the rest in a catch; DeliveryCallbackCrashControlTest asserts the consequence.)
+  the control ran, failures=0
+
+=== verdict ===
+B-07: the native arm produces, the two implementations agree, and a crash in the callback is visible

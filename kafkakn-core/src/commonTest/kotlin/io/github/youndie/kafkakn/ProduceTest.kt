@@ -34,8 +34,8 @@ class ProduceTest {
         } finally {
             producer.close()
         }
-        recordObservation("produce.no-key.stamp", stamp)
-        recordObservation("produce.no-key.count", RECORDS.toString())
+        recordArmFact("produce.no-key.stamp", stamp)
+        recordArmFact("produce.no-key.count", RECORDS.toString())
     }
 
     @Test
@@ -56,8 +56,8 @@ class ProduceTest {
             producer.close()
         }
         assertEquals(1, partitions.size, "one key landed on partitions $partitions")
-        recordObservation("produce.same-key.stamp", stamp)
-        recordObservation("produce.same-key.count", KEYED_RECORDS.toString())
+        recordArmFact("produce.same-key.stamp", stamp)
+        recordArmFact("produce.same-key.count", KEYED_RECORDS.toString())
         // The partition a key maps to is the CLIENT's choice, not the broker's, so it is the kind of
         // observation the two arms have to be compared on rather than each checked alone.
         recordObservation("partitioner.key-k.partition", partitions.single().toString())

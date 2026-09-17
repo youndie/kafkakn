@@ -54,7 +54,10 @@ Every one is **target**: nothing is built.
 * **Given:** the same 200 keys.
 * **When:** they are produced by the JVM actual and by the native actual.
 * **Then:** the partition chosen for each key is identical on both.
-* *This is the differential oracle — [research §1.1](../research/research-architecture.md).*
+* **Automated:** `PartitionerAgreementTest` on both arms, compared by
+  `ci/harness/compare-arms.sh`.
+* *This is the differential oracle, and it earned its keep the first time it ran — five of eight
+  keys disagreed ([research §2.2](../research/research-architecture.md)).*
 
 ### Scenario: A topic that does not exist is an error, not a silence
 * **Given:** the test broker with auto-creation off.
@@ -87,6 +90,11 @@ Every one is **target**: nothing is built.
   whose `acks` was silently dropped behaves identically to one that honoured it until something goes
   wrong — but `kafka-clients` rejects an invalid value at construction, so nothing is sent and
   nothing is proved. The suite uses a *valid* value the broker cannot satisfy.
+- **The two clients do not partition keys the same way by default.** librdkafka uses CRC32
+  (`consistent_random`), the Java producer uses murmur2. kafkakn sets librdkafka's
+  `murmur2_random`, which its own documentation calls equivalent to the Java default. Found by the
+  differential oracle on the first day both arms existed; neither arm could have noticed alone
+  ([research §2.2](../research/research-architecture.md)).
 - **The two arms refuse a bad configuration value in different places.** The JVM client validates at
   construction; librdkafka accepts and lets the broker decide. The contract promises only that it
   fails, and says so.

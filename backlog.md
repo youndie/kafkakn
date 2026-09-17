@@ -31,11 +31,10 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (8)
+## Open (7)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-07](docs/backlog/B-07-native-actual.md) `[ ]` | The native actual: produce and delivery reports across the callback seam | P0 | L | B-03, B-06 |
 | [B-08](docs/backlog/B-08-suspend-on-backpressure.md) `[ ]` | Suspend on backpressure instead of failing | P0 | M | B-07 |
 | [B-09](docs/backlog/B-09-accounting.md) `[ ]` | Account for every record the caller handed in | P0 | S | B-08 |
 | [B-14](docs/backlog/B-14-ci-workflow.md) `[ ]` | CI: make check on every pull request | P0 | XS | - |
@@ -44,7 +43,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (6)
+## Closed (7)
 
 **It builds, and a test can fail**
 
@@ -57,6 +56,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 **It produces, and loses nothing**
 
 - [B-06](docs/backlog/B-06-jvm-actual.md) `[x]` - The JVM actual over kafka-clients
+- [B-07](docs/backlog/B-07-native-actual.md) `[x]` - The native actual: produce and delivery reports across the callback seam
 
 <!-- END INDEX -->
 

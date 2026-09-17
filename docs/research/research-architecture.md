@@ -249,6 +249,42 @@ exist agree perfectly, and so do two empty ones, so absence and emptiness are fa
 agreement. Without that, a suite that never ran would produce the strongest possible "the arms
 agree".
 
+### 2.2 What the oracle caught on the first day it existed
+
+**The two clients do not partition keys the same way.** librdkafka's default `partitioner` is
+`consistent_random` — a **CRC32** hash of the key — while the Java producer uses murmur2. Measured
+2026-09-17 in [B-07](../backlog/B-07-native-actual.md): of eight keys, five landed on different
+partitions depending on which arm produced them.
+
+Neither implementation is wrong, and **neither could have noticed on its own**. Each one's records
+go where that one's partitioner says, every assertion each arm makes about its own records passes,
+and the broker is happy in both cases. A single-implementation client would ship this and the
+symptom would appear in a consumer somewhere else entirely, as records for one key arriving out of
+order across a rebalance.
+
+librdkafka names the compatible option itself: `murmur2_random`, documented as "functionally
+equivalent to the default partitioner in the Java Producer". kafkakn sets it, because one library
+that puts a key in two different places depending on the platform is not one library. A caller who
+sets `partitioner` explicitly keeps their choice.
+
+**Consequence.** This is the concrete answer to "why two arms", and it arrived on day one. It is
+also the argument for the observation mechanism rather than broker-based checking: the broker cannot
+tell you the arms disagree, because each arm is individually consistent with it.
+
+### 2.3 An exception on librdkafka's thread hangs the caller; it does not crash
+
+Measured 2026-09-17 while building the control that was supposed to show a crash being noticed. A
+failure thrown inside the delivery-report callback — on a thread librdkafka owns, outside any `try`
+the caller wrote — **does not terminate the process and surfaces nowhere at all**. It leaves the
+continuation parked, and the caller stays suspended for ever.
+
+That is worse than a crash, because a crash is reported and a hang is not: the test that caught it
+did so as `UncompletedCoroutinesError`, a timeout, and only because the suite had a timeout.
+
+**Consequence.** The callback unparks the continuation **before** doing anything else and wraps
+everything after it in a catch that resumes exceptionally. Whatever goes wrong in there, the caller
+is waiting, and resuming it with the failure is the only outcome that is not a hang.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
