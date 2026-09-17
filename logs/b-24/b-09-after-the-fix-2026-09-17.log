@@ -1,0 +1,37 @@
+=== environment ===
+2026-09-17T23:50:20+02:00
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+  kafkakn-acct-1789681820-{jvm,linuxX64}: created, end offsets 0
+  kafkakn-acct-1789681820-naive-{jvm,linuxX64}: created, end offsets 0
+
+=== pass 1: the real producer, both arms ===
+BUILD SUCCESSFUL in 3m 6s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest        tests=31   failures=0
+  linuxX64Test   tests=28   failures=0
+
+=== the accounting: handed in, answered, and what the broker holds ===
+  jvm       handed in 3000   answered-without-sending 0   end offsets 0 -> 3000
+  linuxX64  handed in 3000   answered-without-sending 0   end offsets 0 -> 3000
+
+=== pass 2: the same test against a producer that drops - THIS MUST BE RED ===
+
+BUILD FAILED in 1m 47s
+11 actionable tasks: 11 executed
+  the control run is red, as it must be
+
+=== and red for the right reason, on both arms ===
+  jvmTest        AccountingTest failures=1
+  linuxX64Test   AccountingTest failures=1
+
+=== the control actually dropped something (an empty control is red for nothing) ===
+  jvm       dropped 2900 of 3000   end offsets 0 -> 100
+  linuxX64  dropped 2730 of 3000   end offsets 0 -> 270
+
+=== verdict ===
+B-09: both arms land exactly what the caller handed in, and the guard is red when they do not

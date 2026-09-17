@@ -73,8 +73,29 @@ internal expect fun backpressureWaitCount(): Long
  * else writes to the topic. Both arms share one broker and one run, so they cannot share a topic
  * without their two counts adding up into one number that no single assertion can check. The suffix
  * is [armName] and the harness creates both.
+ *
+ * **There is no default, and there used to be one.** It read `"kafkakn-acct"`, which is a name
+ * nothing creates: `ci/b-09/run.sh` passes a per-run one. A test started any other way therefore
+ * asked for a topic that could not exist, the Java client waited `max.block.ms` for metadata that
+ * was never coming, and `runTest`'s own one-minute watchdog fired first — so the central guard of
+ * this project went red after sixty seconds of silence with a sentence about **coroutines**
+ * ([B-24](../../../../../../../docs/backlog/B-24-the-central-guard-times-out.md)). It was filed as a
+ * timeout under load and it was neither.
+ *
+ * `testTopic` and `strictTopic` keep their defaults on purpose: those fall back to exactly the names
+ * the scripts use, so they name something that exists. This one named something that does not.
  */
-internal val accountingTopic: String get() = (testEnv("KAFKAKN_ACCOUNTING_TOPIC") ?: "kafkakn-acct") + "-" + armName
+internal val accountingTopic: String get() {
+    val provided =
+        testEnv("KAFKAKN_ACCOUNTING_TOPIC")
+            ?: error(
+                "KAFKAKN_ACCOUNTING_TOPIC is unset, so this test was not started by ci/b-09/run.sh. " +
+                    "That script creates the topic this test accounts on, fresh for the run and one " +
+                    "per arm, and reads the end offsets afterwards - the half of the assertion that " +
+                    "does not live in the test. Run: bash ci/b-09/run.sh",
+            )
+    return "$provided-$armName"
+}
 
 /**
  * Whether this run is the deliberate positive control.

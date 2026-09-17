@@ -726,6 +726,30 @@ record the producer holds when the signal arrives is flushed (twenty rounds, zer
 the *service* holds and has not yet handed over is the service's problem, which the contract never
 claimed otherwise but which nothing had ever separated before.
 
+### 2.18 A default in the harness named a topic nothing creates
+
+[B-24](../backlog/B-24-the-central-guard-times-out.md). `AccountingTest` is the guard this project is
+shaped around, and run outside `ci/b-09/run.sh` it went red after sixty seconds of silence with
+`UncompletedCoroutinesError` — a sentence about coroutines, for a project whose central claim is
+about lost records. It was filed as a timeout under load. It was neither a timeout nor load.
+
+`Observations.accountingTopic` fell back to `"kafkakn-acct"` when the environment did not name a
+topic, and **the script passes a per-run name**, so the fallback invented one nothing creates. The
+Java client then waited `max.block.ms` for metadata that was never coming and `runTest`'s own
+one-minute watchdog fired first. The accessor's KDoc said "the harness creates both" two lines above
+the default that contradicted it.
+
+**Three things are worth keeping out of this.** A fallback that manufactures its own subject is the
+same shape as a lookup test that can never fail, and it is at its worst in the machinery *around* a
+test rather than in the test. `runTest`'s default timeout **masked** the honest error: raising it to
+ten minutes is what made `Topic … not present in metadata after 60000 ms` visible. And the first
+diagnosis — a slow box — was the plausible one and the wrong one, on a box whose load average
+genuinely was 11 at the time.
+
+The fix is the default's removal, not a new check: 60 s of silence becomes an immediate failure
+naming the script that creates the topic, and `testTopic` and `strictTopic` keep their defaults
+because those fall back to exactly the names the scripts use.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
