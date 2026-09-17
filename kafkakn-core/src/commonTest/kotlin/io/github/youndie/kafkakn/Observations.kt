@@ -42,3 +42,20 @@ internal val bootstrap: String get() = testEnv("KAFKAKN_BOOTSTRAP") ?: "127.0.0.
 
 /** The topic the harness created. Never auto-created: the broker has auto-creation off. */
 internal val testTopic: String get() = testEnv("KAFKAKN_TOPIC") ?: "kafkakn"
+
+/**
+ * A producer configuration whose outbound queue is small enough that a test can fill it.
+ *
+ * **The two clients do not name this knob the same way**, and there is no common spelling to give
+ * them: librdkafka bounds the queue by `queue.buffering.max.messages`, while the Java client bounds
+ * it by `buffer.memory` in bytes and waits `max.block.ms` for room. The contract keeps Kafka's own
+ * names rather than inventing a third, so "make the queue small" is necessarily per-arm — and this
+ * is the seam where that shows.
+ *
+ * The default bound is 100 000 records; a test that does not lower it never reaches the case that
+ * matters and passes for the wrong reason.
+ */
+internal expect fun smallQueueConfig(): Map<String, String>
+
+/** How many times a caller has had to wait for room. Zero means the backpressure path never ran. */
+internal expect fun backpressureWaitCount(): Long

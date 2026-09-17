@@ -1,0 +1,35 @@
+=== environment ===
+2026-09-17T15:26:26+02:00
+
+=== broker ===
+  broker answers on 127.0.0.1:9092
+Topic: kafkakn	TopicId: fxACRpzdTsabAfOA5LPb1w	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+Topic: kafkakn-strict	TopicId: 1JrVuR7LS6ivl-CUY0MOtA	PartitionCount: 1	ReplicationFactor: 1	Configs: min.insync.replicas=2
+
+=== both arms, with a queue small enough to overrun ===
+BUILD SUCCESSFUL in 2m
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest        tests=14   failures=0
+  linuxX64Test   tests=16   failures=0
+
+=== the accounting: what each arm says it sent, against what the broker received ===
+  jvm       past-the-bound 3000/3000   after-flush 500/500
+  linuxX64  past-the-bound 3000/3000   after-flush 500/500
+
+=== the native arm actually reached the bound ===
+  (zero waits would mean the test never exercised backpressure - the suite asserts this too,
+   and the first, serial version of the test failed exactly here)
+
+=== the arms still agree on what only a client knows ===
+  jvm.txt: 14 observations
+  linuxX64.txt: 14 observations
+  THE ARMS AGREE on every observation
+
+=== a floor for the rate, not a benchmark ===
+  both suites, end to end: 121s; broker end offsets 17015 -> 24336
+  This box is shared and the number moves by more than the thing it would measure.
+  H4 is settled as NOT MEASURED in the research document, with what it would take.
+
+=== verdict ===
+B-08: both arms produce past their queue bound and lose nothing
