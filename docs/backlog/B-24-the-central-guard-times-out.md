@@ -1,7 +1,7 @@
 ---
 id: B-24
 title: "The accounting guard times out on a loaded box, and a timeout reads as a lost record"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-1-produce

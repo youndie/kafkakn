@@ -80,7 +80,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[ ]` | The accounting guard times out on a loaded box, and a timeout reads as a lost record | P1 | S | - |
+| [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[~]` | The accounting guard times out on a loaded box, and a timeout reads as a lost record | P1 | S | - |
 | [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 | [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
