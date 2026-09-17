@@ -1,7 +1,7 @@
 ---
 id: B-05
 title: "The differential harness: one suite, both actuals, one broker"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-0-it-builds
