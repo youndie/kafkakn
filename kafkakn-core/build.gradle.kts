@@ -18,6 +18,8 @@ kotlin {
     sourceSets {
         commonTest.dependencies {
             implementation(kotlin("test"))
+            // runTest, so a suspending surface can be exercised from a common test on both arms.
+            implementation(libs.coroutines.test)
         }
     }
 }

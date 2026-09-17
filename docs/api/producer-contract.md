@@ -23,11 +23,24 @@ and against each other.
 ## The surface, as targeted
 
 ```kotlin
-interface KafkaProducer : AutoCloseable {
+interface KafkaProducer {
     suspend fun send(record: ProducerRecord): RecordMetadata
     suspend fun flush()
+    suspend fun close()
 }
+
+fun kafkaProducer(config: ProducerConfig): KafkaProducer   // expect
 ```
+
+**Corrected 2026-09-17 while implementing [B-02](../backlog/B-02-expect-surface.md): not
+`AutoCloseable`.** This document said it was, and it cannot be: `AutoCloseable.close` does not
+suspend, while `close` here has to flush — and both ways of fitting into the interface are wrong.
+Blocking a thread inside `close` is wrong on a runtime built around coroutines; dropping records
+still in flight is the silent-loss shape this whole library exists to avoid. So `close` suspends and
+the interface is its own. A `use`-shaped extension can be added when something needs it.
+
+Construction is a top-level `expect fun` rather than an `expect class`: the interface stays ordinary
+common code that both arms implement, and only the factory is platform-specific.
 
 Nothing else is public in M1. `sendAll`, headers, transactions and partitioner overrides are absent
 until an item asks for them.
@@ -106,4 +119,5 @@ This is the list the differential suite exists to check
 |---|---|
 | the interface | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.kt` |
 | record and metadata types | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/ProducerRecord.kt` |
+| configuration | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/ProducerConfig.kt` |
 | the suite that holds both actuals to this document | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/` |
