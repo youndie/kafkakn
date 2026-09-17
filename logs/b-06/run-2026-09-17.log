@@ -1,0 +1,36 @@
+=== environment ===
+2026-09-17T14:54:06+02:00
+
+=== broker and topics ===
+  broker answers on 127.0.0.1:9092
+Topic: kafkakn	TopicId: fxACRpzdTsabAfOA5LPb1w	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+Topic: kafkakn-strict	TopicId: 1JrVuR7LS6ivl-CUY0MOtA	PartitionCount: 1	ReplicationFactor: 1	Configs: min.insync.replicas=2
+
+=== the suite, on the JVM arm ===
+BUILD SUCCESSFUL in 1m 12s
+5 actionable tasks: 5 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest tests=10 failures=0
+
+=== what the client SAID it did ===
+    config.acks=all
+    config.unknown-key-is-null=true
+    record.value.size=3
+    record.key.size=1
+    record.topic=t
+    produce.same-key.stamp=samekey-jvm-5qz7eildo
+    produce.same-key.count=50
+    partitioner.key-k.partition=2
+    produce.no-key.stamp=nokey-jvm-5rnuuvk2y
+    produce.no-key.count=100
+
+=== what the BROKER says happened ===
+  end offsets: 300 -> 450 (grew by 150, the suite claims 150)
+  independent consumer: 100 of 100 with no key, 50 of 50 with a key
+
+=== the oracle can still say no ===
+  a stamp that was never produced: 0 (expected 0)
+
+=== verdict ===
+tests=10 failures=0 offsets=+150/150 nokey=100/100 samekey=50/50 absent=0
+B-06: the JVM arm does what it says, and the broker agrees

@@ -21,4 +21,10 @@ internal actual fun recordObservation(key: String, value: String) {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun skewedArm(): String? = getenv("KAFKAKN_SKEW_ARM")?.toKString()
+internal actual fun testEnv(name: String): String? = getenv(name)?.toKString()
+
+internal actual fun skewedArm(): String? = testEnv("KAFKAKN_SKEW_ARM")
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun randomSuffix(): String = platform.posix.time(null).toString() +
+    platform.posix.getpid().toString(36)
