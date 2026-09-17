@@ -64,6 +64,28 @@ configuration they were taken from; each was produced by a run whose log was kep
 acquiring a runtime dependency. Almost the whole size cost is OpenSSL, which is unavoidable for
 anyone who needs TLS — so there is no size argument for a TLS-less build, and none is offered.
 
+**Re-measured 2026-09-17 on the published artefact**, [B-16](../backlog/B-16-readme-says-what-was-measured.md),
+`ci/b-16/run.sh`, because the README was about to repeat a spike number as if it were a current one.
+The subject is the binary a build outside this repository links, held against the same build with the
+dependency removed:
+
+| | with kafkakn | without |
+|---|---|---|
+| `ldd` | `linux-vdso`, the loader, `libc libcrypt libdl libgcc_s libm libpthread libresolv librt libutil` | **the same set, exactly** |
+| highest versioned glibc symbol | `GLIBC_2.17` | `GLIBC_2.14` |
+
+The spike's row above reproduces. The **glibc floor does not**: kafkakn raises it from 2.14 to 2.17,
+which is `manylinux2014`'s, the image the C bundle is built in — so the floor is a consequence of D4
+rather than of Kotlin/Native, and "kafkakn adds nothing above Kotlin/Native's own floor" was wrong in
+a way only the measurement could show. The script pins 2.17 so the README and the artefact cannot
+drift apart.
+
+**The first version of that comparison attributed four libraries to the wrong thing.** Its baseline
+was a hello-world, so it differed from the consumer in *two* ways — kafkakn and kotlinx-coroutines —
+and it reported `libcrypt`, `libresolv`, `librt` and `libutil` as kafkakn's. They are the coroutines
+runtime's. That list was one edit away from being written into the README as a measured fact; what
+kept it out was asking what else the two binaries differed by.
+
 ### 1.3 Kotlin/Native ships a glibc 2.19 sysroot, and that decides how the C side is built
 
 Measured in the same spike.

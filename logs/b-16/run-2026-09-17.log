@@ -1,0 +1,50 @@
+=== environment ===
+2026-09-17T21:48:54+02:00
+  io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT, from https://reposilite.kotlin.website/snapshots
+
+=== the two binaries ===
+BUILD SUCCESSFUL in 13s
+4 actionable tasks: 1 executed, 3 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+BUILD SUCCESSFUL in 8s
+4 actionable tasks: 1 executed, 3 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  with kafkakn:    ci/consumer/build/bin/linuxX64/releaseExecutable/kafkakn-consumer.kexe (10059640 bytes)
+  without kafkakn: ci/b-16/baseline/build/bin/linuxX64/releaseExecutable/kafkakn-ldd-baseline.kexe (1133648 bytes)
+
+=== ldd, with kafkakn ===
+  /lib64/ld-linux-x86-64.so.2
+  libc.so.6
+  libcrypt.so.1
+  libdl.so.2
+  libgcc_s.so.1
+  libm.so.6
+  libpthread.so.0
+  libresolv.so.2
+  librt.so.1
+  libutil.so.1
+  linux-vdso.so.1
+
+=== ldd, without ===
+  /lib64/ld-linux-x86-64.so.2
+  libc.so.6
+  libcrypt.so.1
+  libdl.so.2
+  libgcc_s.so.1
+  libm.so.6
+  libpthread.so.0
+  libresolv.so.2
+  librt.so.1
+  libutil.so.1
+  linux-vdso.so.1
+
+=== what kafkakn adds ===
+  nothing, in either direction: the two sets are identical
+
+=== the oldest glibc each one would run on ===
+  with kafkakn:    GLIBC_2.17
+  without:         GLIBC_2.14
+  the README says GLIBC_2.17, and so does the binary
+
+=== the check can say no ===
+  held against /bin/bash, the same comparison reports what it adds, as it must

@@ -1,7 +1,7 @@
 ---
 id: B-16
 title: "The README says what was measured, not what sounded right"
-status: wip
+status: done
 priority: P1
 size: S
 stage: stage-3-usable-by-others
@@ -50,4 +50,30 @@ link the artefact at all.
 - AC: the two defects are named in one sentence each, with their item.
 - AC: `ldd` run against the current test binary and the Kafka-free one, and the README says what
   that run showed rather than what the spike showed.
-- Anchors: `README.md`, `docs/research/research-architecture.md`.
+- Anchors: `README.md`, `ci/b-16/run.sh`, `ci/b-16/baseline/`,
+  `docs/research/research-architecture.md`.
+
+## What happened
+
+All five corrections are in, and the third one came out differently from how this item wrote it.
+
+**`ldd`, measured rather than quoted** (`ci/b-16/run.sh`, 2026-09-17). The subject is the binary a
+build outside this repository links — `ci/consumer` — against the same build with the dependency
+removed. The sets are **identical in both directions**: `linux-vdso`, the loader, `libc libcrypt
+libdl libgcc_s libm libpthread libresolv librt libutil`. The spike's claim reproduces.
+
+**But the glibc floor does not, and this item had it wrong.** It says kafkakn "adds nothing above"
+Kotlin/Native's own floor. Measured: **`GLIBC_2.17` with the library, `GLIBC_2.14` without.** 2.17 is
+`manylinux2014`'s, the image the C bundle is built in — so the floor is a consequence of
+[D4](../research/research-architecture.md) and not of Kotlin/Native, and the README now says the
+number instead of the argument. The script pins 2.17, so the README and the artefact cannot drift
+apart without the check saying so.
+
+**The first comparison attributed four libraries to the wrong thing.** Its baseline was a
+hello-world, which differs from the consumer in *two* ways — kafkakn and kotlinx-coroutines — and it
+reported `libcrypt`, `libresolv`, `librt` and `libutil` as kafkakn's. They belong to the coroutines
+runtime. That list was one edit from going into the README as a measured fact. The baseline is now
+the consumer with the library taken out, and the reason is in the script beside it.
+
+The check can say no: the same `comm`, held against `/bin/bash`, reports what that adds — otherwise
+an empty answer would pass whether the comparison worked or not.

@@ -68,18 +68,17 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (6)
+## Open (5)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-16](docs/backlog/B-16-readme-says-what-was-measured.md) `[~]` | The README says what was measured, not what sounded right | P1 | S | - |
 | [B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md) `[ ]` | Certificate verification: the README and the contract disagree | P1 | S | - |
 | [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[ ]` | RQ-C: does the artefact resolve and link on a machine that has never seen this repository? | P1 | S | - |
 | [B-22](docs/backlog/B-22-a-dead-patch-must-say-so.md) `[ ]` | A bump that makes the patch dead must say so, not merely fail | P1 | S | - |
 | [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 | [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
-## Closed (17)
+## Closed (18)
 
 **It builds, and a test can fail**
 
@@ -107,6 +106,7 @@ verdict.
 - [B-12](docs/backlog/B-12-publish-snapshots.md) `[x]` - Publish snapshots to reposilite
 - [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[x]` - Acceptance from outside: a consumer project that uses the published artefact
 - [B-15](docs/backlog/B-15-native-klib-carries-no-c.md) `[x]` - The published native klib does not carry its C dependency
+- [B-16](docs/backlog/B-16-readme-says-what-was-measured.md) `[x]` - The README says what was measured, not what sounded right
 
 **Somebody actually runs it**
 
