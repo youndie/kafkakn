@@ -646,6 +646,38 @@ stranger's second build does not pay the 74 s again.
 subject is "did it work" passes just as well when it is not looking, and this one was watched failing
 for a real reason before it was watched passing.
 
+### 2.16 `patch -R` does not mean "is this already applied?"
+
+[B-22](../backlog/B-22-a-dead-patch-must-say-so.md) needed the bundle build to tell two opposite
+situations apart on a librdkafka bump: *upstream fixed it, delete the patch* and *upstream moved the
+code, rewrite the patch*. `patch --batch --forward` gives both the same sentence —
+`Ignoring previously applied (or reversed) patch.` — and exit 1.
+
+The obvious probe is `patch --dry-run --reverse`: if the change is already in the source, reversing
+it works. **It does not answer that question.** Measured 2026-09-17 with GNU patch 2.7.6 against
+librdkafka 2.13.0's own `src/rdrand.c`, patched and unpatched:
+
+| | unpatched | already patched |
+|---|---|---|
+| `patch -R --dry-run` | **exit 0** | exit 0 |
+| `patch -R --dry-run --forward` | exit 1 | exit 0 |
+| `patch --dry-run` | exit 0 | **exit 0** |
+| `patch --dry-run --forward` | exit 0 | exit 1 |
+
+Given `-R` on a patch that is *not* applied, patch prints `Unreversed patch detected!  Ignoring -R.`
+and applies it forward, exiting 0. Without `--forward`, **neither probe can say no**: both rows are
+`0 0`, and the first version of `ci/librdkafka/apply-patches.sh` shipped with exactly that — it
+reported "already applied, delete this patch" against a pristine source. That is the one answer whose
+cost is asymmetric: a live patch deleted on a bump, and a build that then fails somewhere else.
+
+It was caught by running the script against the real source rather than by reading it, and then by
+`ci/b-22/run.sh`, which holds the script against four fixtures and requires four different answers.
+
+**Also visible in that run and worth knowing:** the patch applies to 2.13.0 **with fuzz 1 and an
+offset** — its context was written against a slightly different neighbourhood. `patch`'s own output
+is no longer swallowed by the bundle build, because "succeeded with fuzz 1" is how a patch says its
+context has begun to drift, long before it becomes one of the three refusals.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
@@ -660,7 +692,9 @@ the defect is invisible below the bound.
 
 **The patch in D4 rotting against a new librdkafka.** Mitigation: the bump procedure re-applies and
 re-tests it (H3), and the patch is a file in this repository rather than a sed in a script, so a
-conflict is visible.
+conflict is visible. Since [B-22](../backlog/B-22-a-dead-patch-must-say-so.md) the bundle build also
+says *which* rot it is — obsolete, moved, or a file that is gone — because one message for two
+opposite actions is how a dead patch gets carried for years (§2.16).
 
 **A green suite over a library nobody has called.** Mitigation: an acceptance item that uses the
 published artefact from an external consumer project, not the sources.

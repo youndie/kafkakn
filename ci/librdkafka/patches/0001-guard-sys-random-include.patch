@@ -13,6 +13,12 @@ It is a FILE rather than a sed inside the build script on purpose: when librdkaf
 patch that no longer applies is a conflict somebody sees, and a sed that no longer matches is a
 silent no-op followed by a confusing compile error.
 
+The bump is applied by ci/librdkafka/apply-patches.sh, which refuses in three different ways and
+names the action each time: OBSOLETE means upstream guards the include itself and this file should be
+DELETED - not rewritten - along with the sentences that carry it; NO LONGER APPLIES means the code
+moved and it needs rewriting; TARGET MISSING means rdrand.c itself is gone. ci/b-22/run.sh watches
+all three happen.
+
 Nothing is reported upstream from this project, so the patch is carried here.
 
 --- a/src/rdrand.c

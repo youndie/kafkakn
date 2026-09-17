@@ -38,6 +38,7 @@ echo "=== building in $IMAGE ==="
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
     -v "$SRC:/src:ro" -v "$CACHE:/out" \
     -v "$HERE/inside.sh:/inside.sh:ro" -v "$HERE/patches:/patches:ro" \
+    -v "$HERE/apply-patches.sh:/apply-patches.sh:ro" \
     "$IMAGE" bash /inside.sh
 
 echo

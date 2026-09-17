@@ -38,10 +38,8 @@ build_librdkafka() {
     echo "  librdkafka"
     rm -rf /tmp/rdk && mkdir -p /tmp/rdk && tar xzf "$SRC"/v*.tar.gz -C /tmp/rdk --strip-components=1
     cd /tmp/rdk
-    for p in "$PATCHES"/*.patch; do
-        echo "    applying $(basename "$p")"
-        patch -p1 --batch --forward < "$p"
-    done
+    # Two different refusals rather than one message for two opposite actions - see the script.
+    bash /apply-patches.sh /tmp/rdk "$PATCHES"
     export CPPFLAGS="-I$OUT/include"
     export LDFLAGS="-L$OUT/lib -L$OUT/lib64"
     export PKG_CONFIG_PATH="$OUT/lib/pkgconfig:$OUT/lib64/pkgconfig"
