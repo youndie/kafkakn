@@ -1,7 +1,7 @@
 ---
 id: B-07
 title: "The native actual: produce and delivery reports across the callback seam"
-status: open
+status: wip
 priority: P0
 size: L
 stage: stage-1-produce
