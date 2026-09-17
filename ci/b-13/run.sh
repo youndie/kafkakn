@@ -16,10 +16,13 @@ GROUP=$(sed -n 's/^group=//p' gradle.properties)
 # A HOME OF ITS OWN, emptied of this group: a consumer that resolves from a warm cache proves the
 # cache. Kotlin's own artefacts stay, because re-downloading the compiler measures the network.
 CONSUMER_HOME=${CONSUMER_HOME:-$HOME/.cache/kafkakn/b13-gradle-home}
+# Defaults to the server. Point it at `file://$PWD/build/local-repo` to accept a candidate before
+# publishing it: same bytes, and the mistake found there costs nothing to undo.
+REPO_URL=${REPO_URL:-https://reposilite.kotlin.website/snapshots}
 
 echo "=== environment ==="
 date -Is
-echo "  $GROUP:kafkakn-core:$VERSION, from the network"
+echo "  $GROUP:kafkakn-core:$VERSION, from $REPO_URL"
 
 echo
 echo "=== broker ==="
@@ -31,7 +34,7 @@ echo "=== the consumer knows a coordinate and a URL, and its cache holds neither
 rm -rf "$CONSUMER_HOME/caches/modules-2/files-2.1/$GROUP" \
        "$CONSUMER_HOME/caches/modules-2/metadata-"*/descriptors/"$GROUP"
 GRADLE_USER_HOME=$CONSUMER_HOME ./gradlew --no-daemon --console=plain \
-    -p ci/consumer -Pkafkakn.version="$VERSION" --refresh-dependencies \
+    -p ci/consumer -Pkafkakn.version="$VERSION" -Pkafkakn.repo="$REPO_URL" --refresh-dependencies \
     installJvmDist linkReleaseExecutableLinuxX64 2>&1 | tail -6
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "  THE CONSUMER COULD NOT BUILD"; exit 1; }
 

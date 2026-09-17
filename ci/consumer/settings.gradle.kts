@@ -19,7 +19,10 @@ dependencyResolutionManagement {
     repositories {
         // NO mavenLocal, and no project dependency. `~/.m2` is shared with every build on this
         // machine; resolving from it would prove the machine rather than the publication.
-        maven("https://reposilite.kotlin.website/snapshots") {
+        // The URL is a parameter so the same consumer can be aimed at a CANDIDATE publication
+        // before it goes out - a repository on disk holds the same bytes the server will. Defaults
+        // to the real one, which is what a stranger would use.
+        maven(providers.gradleProperty("kafkakn.repo").getOrElse("https://reposilite.kotlin.website/snapshots")) {
             content { includeGroupAndSubgroups("io.github.youndie") }
         }
         mavenCentral()

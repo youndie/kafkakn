@@ -453,6 +453,37 @@ not before — the cost was invisible while nothing had been published. It also 
 namespace form to ask Maven Central for later, which is the reason it is worth doing once rather
 than after somebody has depended on the old coordinate.
 
+### 2.12 The klib carried the bindings and not the implementation
+
+[B-15](../backlog/B-15-native-klib-carries-no-c.md), found by
+[B-13](../backlog/B-13-external-consumer-acceptance.md). A build that is not this one resolved the
+published `kafkakn-core-linuxx64`, compiled against it, and could not link: **14 undefined symbols**,
+`rd_kafka_produceva` and `rd_kafka_poll` among them. The same source ran on the jvm arm from the same
+version, so the API was fine and the artefact was not.
+
+**Why every check here was green anyway.** The archives were named in `build.gradle.kts` as
+`linkerOpts` on **this project's own test binaries**, at absolute paths in `~/.cache/kafkakn`. The
+suite linked because the build file told it how; the published klib said nothing about
+`librdkafka-static.a`, and nothing in the gate compares the two. Eleven items passed over it.
+
+**The fix is `staticLibraries` in `rdkafka.def`**, with the directories passed as `-libraryPath`
+from Gradle so the file stays machine-independent. cinterop then copies the archives into the klib
+and a downstream link needs no configuration at all.
+
+| | before | after |
+|---|---|---|
+| `kafkakn-core-linuxx64-…-cinterop-rdkafka.klib` | 76 952 bytes | 11 280 633 bytes |
+| a stranger's `linkReleaseExecutableLinuxX64` | 14 undefined symbols | a 9.6 MB binary that runs |
+
+The 11 MB is the compressed form of 46 MB of archives — librdkafka, OpenSSL, zlib, zstd — and it is
+the same 46 MB the link was always going to consume. What changed is where they live.
+
+**The guard is the removal, not an addition.** `linkerOpts` is gone from `build.gradle.kts`: this
+project's own test binaries now link the way a stranger's does, so an artefact that cannot be linked
+cannot pass the suite either. A check that exercises a path only the library's own build knows about
+is a check that cannot see this class of defect, and this is the second one it hid
+([§2.8](#28-a-fresh-topic-configuration-silently-dropped-every-topic-level-property) was the first).
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
