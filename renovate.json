@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "The portfolio's configuration, extended by name rather than copied: the schedule, the labels and the Kotlin/kotlinx groups live in `github>youndie/sborka`.",
+    "`automerge-harness` is extended second, and the order matters - package rules are concatenated in the order the presets are named and the last match wins, so its rule has to come after the base preset's 'majors get a human'. Its precondition was checked rather than assumed: `.github/workflows/check.yaml` runs on `pull_request`, and B-14 watched it go red, so a harness bump is built before it merges itself."
+  ],
+
+  "extends": [
+    "github>youndie/sborka",
+    "github>youndie/sborka:automerge-harness"
+  ],
+
+  "packageRules": [
+    {
+      "description": [
+        "The Java client and the broker are ONE version on purpose: `kafka-clients` is what the jvm arm delegates to and `apache/kafka` is what the suite runs against, and the catalogue says in as many words that they are the same release so the differential suite has one variable fewer.",
+        "Ungrouped, Renovate offers them as two pull requests, and taking one leaves the two arms measured against different Kafkas while every document still claims they agree. That is not a merge conflict - it is a claim that quietly stops being true."
+      ],
+      "matchPackageNames": ["org.apache.kafka:kafka-clients", "apache/kafka"],
+      "groupName": "kafka"
+    }
+  ]
+}
