@@ -1,0 +1,42 @@
+# An SSL listener BESIDE the plaintext one, not instead of it.
+#
+# Two reasons, and the second is the load-bearing one. The offsets a TLS test is checked against are
+# read over plaintext, so the verification path is not the path under test. And with both listening
+# at once, "TLS worked" can be told apart from "TLS was quietly not used": the plaintext port is
+# there to be handed a TLS handshake and refuse it.
+#
+# Used as an overlay:  docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# The certificates come from ci/broker/certs.sh, which writes them OUTSIDE the source tree - the
+# working copy on the build box is a one-way replica that erases what is written into it and hands
+# over what is copied in at 0600, which this container's non-root user cannot read.
+
+services:
+  broker:
+    ports:
+      # PUBLISHED, not merely configured. A listener the broker holds open inside its own network
+      # namespace and nothing outside can reach fails exactly like a broker that is down, and the
+      # test would then be red for a reason that has nothing to do with TLS.
+      - "9094:9094"
+    volumes:
+      - ${KAFKAKN_TLS_DIR:-${HOME}/.cache/kafkakn/tls}:/etc/kafka/secrets:ro
+    environment:
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,SSL://:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9094"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL"
+      # PKCS12 on the SERVER side only. PEM was tried and refused: `SSL key store password cannot
+      # be specified with PEM format`, and this image always specifies one. Both CLIENTS still read
+      # the PEM CA, which is the half the library has to get right.
+      KAFKA_SSL_KEYSTORE_TYPE: "PKCS12"
+      # FILENAME, not LOCATION: the image's configure script builds the location itself from
+      # /etc/kafka/secrets and overwrites anything set here, then `ensure`s these two credential
+      # files exist. Without them it exits on an unbound variable before the broker starts, and
+      # `docker compose up --wait` reports the crash-looping container Healthy.
+      KAFKA_SSL_KEYSTORE_FILENAME: "broker.keystore.p12"
+      KAFKA_SSL_KEY_CREDENTIALS: "key-password"
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: "keystore-password"
+      # No client certificates: mTLS is out of scope for B-11, and asking for one would make every
+      # scenario fail for a reason the scenario is not about.
+      KAFKA_SSL_CLIENT_AUTH: "none"
+      # The broker talks to itself over PLAINTEXT (see docker-compose.yml), so it needs no trust
+      # store of its own.

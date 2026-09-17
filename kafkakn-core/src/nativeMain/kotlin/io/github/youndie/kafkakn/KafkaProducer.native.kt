@@ -27,10 +27,12 @@ import kotlin.concurrent.AtomicLong
 import kotlin.concurrent.AtomicReference
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
+import rdkafka.RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN
 import rdkafka.RD_KAFKA_RESP_ERR__QUEUE_FULL
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_conf_set_dr_msg_cb
+import rdkafka.rd_kafka_conf_set_error_cb
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_flush
@@ -43,8 +45,6 @@ import rdkafka.rd_kafka_produce
 import rdkafka.rd_kafka_t
 import rdkafka.rd_kafka_topic_destroy
 import rdkafka.rd_kafka_topic_name
-import rdkafka.rd_kafka_topic_conf_new
-import rdkafka.rd_kafka_topic_conf_set
 import rdkafka.rd_kafka_topic_new
 import rdkafka.rd_kafka_type_t
 
@@ -56,6 +56,10 @@ import rdkafka.rd_kafka_type_t
  * record was enqueued.
  */
 public actual fun kafkaProducer(config: ProducerConfig): KafkaProducer = NativeKafkaProducer(config)
+
+/** The default is murmur2_random; a caller who names a partitioner keeps theirs. */
+private fun partitionerFor(config: ProducerConfig): String =
+    config.properties["partitioner"] ?: "murmur2_random"
 
 // RD_KAFKA_PARTITION_UA and RD_KAFKA_MSG_F_COPY are preprocessor macros, so cinterop does not
 // publish them. Spelled with the names they have in rdkafka.h so a reader can check them.
@@ -109,6 +113,37 @@ private fun unpark(id: Long): CompletableDeferred<RecordMetadata>? {
  */
 internal val crashInDeliveryCallback = AtomicReference(false)
 
+/**
+ * What librdkafka last complained about on a connection, as free text.
+ *
+ * **Without this a TLS failure is unrecognisable.** `rd_kafka_produce` only enqueues, so a record
+ * bound for a broker whose certificate cannot be verified is queued, retried, and finally delivered
+ * back as `Local: Message timed out` — the same words a closed port, a wrong address and a dead
+ * broker produce. The reason it could not connect goes to the error callback and nowhere else, so
+ * a producer that does not keep it cannot tell its caller why.
+ *
+ * Top-level and atomic for the same reason as the registry above: a `staticCFunction` captures
+ * nothing.
+ */
+private val lastConnectionError = AtomicReference<String?>(null)
+
+private val errorReport = staticCFunction<
+    CPointer<rd_kafka_t>?,
+    Int,
+    CPointer<ByteVar>?,
+    COpaquePointer?,
+    Unit,
+    > { _, code, reason, _ ->
+    // `_ALL_BROKERS_DOWN` is skipped, and that is the difference between a usable message and a
+    // useless one. It is a SUMMARY of other errors - librdkafka's own header calls it informational
+    // and says not to treat it as fatal - and it arrives last, after the error that explains
+    // anything. Measured: keeping the last error of any kind produced
+    // `Local: All broker connections are down: 1/1 brokers are down` for a certificate that could
+    // not be verified, a certificate that had expired, and a port with nothing on it alike.
+    if (code == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN) return@staticCFunction
+    lastConnectionError.value = "${rd_kafka_err2str(code)?.toKString()}: ${reason?.toKString()}"
+}
+
 private val deliveryReport = staticCFunction<
     CPointer<rd_kafka_t>?,
     CPointer<rd_kafka_message_t>?,
@@ -136,8 +171,14 @@ private val deliveryReport = staticCFunction<
             // The topic is spelled into the message deliberately. rd_kafka_err2str gives
             // "Broker: Unknown topic or partition" and names nothing, so a caller with several
             // topics in flight learns which one failed only if we say.
+            //
+            // The connection error is appended when there is one. `Local: Message timed out` is
+            // what a certificate that cannot be verified looks like from here, and it is also what
+            // a closed port looks like; the sentence that tells them apart arrived on the error
+            // callback minutes earlier.
+            val why = lastConnectionError.value?.let { "; last broker error: $it" } ?: ""
             slot.completeExceptionally(
-                KafkaProduceException("$topic: ${rd_kafka_err2str(error)?.toKString()}"),
+                KafkaProduceException("$topic: ${rd_kafka_err2str(error)?.toKString()}$why"),
             )
         }
     } catch (failure: Throwable) {
@@ -157,9 +198,16 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
     private val handle: CPointer<rd_kafka_t> = memScoped {
         val conf = rd_kafka_conf_new() ?: error("rd_kafka_conf_new returned null")
         val errstr = allocArray<ByteVar>(ERRSTR)
-        // `partitioner` is a TOPIC property in librdkafka, not a global one; it is applied in
-        // topicHandle and would be rejected here.
-        config.properties.filterKeys { it != "partitioner" }.forEach { (key, value) ->
+        // EVERYTHING the caller set goes on the global conf, topic-level properties included.
+        // librdkafka accepts those here and applies them to the default topic configuration it
+        // creates implicitly - which is the configuration `rd_kafka_topic_new(.., NULL)` then uses.
+        //
+        // The earlier shape built a fresh topic conf per topic, and that SILENTLY DROPPED every
+        // topic-level property the caller had set: `message.timeout.ms`, `acks`, `compression.codec`
+        // among them. It was found by a TLS test that hung for a minute where it had asked to fail
+        // in twenty seconds, and it had been passing its own `acks=all` assertion all along because
+        // librdkafka's default for acks happens to be -1 (research §2.8).
+        (config.properties + ("partitioner" to partitionerFor(config))).forEach { (key, value) ->
             // librdkafka reports an unknown key here, so this arm refuses it at construction too -
             // the contract says an unusable configuration fails, and the earlier the better.
             if (rd_kafka_conf_set(conf, key, value, errstr, ERRSTR.convert()) != RD_KAFKA_CONF_OK) {
@@ -167,8 +215,18 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
             }
         }
         rd_kafka_conf_set_dr_msg_cb(conf, deliveryReport)
+        rd_kafka_conf_set_error_cb(conf, errorReport)
         rd_kafka_new(rd_kafka_type_t.RD_KAFKA_PRODUCER, conf, errstr, ERRSTR.convert())
             ?: error("rd_kafka_new failed: ${errstr.toKString()}")
+    }
+
+    init {
+        // Cleared per producer, because [lastConnectionError] is one slot for the whole process: a
+        // `staticCFunction` captures nothing, so there is nowhere per-producer for it to write.
+        // Attributing it properly would mean handing each producer's identity through
+        // `rd_kafka_conf_set_opaque` and keeping a second registry; two producers failing at once
+        // is not a case this library has, and when it is, that is the shape of the fix.
+        lastConnectionError.value = null
     }
 
     private val topics = mutableMapOf<String, CPointer<rdkafka.rd_kafka_topic_t>>()
@@ -186,7 +244,7 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
     }
 
     /**
-     * The partitioner is set here, and this is not a detail.
+     * The partitioner default, and this is not a detail.
      *
      * **librdkafka and the Java client do not agree by default.** librdkafka's default is
      * `consistent_random`, a CRC32 hash of the key; the Java producer uses murmur2. Both are
@@ -202,17 +260,10 @@ internal class NativeKafkaProducer(private val config: ProducerConfig) : KafkaPr
      * A caller who sets `partitioner` explicitly keeps their choice; the default is a default.
      */
     private fun topicHandle(name: String) = topics.getOrPut(name) {
-        val topicConf = rd_kafka_topic_conf_new() ?: error("rd_kafka_topic_conf_new returned null")
-        memScoped {
-            val errstr = allocArray<ByteVar>(ERRSTR)
-            val partitioner = config.properties["partitioner"] ?: "murmur2_random"
-            if (rd_kafka_topic_conf_set(topicConf, "partitioner", partitioner, errstr, ERRSTR.convert())
-                != RD_KAFKA_CONF_OK
-            ) {
-                throw IllegalArgumentException("partitioner=$partitioner rejected: ${errstr.toKString()}")
-            }
-        }
-        rd_kafka_topic_new(handle, name, topicConf) ?: error("rd_kafka_topic_new failed for $name")
+        // NULL, deliberately: librdkafka then uses the default topic configuration built from the
+        // global conf above, so the caller's topic-level properties are the ones in force. Handing
+        // a freshly created topic conf here instead is what dropped them.
+        rd_kafka_topic_new(handle, name, null) ?: error("rd_kafka_topic_new failed for $name")
     }
 
     override suspend fun send(record: ProducerRecord): RecordMetadata {

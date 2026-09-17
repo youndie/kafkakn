@@ -35,3 +35,10 @@ internal actual fun smallQueueConfig(): Map<String, String> = mapOf(
 // The JVM client does its waiting inside send(); there is no counter to read, and inventing one
 // would mean adding logic to the arm whose value is that it is not ours.
 internal actual fun backpressureWaitCount(): Long = -1
+
+internal actual fun failFastConfig(): Map<String, String> = mapOf(
+    "max.block.ms" to "20000",
+    "request.timeout.ms" to "5000",
+    "delivery.timeout.ms" to "25000",
+    "retries" to "1",
+)

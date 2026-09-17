@@ -16,7 +16,32 @@ import kotlin.coroutines.resumeWithException
  */
 public actual fun kafkaProducer(config: ProducerConfig): KafkaProducer = JvmKafkaProducer(config)
 
+/**
+ * The one place this arm is allowed to not be a plain delegate.
+ *
+ * The contract spells the certificate authority librdkafka's way — `ssl.ca.location`, a path — and
+ * the Java client has no such key: it wants a trust store. Kafka 4.x reads a PEM trust store
+ * directly, so the translation is two entries and no file conversion.
+ *
+ * **The alternative was to make the caller write both.** A configuration that must be spelled
+ * differently per platform is a configuration the caller gets wrong on the arm they do not run
+ * locally, and the whole claim of this library is one surface over two implementations
+ * ([feature-secure-connection](../../../../../../../docs/features/feature-secure-connection.md)).
+ *
+ * A caller who sets `ssl.truststore.location` themselves is left alone: theirs is the Java client's
+ * own key and it travels untouched.
+ */
+internal fun translateForJava(properties: Map<String, String>): Map<String, String> {
+    val ca = properties["ssl.ca.location"] ?: return properties
+    return properties - "ssl.ca.location" + mapOf(
+        "ssl.truststore.location" to ca,
+        "ssl.truststore.type" to "PEM",
+    )
+}
+
 internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
+
+    private val properties = translateForJava(config.properties)
 
     init {
         // A key nobody honours fails HERE, not silently. kafka-clients logs unknown configuration at
@@ -26,7 +51,7 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
         // The known set comes from the client itself rather than from a list maintained here - a
         // hand-written list beside a growing set goes stale on the first Kafka release.
         val known = ApacheProducerConfig.configNames()
-        val unknown = config.properties.keys.filterNot { it in known }.sorted()
+        val unknown = properties.keys.filterNot { it in known }.sorted()
         require(unknown.isEmpty()) {
             "unknown producer configuration: ${unknown.joinToString()} " +
                 "(kafka-clients knows ${known.size} keys; nothing here is silently ignored)"
@@ -35,7 +60,7 @@ internal class JvmKafkaProducer(config: ProducerConfig) : KafkaProducer {
 
     private val delegate = org.apache.kafka.clients.producer.KafkaProducer<ByteArray, ByteArray>(
         Properties().apply {
-            config.properties.forEach { (key, value) -> setProperty(key, value) }
+            properties.forEach { (key, value) -> setProperty(key, value) }
         },
         ByteArraySerializer(),
         ByteArraySerializer(),
