@@ -26,4 +26,4 @@ and therefore unusable through cinterop ([research §1.5](../research/research-a
 - AC: a record with headers round-trips, and an independent reader sees the same header bytes.
 - AC: both arms agree on header ordering and on what a duplicate key does.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/ProducerRecord.kt`,
-  `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/NativeProducer.kt`.
+  `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`.

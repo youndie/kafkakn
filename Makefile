@@ -25,6 +25,8 @@ gate: guard
 	$(PY) scripts/docs_check.py
 	$(PY) scripts/coverage_map.py --check
 	$(PY) scripts/common_is_platform_free.py
+	$(PY) scripts/no_delivery_counters.py --selftest
+	$(PY) scripts/no_delivery_counters.py
 
 # The subject has to exist before any verdict about it means anything. Each script below prints
 # "nothing checked" and exits zero on an empty tree, so without this a deleted docs/ is a green run.

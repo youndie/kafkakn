@@ -32,7 +32,7 @@ where a C callback arriving on librdkafka's own thread resumes a Kotlin coroutin
   harness could contradict.
 - AC: `flush` is implemented as `rd_kafka_outq_len` reaching zero, never as the return of
   `rd_kafka_flush` — which is an error code.
-- Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/NativeProducer.kt`,
+- Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/nativeInterop/cinterop/rdkafka.def`.
 
 ---

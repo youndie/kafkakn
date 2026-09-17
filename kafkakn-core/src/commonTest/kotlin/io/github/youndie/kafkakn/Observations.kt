@@ -59,3 +59,23 @@ internal expect fun smallQueueConfig(): Map<String, String>
 
 /** How many times a caller has had to wait for room. Zero means the backpressure path never ran. */
 internal expect fun backpressureWaitCount(): Long
+
+/**
+ * The topic this arm accounts on, **per arm and fresh for the run**.
+ *
+ * The accounting oracle is the topic's end offsets, and a delta is only attributable while nothing
+ * else writes to the topic. Both arms share one broker and one run, so they cannot share a topic
+ * without their two counts adding up into one number that no single assertion can check. The suffix
+ * is [armName] and the harness creates both.
+ */
+internal val accountingTopic: String get() = (testEnv("KAFKAKN_ACCOUNTING_TOPIC") ?: "kafkakn-acct") + "-" + armName
+
+/**
+ * Whether this run is the deliberate positive control.
+ *
+ * Set by `ci/b-09/run.sh` for a second pass in which the accounting test runs against
+ * [NaiveProducer] and **must fail**. An environment variable rather than a system property: `-D` on
+ * the Gradle command line sets a property on the Gradle process and never reaches the forked test
+ * JVM, which is how an earlier skew guard was steered into agreeing with itself (research §2.1).
+ */
+internal fun naiveProducerRequested(): Boolean = testEnv("KAFKAKN_NAIVE") == "1"

@@ -331,6 +331,29 @@ one. The suite makes the queue small through a per-arm helper, which is the hone
 test with a platform-specific fixture, rather than a common key that silently means something
 different on each side.
 
+### 2.7 The accounting guard, measured against a producer that drops
+
+[B-09](../backlog/B-09-accounting.md). Both arms handed 3 000 records to a topic created empty for
+the run, and the topic's end offsets grew to exactly 3 000 on each — measured 2026-09-17 by
+`ci/b-09/run.sh`, reading `kafka-get-offsets.sh`, not the library.
+
+**The number that makes it mean something is the second one.** The same test was run again against a
+deliberately naive producer that counts an enqueue refusal and moves on, and it went red on both
+arms: the jvm arm landed 100 of 3 000 and the native arm 103, while every `send` had returned a
+`RecordMetadata`. The shortfall equalled the drops the control admits to, exactly, on both arms —
+so the oracle sees the whole of the loss and not a part of it.
+
+**Why the control is a wrapper and not a second binding.** It simulates the refusal with a permit
+count rather than taking it from librdkafka, so it says nothing about librdkafka's own refusal path
+— that is what §1.4 and [B-08](../backlog/B-08-suspend-on-backpressure.md) are for. What it
+reproduces exactly is the condition the guard exists to catch: records handed in, answered with a
+result-shaped value, that no broker ever saw. Being identical on both arms is the gain; a control
+only one arm can run leaves the other arm's guard unproven.
+
+**Consequence for the oracle.** The topic is created fresh per run and **per arm**. Both arms run
+against one broker in one pass, so a shared topic would add their two counts into a single number no
+assertion could attribute, and a reused topic makes the delta somebody else's.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
