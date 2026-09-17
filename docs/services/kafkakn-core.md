@@ -78,6 +78,10 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
   `ci/publish/run.sh` names all three after a publish and then compiles a **separate build** against
   them from a cache purged of this group — and requires that same probe to fail against an empty
   repository, because "it resolved" says nothing about where it resolved from.
+- **Published, and resolved back from the network**: all three coordinates answer at
+  `reposilite.kotlin.website/snapshots` and `ci/publish/verify-published.sh` compiles a separate
+  build against them after every upload. An upload that returned 2xx is not a publication — a
+  `.module` naming a variant that was never uploaded answers 200 just as well.
 - The coordinate lives in `gradle.properties` and nowhere else. Gradle applies `group` and `version`
   to every project, so a module cannot publish under a different one by forgetting to set it.
 

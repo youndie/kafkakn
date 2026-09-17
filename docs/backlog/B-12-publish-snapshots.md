@@ -1,7 +1,7 @@
 ---
 id: B-12
 title: "Publish snapshots to reposilite"
-status: question
+status: done
 priority: P1
 size: S
 stage: stage-3-usable-by-others
@@ -81,22 +81,43 @@ growing set of targets.
   grows. `k8s/reposilite/token.sh` supports this as `--path`; the workflow that calls it exposes
   only `coordinates` and `plugin-ids`, so it is an input away.
 
-### What is not done, and why it is not something this loop can do
+### Closed — 2026-09-17
 
-**The upload needs credentials this repository does not have.** The portfolio's convention is the
-Gradle properties `REPOSILITE_USER` and `REPOSILITE_SECRET`, supplied in CI as
-`ORG_GRADLE_PROJECT_*` from repository secrets. `youndie/kafkakn` has **no secrets set**; the values
-exist only as secrets on other repositories, and a secret's value cannot be read back from one — by
-design. They are not on this machine either.
+Published, and **resolved back from the network by a build that is not this one**:
 
-`.github/workflows/publish.yaml` is written and does everything but the upload: it builds the C
-bundle, runs the proof above, and then either uploads or prints a warning saying it did not. That
-split is deliberate — a publish workflow only its secret-holder can exercise is a workflow whose
-first real run is also its first test.
+| Coordinate | `maven-metadata.xml` |
+|---|---|
+| `io.github.youndie.kafkakn:kafkakn-core` | 200 |
+| `io.github.youndie.kafkakn:kafkakn-core-jvm` | 200 |
+| `io.github.youndie.kafkakn:kafkakn-core-linuxx64` | 200 |
 
-**What a person has to do:** add `REPOSILITE_USER` and `REPOSILITE_SECRET` to
-`youndie/kafkakn` → Settings → Secrets and variables → Actions, then run the `publish` workflow. The
-item closes when a run of it uploads and the three coordinates answer over HTTP.
+`ci/publish/verify-published.sh` runs after every upload and is the only statement that means
+anything: **an upload that returned 2xx is not a publication.** A `.module` listing a variant that
+was never uploaded, a POM under the wrong group, a `maven-metadata.xml` that does not name the
+snapshot just written — each answers 200 and fails the first consumer to try. So the check is a
+separate build, knowing a coordinate and a URL, compiling `jvm`, `linuxX64` and the common metadata
+with the group purged from its cache.
 
-[B-13](B-13-external-consumer-acceptance.md) stays blocked until then: its whole point is consuming
-the artefact from the network rather than from a directory.
+The token now holds **one route**, `/snapshots/io/github/youndie/kafkakn/`, which covers the project
+and every target it grows. The job that issues these tokens took whole paths in its script but not
+in its dispatch form; it takes them now, and its own documentation carries the multiplatform case
+beside the Gradle-plugin one. That job is not in this repository and is not named here — see
+[the rule below](#what-this-document-does-not-name).
+
+### The three iterations above, in one line each
+
+1. Everything but the upload, proved against a Maven repository on disk.
+2. The group moved to the project's own before the first token was issued.
+3. The first real upload was refused where it was predicted, and nothing landed.
+
+[B-13](B-13-external-consumer-acceptance.md) is unblocked: there is now an artefact on the network
+to consume.
+
+## What this document does not name
+
+The credential is issued from a repository that is not public, so it is described by what it does
+and never by its name — the same rule the research document follows for the feasibility work this
+project started from. What a reader here needs is the shape of the thing: a dispatched job that
+turns coordinates or paths into Reposilite routes, proves the token can write where it was meant to,
+and stores `REPOSILITE_USER` and `REPOSILITE_SECRET` in the publishing repository without the secret
+passing through anyone's hands.

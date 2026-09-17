@@ -63,6 +63,15 @@ jobs:
           ./gradlew --no-daemon --console=plain :kafkakn-core:publishAllPublicationsToWipRepository
           echo "published io.github.youndie:kafkakn-core{,-jvm,-linuxx64}:$(sed -n 's/^version=//p' gradle.properties)"
 
+      # An upload that returned 2xx is not a publication. This is the statement worth making: a
+      # separate build, knowing a coordinate and a URL, compiling against every variant with the
+      # group purged from its cache.
+      - name: resolve what was just published
+        if: env.REPOSILITE_USER != ''
+        env:
+          REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
+        run: bash ci/publish/verify-published.sh
+
       - name: say so when it did not upload
         if: env.REPOSILITE_USER == ''
         env:
