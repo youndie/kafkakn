@@ -1,0 +1,83 @@
+# CLAUDE.md — kafkakn
+
+A Kafka **producer** for Kotlin Multiplatform: one `expect` surface, two actuals — librdkafka
+through cinterop on Kotlin/Native, `org.apache.kafka:kafka-clients` on the JVM. Targets `jvm` and
+`linuxX64` are mandatory; `linuxArm64` is designed for and not built.
+
+**State: nothing is implemented.** The repository holds the research, the contract, the features and
+the backlog. Read before writing code — the obvious design is wrong in four documented ways.
+
+## Where to start a session
+
+1. [docs/research/research-architecture.md](docs/research/research-architecture.md) — the decisions
+   and the evidence under them. Without it the items look like "do the obvious thing", and here the
+   obvious thing is wrong:
+   - **`rd_kafka_produce` only enqueues, and a record it refuses produces no delivery report at
+     all** (§1.4). A naive binding lost 264 826 of 1 000 000 records with `failed = 0` and a
+     successful flush. The unit of truth is what the *caller* asked to send.
+   - **A full queue is backpressure, not an error** (§1.4, D3). `send` suspends. Returning a failure
+     the caller may ignore rebuilds the same defect somewhere new.
+   - **`rd_kafka_flush` returns an error code, not a count** (§1.4). Reading it as "how many are
+     left" printed `-185`, which is a timeout wearing a quantity's clothes. The count is
+     `rd_kafka_outq_len`.
+   - **`rd_kafka_producev` is variadic and unusable through cinterop** (§1.5). The library cannot
+     mirror librdkafka's own recommended API.
+2. [docs/api/producer-contract.md](docs/api/producer-contract.md) — what a test cites.
+3. [backlog.md](backlog.md) — the queue, the stages, the decisions.
+
+## The rule that governs everything here
+
+> **First a test from the specification, then the code. The test passing is the GATE.**
+
+A test cites a concrete place in the producer contract or in Kafka's own documentation — in its name
+or in a comment above it. A test "from common sense" is not accepted, because the common sense here
+says a produce call that returned has sent something.
+
+Order inside a task: read the place in the contract → write the red test → **confirm it is red for
+the intended reason** → implement → green.
+
+## The second rule
+
+> **The JVM arm is the oracle, not a portability afterthought.**
+
+The same `commonTest` suite runs on both arms against one broker. The native arm is correct when it
+agrees with the reference implementation. A test that can only be written in `jvmTest` or
+`nativeTest` is either about the platform seam itself, or a sign the `expect` surface has leaked a
+platform's shape — and that is a finding for the research document, not something to work around.
+
+## What not to do
+
+- **Do not let the library count its own successes.** The reconciliation lives in the suite, against
+  the broker's end offsets. A producer that reports its own delivery rate is the shape that failed.
+- **Do not verify a produce with our own consumer.** The oracles are the broker's end offsets and
+  `kafka-console-consumer`. A producer checked by its own consumer can be wrong in both directions
+  at once.
+- **Do not test below the queue bound and call it covered.** The default bound is 100 000 records; a
+  2 000-record test cannot reach the case that matters. Lower the bound in the suite.
+- **Do not type keys or values as `String`.** Kafka's value space has no encoding, and the first
+  non-UTF-8 payload is what finds out.
+- **Do not add a configuration key the actuals do not honour.** An option accepted and dropped looks
+  identical to one that worked. Unknown keys fail at construction.
+- **Do not name a private project.** This repository is public. The work it starts from was done in
+  one that is not: quote the measurements with their method, never the repository.
+- **Do not mark a document `active` without a test behind it.** `main` describes what exists.
+- **Do not trust a gotcha inherited from a sibling project without re-checking it at the pinned
+  version.** Several in the research document came from measurement here; the rest say where they
+  came from.
+
+## Checks
+
+```bash
+make check
+```
+
+Documentation only, for now — there is no build yet. CI runs exactly this
+([B-14](docs/backlog/B-14-ci-workflow.md)). Whatever is not in `make check` is not a gate.
+
+## Language
+
+Everything in this repository is in English: documents, code, KDoc, test names, exception messages,
+commit messages, pull request titles and bodies. Commits follow Conventional Commits.
+
+Kafka's own names are verbatim as Kafka writes them: `bootstrap.servers`, `acks`,
+`queue.buffering.max.messages`, `security.protocol`, `ssl.ca.location`.
