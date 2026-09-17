@@ -31,11 +31,10 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (14)
+## Open (13)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-01](docs/backlog/B-01-gradle-skeleton.md) `[~]` | Gradle skeleton: jvm and linuxX64 targets, pinned catalogue | P0 | S | - |
 | [B-02](docs/backlog/B-02-expect-surface.md) `[ ]` | The expect surface, compiling and throwing | P0 | S | B-01 |
 | [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[ ]` | The C bundle, built against glibc 2.17, consumed by cinterop | P0 | M | B-01 |
 | [B-04](docs/backlog/B-04-broker-fixture.md) `[ ]` | The broker fixture: KRaft, three partitions, auto-create off | P0 | S | - |
@@ -50,7 +49,11 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (0)
+## Closed (1)
+
+**It builds, and a test can fail**
+
+- [B-01](docs/backlog/B-01-gradle-skeleton.md) `[x]` - Gradle skeleton: jvm and linuxX64 targets, pinned catalogue
 
 <!-- END INDEX -->
 
