@@ -9,7 +9,7 @@ owner: unassigned
 depends_on:
   - test-broker
 publishes:
-  - io.github.youndie:kafkakn-core (snapshots, reposilite)
+  - io.github.youndie.kafkakn:kafkakn-core (snapshots, reposilite)
 ---
 
 # kafkakn-core
@@ -36,7 +36,15 @@ fixtures an external consumer needs ([B-13](../backlog/B-13-external-consumer-ac
 not split out before there is a consumer to need it, because a module with one in-tree caller
 accumulates API nobody has used.
 
-Package: `io.github.youndie.kafkakn`. Group: `io.github.youndie`.
+Package and group are the same string: `io.github.youndie.kafkakn`.
+
+The group is the **project's**, not the account's, and that is what puts every artefact of this
+project under one directory — `io/github/youndie/kafkakn/`. Two things follow. A publishing token
+can be scoped to that one directory instead of to each artefact separately, which matters because a
+Reposilite route is a raw string prefix: a route at `…/kafkakn-core/` grants nothing under
+`…/kafkakn-core-jvm/`, so a per-artefact token has to be re-issued for every target ever added.
+And it is the namespace to ask Maven Central for if that decision is ever taken
+([D7](../research/research-architecture.md)).
 
 ## The source-set layout
 
@@ -63,9 +71,9 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
 
   | Coordinate | What a consumer gets |
   |---|---|
-  | `io.github.youndie:kafkakn-core` | the metadata module — what common code asks for |
-  | `io.github.youndie:kafkakn-core-jvm` | the jvm variant |
-  | `io.github.youndie:kafkakn-core-linuxx64` | the native variant, with the cinterop klib beside it |
+  | `io.github.youndie.kafkakn:kafkakn-core` | the metadata module — what common code asks for |
+  | `io.github.youndie.kafkakn:kafkakn-core-jvm` | the jvm variant |
+  | `io.github.youndie.kafkakn:kafkakn-core-linuxx64` | the native variant, with the cinterop klib beside it |
 
   `ci/publish/run.sh` names all three after a publish and then compiles a **separate build** against
   them from a cache purged of this group — and requires that same probe to fail against an empty

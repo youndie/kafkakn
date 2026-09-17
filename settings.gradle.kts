@@ -13,6 +13,10 @@ pluginManagement {
         // resolution of Kotlin and coroutines too - measured in a sibling project, where an
         // unreachable third-party repository broke the resolution of OUR artefact.
         maven("https://reposilite.kotlin.website/snapshots") {
+            // The ACCOUNT's namespace, not this project's `io.github.youndie.kafkakn`, and
+            // deliberately: the filter exists to keep this host out of every other resolution, and
+            // a portfolio library added here later would otherwise need the filter widened at the
+            // same time as the dependency - two edits, one of which gets forgotten.
             content { includeGroupAndSubgroups("io.github.youndie") }
         }
     }
