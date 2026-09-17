@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-06](docs/backlog/B-06-jvm-actual.md) `[ ]` | The JVM actual over kafka-clients | P0 | M | B-05 |
+| [B-06](docs/backlog/B-06-jvm-actual.md) `[~]` | The JVM actual over kafka-clients | P0 | M | B-05 |
 | [B-07](docs/backlog/B-07-native-actual.md) `[ ]` | The native actual: produce and delivery reports across the callback seam | P0 | L | B-03, B-06 |
 | [B-08](docs/backlog/B-08-suspend-on-backpressure.md) `[ ]` | Suspend on backpressure instead of failing | P0 | M | B-07 |
 | [B-09](docs/backlog/B-09-accounting.md) `[ ]` | Account for every record the caller handed in | P0 | S | B-08 |

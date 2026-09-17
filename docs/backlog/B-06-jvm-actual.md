@@ -1,7 +1,7 @@
 ---
 id: B-06
 title: "The JVM actual over kafka-clients"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-1-produce
