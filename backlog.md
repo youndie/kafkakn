@@ -31,12 +31,11 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 <!-- BEGIN INDEX -->
 
-## Open (12)
+## Open (11)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[ ]` | The C bundle, built against glibc 2.17, consumed by cinterop | P0 | M | B-01 |
-| [B-04](docs/backlog/B-04-broker-fixture.md) `[~]` | The broker fixture: KRaft, three partitions, auto-create off | P0 | S | - |
 | [B-05](docs/backlog/B-05-differential-harness.md) `[ ]` | The differential harness: one suite, both actuals, one broker | P0 | M | B-02, B-04 |
 | [B-06](docs/backlog/B-06-jvm-actual.md) `[ ]` | The JVM actual over kafka-clients | P0 | M | B-05 |
 | [B-07](docs/backlog/B-07-native-actual.md) `[ ]` | The native actual: produce and delivery reports across the callback seam | P0 | L | B-03, B-06 |
@@ -48,12 +47,13 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 | [B-13](docs/backlog/B-13-external-consumer-acceptance.md) `[ ]` | Acceptance from outside: a consumer project that uses the published artefact | P1 | M | B-12 |
 | [B-10](docs/backlog/B-10-record-headers.md) `[ ]` | Record headers without rd_kafka_producev | P2 | M | B-07 |
 
-## Closed (2)
+## Closed (3)
 
 **It builds, and a test can fail**
 
 - [B-01](docs/backlog/B-01-gradle-skeleton.md) `[x]` - Gradle skeleton: jvm and linuxX64 targets, pinned catalogue
 - [B-02](docs/backlog/B-02-expect-surface.md) `[x]` - The expect surface, compiling and throwing
+- [B-04](docs/backlog/B-04-broker-fixture.md) `[x]` - The broker fixture: KRaft, three partitions, auto-create off
 
 <!-- END INDEX -->
 

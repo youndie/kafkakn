@@ -1,0 +1,33 @@
+=== environment ===
+2026-09-17T14:30:04+02:00
+Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2
+    image: apache/kafka:4.3.1
+
+=== up, and a topic with three partitions ===
+  broker answers on 127.0.0.1:9092
+Topic: b04	TopicId: eRg_be9SSwaxxott-rxKOA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+	Topic: b04	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: b04	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: b04	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+
+=== positive control 1: the broker check must fail against a dead port ===
+(a helper that cannot say no makes every later green meaningless)
+selftest: the broker check fails against a dead port, as it must
+
+=== positive control 2: a produce with no stdin attached writes NOTHING ===
+(docker exec without -i: the console producer reads EOF, exits zero, and writes nothing.
+ Only the end offsets reveal it - this is the failure the harness is built to make visible.)
+  exit was 0, and end offsets went 0 -> 0
+  CONFIRMED: a clean exit code and nothing written. The offsets are the only witness.
+
+=== the oracles, working ===
+Warning: --producer-property is deprecated and will be removed in a future version. Use --command-property instead.
+  end offsets: 0 -> 1 (expected +1)
+  console consumer found: 1 (expected 1)
+
+=== the consumer oracle must also be able to say no ===
+  a pattern that was never produced: 0 (expected 0)
+
+=== verdict ===
+offsets-grew=1 found=1 absent=0
+B-04: the fixture stands and both oracles can say yes and no
