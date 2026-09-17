@@ -1,7 +1,7 @@
 ---
 id: B-12
 title: "Publish snapshots to reposilite"
-status: wip
+status: question
 priority: P1
 size: S
 stage: stage-3-usable-by-others
@@ -32,7 +32,7 @@ blocked_by: [B-09]
   coordinate.
 - Anchors: `build.gradle.kts`, `settings.gradle.kts`, `ci/publish/`.
 
-## Iteration 1 — 2026-09-17
+## Iteration 1 — 2026-09-17, and what it waits on
 
 Everything except the upload itself, measured by `ci/publish/run.sh`.
 
