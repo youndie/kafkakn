@@ -1,7 +1,7 @@
 ---
 id: B-01
 title: "Gradle skeleton: jvm and linuxX64 targets, pinned catalogue"
-status: open
+status: wip
 priority: P0
 size: S
 stage: stage-0-it-builds

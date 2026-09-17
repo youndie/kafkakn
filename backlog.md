@@ -35,7 +35,7 @@ Nothing is built yet. Every layer document says `status: draft` and means it.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-01](docs/backlog/B-01-gradle-skeleton.md) `[ ]` | Gradle skeleton: jvm and linuxX64 targets, pinned catalogue | P0 | S | - |
+| [B-01](docs/backlog/B-01-gradle-skeleton.md) `[~]` | Gradle skeleton: jvm and linuxX64 targets, pinned catalogue | P0 | S | - |
 | [B-02](docs/backlog/B-02-expect-surface.md) `[ ]` | The expect surface, compiling and throwing | P0 | S | B-01 |
 | [B-03](docs/backlog/B-03-c-bundle-old-glibc.md) `[ ]` | The C bundle, built against glibc 2.17, consumed by cinterop | P0 | M | B-01 |
 | [B-04](docs/backlog/B-04-broker-fixture.md) `[ ]` | The broker fixture: KRaft, three partitions, auto-create off | P0 | S | - |
