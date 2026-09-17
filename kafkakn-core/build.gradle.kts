@@ -4,7 +4,7 @@
 // (research §1.1), and an oracle added after the implementation is an oracle shaped by it.
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
+    alias(wip.plugins.kotlinMultiplatform)
     `maven-publish`
 }
 
@@ -50,7 +50,7 @@ kotlin {
         commonMain.dependencies {
             // api, not implementation: the public surface is suspend functions, so a consumer needs
             // coroutines on its own compile classpath to call them at all.
-            api(libs.coroutines.core)
+            api(wip.kotlinx.coroutines.core)
         }
         jvmMain.dependencies {
             // The reference implementation. This arm delegates to it and adds as little as possible.
@@ -59,7 +59,7 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             // runTest, so a suspending surface can be exercised from a common test on both arms.
-            implementation(libs.coroutines.test)
+            implementation(wip.kotlinx.coroutines.test)
         }
     }
 }
