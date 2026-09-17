@@ -10,6 +10,8 @@ set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 COMPOSE="$HERE/../broker/docker-compose.yml"
+TLS_COMPOSE="$HERE/../broker/docker-compose.tls.yml"
+SSL_BOOTSTRAP=${SSL_BOOTSTRAP:-127.0.0.1:9094}
 CONTAINER=kafkakn-broker
 BOOTSTRAP=${BOOTSTRAP:-127.0.0.1:9092}
 PARTITIONS=${PARTITIONS:-3}
@@ -20,27 +22,67 @@ kc() { docker exec "$CONTAINER" "$@"; }
 kci() { docker exec -i "$CONTAINER" "$@"; }
 
 case "${1:-}" in
-  up)
+  up|tls-up)
+    # ONE fixture with BOTH listeners, always. The alternative - a plaintext mode and a TLS mode -
+    # buys a suite that skips its TLS scenarios in the mode that does not have them, and a skipped
+    # scenario reads exactly like a passing one in a summary line.
+    #
     # `--wait` is NOT trusted to mean the broker is up. Measured 2026-09-17: with a required
     # configuration key missing, the broker aborted in StorageTool, the container crash-looped with
     # exit 1, and compose reported it **Healthy** anyway. A fixture that reports success while its
     # subject is dead makes every test above it meaningless, so the only evidence accepted here is
     # the broker answering a request.
-    docker compose -f "$COMPOSE" up -d --wait < /dev/null >/dev/null 2>&1
+    bash "$HERE/../broker/certs.sh" || exit 1
+    docker compose -f "$COMPOSE" -f "$TLS_COMPOSE" up -d --wait < /dev/null >/dev/null 2>&1
+    answered=
     for _ in $(seq 1 30); do
         if kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$BOOTSTRAP" \
                 >/dev/null 2>&1; then
             echo "  broker answers on $BOOTSTRAP"
+            answered=yes
+            break
+        fi
+        sleep 2
+    done
+    [ -n "$answered" ] || {
+        echo "  BROKER DID NOT ANSWER on $BOOTSTRAP - here is why:" >&2
+        docker logs "$CONTAINER" 2>&1 | grep -iE "exception|error|missing" | tail -3 >&2
+        exit 1
+    }
+    for _ in $(seq 1 30); do
+        if kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$SSL_BOOTSTRAP" \
+                --command-config /etc/kafka/secrets/client-ssl.properties >/dev/null 2>&1; then
+            echo "  broker answers over TLS on $SSL_BOOTSTRAP"
             exit 0
         fi
         sleep 2
     done
-    echo "  BROKER DID NOT ANSWER on $BOOTSTRAP - here is why:" >&2
-    docker logs "$CONTAINER" 2>&1 | grep -iE "exception|error|missing" | tail -3 >&2
+    echo "  BROKER DID NOT ANSWER OVER TLS on $SSL_BOOTSTRAP - here is why:" >&2
+    docker logs "$CONTAINER" 2>&1 | grep -iE "ssl|exception|error" | tail -5 >&2
     exit 1
     ;;
+  tls-selftest)
+    # The fixture must be able to say NO. A broker that accepts every CA, or a client that never
+    # verifies one, produces exactly the same green as a working TLS setup - and this is the one
+    # question that tells them apart, asked with the broker's own tools rather than with kafkakn.
+    kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$SSL_BOOTSTRAP" \
+        --command-config /etc/kafka/secrets/client-ssl.properties >/dev/null 2>&1 \
+        || { echo "tls-selftest: the RIGHT CA was refused - the fixture is broken" >&2; exit 1; }
+    if kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$SSL_BOOTSTRAP" \
+            --command-config /etc/kafka/secrets/client-ssl-wrong-ca.properties >/dev/null 2>&1; then
+        echo "tls-selftest: the WRONG CA was accepted - verification is not happening" >&2
+        exit 1
+    fi
+    echo "  tls-selftest: the right CA connects, the wrong CA does not"
+    ;;
+  ssl-offsets)
+    # Deliberately absent: offsets are read over PLAINTEXT even when the records arrived over TLS,
+    # so the path that verifies the claim is not the path the claim is about. Use `offsets`.
+    echo "offsets are read over plaintext on purpose - use: broker.sh offsets <topic>" >&2
+    exit 2
+    ;;
   down)
-    docker compose -f "$COMPOSE" down < /dev/null >/dev/null 2>&1
+    docker compose -f "$COMPOSE" -f "$TLS_COMPOSE" down < /dev/null >/dev/null 2>&1
     ;;
   topic)
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" \
@@ -83,7 +125,7 @@ case "${1:-}" in
     echo "selftest: the broker check fails against a dead port, as it must"
     ;;
   *)
-    echo "usage: broker.sh up|down|topic <name>|offsets <name>|consume <name> <pattern>|produce <name>|selftest" >&2
+    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest" >&2
     exit 2
     ;;
 esac

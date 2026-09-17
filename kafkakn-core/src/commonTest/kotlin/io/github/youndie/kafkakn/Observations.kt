@@ -79,3 +79,33 @@ internal val accountingTopic: String get() = (testEnv("KAFKAKN_ACCOUNTING_TOPIC"
  * JVM, which is how an earlier skew guard was steered into agreeing with itself (research §2.1).
  */
 internal fun naiveProducerRequested(): Boolean = testEnv("KAFKAKN_NAIVE") == "1"
+
+/**
+ * The broker's TLS listener, which sits **beside** the plaintext one rather than replacing it.
+ *
+ * Both are always up (`ci/harness/broker.sh up`). A fixture with a plaintext mode and a TLS mode
+ * would give the suite a mode in which its TLS scenarios quietly do not run, and a scenario that did
+ * not run reads exactly like one that passed.
+ */
+internal val sslBootstrap: String get() = testEnv("KAFKAKN_SSL_BOOTSTRAP") ?: "127.0.0.1:9094"
+
+/** The certificate authority that signed the broker's certificate. */
+internal val caPath: String get() = testEnv("KAFKAKN_CA") ?: "${testEnv("HOME")}/.cache/kafkakn/tls/ca.pem"
+
+/**
+ * An authority that signed nothing here.
+ *
+ * Without it a TLS test cannot tell "the certificate was verified" from "verification never
+ * happened" — and the second is also what a client with verification disabled looks like.
+ */
+internal val wrongCaPath: String get() = testEnv("KAFKAKN_WRONG_CA") ?: "${testEnv("HOME")}/.cache/kafkakn/tls/wrong-ca.pem"
+
+/**
+ * Timeouts short enough that a connection which will never succeed fails inside a test.
+ *
+ * Per-arm for the same reason as [smallQueueConfig]: librdkafka gives up on a record after
+ * `message.timeout.ms`, the Java client after `delivery.timeout.ms` and only after `max.block.ms`
+ * of waiting for metadata. The defaults are minutes, and a negative TLS scenario spends every one
+ * of them before saying anything.
+ */
+internal expect fun failFastConfig(): Map<String, String>
