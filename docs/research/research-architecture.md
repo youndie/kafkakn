@@ -210,11 +210,44 @@ described in a way that identifies it. A reader can re-run any of them from what
 
 | # | Hypothesis | Settled by |
 |---|---|---|
-| H1 | The same common test suite can express every producer assertion in a way both actuals satisfy — i.e. the `expect` surface is not secretly JVM-shaped or librdkafka-shaped | [B-05](../backlog/B-05-differential-harness.md) |
+| H1 | ~~The same common test suite can express every producer assertion in a way both actuals satisfy~~ — **settled 2026-09-17, with a qualification: see §2.1** | [B-05](../backlog/B-05-differential-harness.md) `done` |
 | H2 | Per-message headers can be carried without `rd_kafka_producev` (§1.5) | [B-10](../backlog/B-10-record-headers.md) |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | [B-08](../backlog/B-08-suspend-on-backpressure.md) |
 | H5 | `linuxArm64` costs a matrix row and no code (D6) | not scheduled; claimed nowhere until it is |
+
+### 2.1 H1, settled: three kinds of assertion, and only one of them needs machinery
+
+Building the harness ([B-05](../backlog/B-05-differential-harness.md)) split the question in a way
+the hypothesis did not anticipate. "Can `commonTest` express every producer assertion" has three
+answers, not one:
+
+**Assertions whose truth belongs to the broker** — how many records landed, on which partition, at
+which offset, what an independent reader sees. These go in `commonTest` unchanged. Each arm is
+checked against the same third party, and agreement between the arms follows from both being right
+rather than being asserted directly. This is most of the suite.
+
+**Assertions about what only the client knows** — which partition *its own* partitioner chose for a
+key, which error type it raises for a given failure, how it normalises a configuration value. These
+are expressible in `commonTest`, but comparing them **across** arms cannot happen inside a test: the
+two are separate processes on separate platforms, and `commonTest` is compiled twice rather than run
+once. Each arm records what it saw, and `ci/harness/compare-arms.sh` diffs the two files afterwards.
+That is the differential oracle's actual mechanism, and it is where the two implementations can
+differ while each looks correct on its own.
+
+**Assertions about the platform seam itself** — that the cinterop archives link, that a delivery
+report arriving on librdkafka's thread resumes the right coroutine. These belong in `linuxX64Test`
+and that is **not** a leak of platform shape into the contract; it is the one place where the thing
+under test is the platform. `CinteropLinkTest` is the first of them.
+
+**Consequence.** "A test that can only be written in one arm's source set" is a warning sign for the
+first two kinds and the normal case for the third, so the rule in `CLAUDE.md` is stated that way
+rather than as a prohibition.
+
+**Consequence 2.** The comparison needs its own vacuity guard and has one: two files that do not
+exist agree perfectly, and so do two empty ones, so absence and emptiness are failures rather than
+agreement. Without that, a suite that never ran would produce the strongest possible "the arms
+agree".
 
 ## 4. Risks, with the machinery that would catch them
 

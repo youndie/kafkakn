@@ -1,0 +1,51 @@
+=== environment ===
+2026-09-17T14:43:01+02:00
+
+=== one suite, both arms ===
+BUILD SUCCESSFUL in 18s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest        tests=6    failures=0    newest result file 14:43:18
+  linuxX64Test   tests=7    failures=0    newest result file 14:43:18
+
+=== the arms agree ===
+  jvm.txt: 5 observations
+  linuxX64.txt: 5 observations
+  THE ARMS AGREE on every observation
+
+=== the comparison can fail: skew the JVM arm ===
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvm.txt: 5 observations
+  linuxX64.txt: 5 observations
+  THE ARMS DISAGREE:
+    4c4
+    < record.topic=t-skewed
+    ---
+    > record.topic=t
+  as required: the skew was caught
+
+=== and it can fail the other way: skew the native arm ===
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvm.txt: 5 observations
+  linuxX64.txt: 5 observations
+  THE ARMS DISAGREE:
+    4c4
+    < record.topic=t
+    ---
+    > record.topic=t-skewed
+  as required: the skew was caught on the other arm too
+
+=== the vacuity guard: two files that do not exist must NOT agree ===
+MISSING: kafkakn-core/build/observations/jvm.txt - the arm did not run, which is not the same as agreeing
+  as required: absence is not agreement
+
+=== restore a clean run ===
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest        tests=6    failures=0    newest result file 14:44:10
+  linuxX64Test   tests=7    failures=0    newest result file 14:44:10
+  jvm.txt: 5 observations
+  linuxX64.txt: 5 observations
+  THE ARMS AGREE on every observation
