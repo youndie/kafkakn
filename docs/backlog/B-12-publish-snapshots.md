@@ -42,11 +42,23 @@ Everything except the upload itself, measured by `ci/publish/run.sh`.
 - **A separate build resolves them.** `ci/publish/consumer` is a build of its own, not a module: it
   knows a coordinate and a repository URL and nothing else, declares **no `mavenLocal`**, and
   compiles `jvm`, `linuxX64` and the common metadata against the published module on a cache purged
-  of `io.github.youndie` with `--refresh-dependencies`.
+  of `io.github.youndie.kafkakn` with `--refresh-dependencies`.
 - **The probe is shown failing** against an empty repository first. Without that, "it resolved" says
   nothing about where it resolved *from* — a warm cache and a stray `~/.m2` both answer the same way.
 - **The content filter is in place**, so an outage at that host cannot fail the resolution of
   Kotlin, coroutines or `kafka-clients`.
+
+### Iteration 2 — the group moved before the first token was issued
+
+`io.github.youndie` → **`io.github.youndie.kafkakn`**, and re-measured: the three coordinates
+publish and the separate build resolves them under the new group.
+
+The reason came from the credential rather than from the build. Secrets here are issued by a job in
+the infrastructure repository that turns coordinates into Reposilite routes, and **a route is a raw
+string prefix**: `…/kafkakn-core/` grants nothing under `…/kafkakn-core-jvm/`. Under the account's
+group that is three routes now and a fourth for every target ever added — a credential re-issued for
+a build-matrix row. Under the project's group it is one directory and one route.
+[research §2.11](../research/research-architecture.md).
 
 ### What is not done, and why it is not something this loop can do
 

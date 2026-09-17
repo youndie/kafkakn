@@ -11,7 +11,7 @@ kotlin {
         commonMain.dependencies {
             // The coordinate a stranger would write. If the metadata module is missing, or carries
             // the wrong variants, this line is where it shows.
-            implementation("io.github.youndie:kafkakn-core:${providers.gradleProperty("kafkakn.version").get()}")
+            implementation("io.github.youndie.kafkakn:kafkakn-core:${providers.gradleProperty("kafkakn.version").get()}")
         }
     }
 }

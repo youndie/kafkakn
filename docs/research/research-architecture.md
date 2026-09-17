@@ -186,9 +186,14 @@ redesign — no target name appears in common code, and the cinterop definition 
 It is not in the gate, and no claim is made about it until it is.
 
 **D7 — snapshots to reposilite only.** `reposilite.kotlin.website/snapshots`, group
-`io.github.youndie`, with the repository declared under a content filter so an outage there cannot
-fail resolution of anything else. **No Maven Central**, and no release: publication is a decision
-nobody has taken.
+`io.github.youndie.kafkakn` — the **project's** namespace rather than the account's, so every
+artefact of this project sits under one directory. The repository is declared under a content filter
+so an outage there cannot fail resolution of anything else. **No Maven Central**, and no release:
+publication is a decision nobody has taken; the group is chosen so that the decision stays available
+without a rename ([§2.11](#211-a-per-artefact-route-is-a-token-per-target)).
+
+Amended 2026-09-17: the group was `io.github.youndie` until the publishing token made the cost of
+that visible.
 
 **D8 — the repository is public, so CI runs on GitHub's standard runners.** `make check` on every
 pull request, the same target a contributor runs. The label matters and is not a default taken
@@ -429,6 +434,24 @@ needed, and this project still contains no C of its own.
 an empty one stay distinguishable through the broker, on both arms. Kafka's headers are an ordered
 sequence rather than a map, so `RecordHeader` is carried in a list: a client that stored them in a
 map would have answered a three-header record with two.
+
+### 2.11 A per-artefact route is a token per target
+
+The publishing credential is issued by a job that turns Maven coordinates into Reposilite routes,
+and **a Reposilite route is a raw string prefix with a trailing slash**: a route at
+`/snapshots/io/github/youndie/kafkakn-core/` grants nothing under `…/kafkakn-core-jvm/`, which is a
+sibling directory. Under a group of `io.github.youndie` this project therefore needed three routes —
+one per coordinate — and a fourth the day `linuxArm64` is added, which is a credential to re-issue
+for a build-matrix row.
+
+**Under `io.github.youndie.kafkakn` all of them live in one directory**, so one route covers the
+project and every target it ever grows. Same trailing slash, same guarantee that it reaches no
+sibling project.
+
+**The group was changed for this**, at the point where the first token was about to be issued and
+not before — the cost was invisible while nothing had been published. It also happens to be the
+namespace form to ask Maven Central for later, which is the reason it is worth doing once rather
+than after somebody has depended on the old coordinate.
 
 ## 4. Risks, with the machinery that would catch them
 

@@ -12,7 +12,7 @@ ROOT=$(cd "$HERE/../.." && pwd)
 cd "$ROOT" || exit 3
 
 VERSION=$(sed -n 's/^version=//p' gradle.properties)
-GROUP_PATH=io/github/youndie
+GROUP_PATH=io/github/youndie/kafkakn
 REPO=$ROOT/build/local-repo
 EMPTY_REPO=$ROOT/build/empty-repo
 # Kept between runs so Kotlin's own artefacts are not re-downloaded every time; OUR group is purged
@@ -53,8 +53,8 @@ echo
 echo "=== the probe must FAIL against an empty repository ==="
 echo "  (otherwise 'it resolved' says nothing about where it resolved FROM)"
 rm -rf "$EMPTY_REPO"; mkdir -p "$EMPTY_REPO"
-rm -rf "$CONSUMER_HOME/caches/modules-2/files-2.1/io.github.youndie" \
-       "$CONSUMER_HOME/caches/modules-2/metadata-"*/descriptors/io.github.youndie
+rm -rf "$CONSUMER_HOME/caches/modules-2/files-2.1/io.github.youndie.kafkakn" \
+       "$CONSUMER_HOME/caches/modules-2/metadata-"*/descriptors/io.github.youndie.kafkakn
 if GRADLE_USER_HOME=$CONSUMER_HOME ./gradlew --no-daemon --console=plain \
         -p ci/publish/consumer -Pkafkakn.repo="file://$EMPTY_REPO" -Pkafkakn.version="$VERSION" \
         --refresh-dependencies compileKotlinJvm >/dev/null 2>&1; then
@@ -65,8 +65,8 @@ echo "  it fails, as it must"
 
 echo
 echo "=== a build that knows only a coordinate and a URL, on a cache purged of this group ==="
-rm -rf "$CONSUMER_HOME/caches/modules-2/files-2.1/io.github.youndie" \
-       "$CONSUMER_HOME/caches/modules-2/metadata-"*/descriptors/io.github.youndie
+rm -rf "$CONSUMER_HOME/caches/modules-2/files-2.1/io.github.youndie.kafkakn" \
+       "$CONSUMER_HOME/caches/modules-2/metadata-"*/descriptors/io.github.youndie.kafkakn
 GRADLE_USER_HOME=$CONSUMER_HOME ./gradlew --no-daemon --console=plain \
     -p ci/publish/consumer -Pkafkakn.repo="file://$REPO" -Pkafkakn.version="$VERSION" \
     --refresh-dependencies compileKotlinJvm compileKotlinLinuxX64 \
@@ -76,7 +76,7 @@ echo "  jvm, linuxX64 and the common metadata all compiled against the published
 
 echo
 echo "=== where each variant came from ==="
-find "$CONSUMER_HOME/caches/modules-2/files-2.1/io.github.youndie" -name '*.jar' -o -name '*.klib' 2>/dev/null \
+find "$CONSUMER_HOME/caches/modules-2/files-2.1/io.github.youndie.kafkakn" -name '*.jar' -o -name '*.klib' 2>/dev/null \
     | sed "s|$CONSUMER_HOME/caches/modules-2/files-2.1/||" | sed 's|/[0-9a-f]\{20,\}/|/|' | sort | sed 's/^/  /'
 
 echo
