@@ -31,10 +31,13 @@ internal val HOSTNAME_VERIFICATION_VALUES: Set<String> = setOf("none", "https")
  * for the first time on the platform they do not run locally.
  */
 internal fun ProducerConfig.checkTlsKeys() {
+    // The message does not name the client it belongs to, and the checker that forbids it here is
+    // right: common code that knows which platform is which has already stopped being common. The
+    // caller does not need the name either — what they need is that this will not work anywhere.
     require(CERTIFICATE_VERIFICATION !in properties) {
-        "$CERTIFICATE_VERIFICATION is refused on both arms: it exists only in librdkafka, so it " +
-            "could only ever be honoured on the arm with no oracle. Certificate trust is not " +
-            "configurable through this API — see docs/api/producer-contract.md"
+        "$CERTIFICATE_VERIFICATION is refused on both arms: only one of the two clients has it, so " +
+            "it could only ever be honoured where nothing checks the result. Certificate trust is " +
+            "not configurable through this API — see docs/api/producer-contract.md"
     }
     val hostname = properties[HOSTNAME_VERIFICATION] ?: return
     require(hostname in HOSTNAME_VERIFICATION_VALUES) {

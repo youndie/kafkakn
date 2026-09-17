@@ -129,7 +129,7 @@ Everything about this API follows from that:
 | **Consumers, consumer groups, rebalancing** | where most of a Kafka client's difficulty lives; a thin consumer shipped for symmetry would be worse than none |
 | **Transactions, exactly-once** | out of scope until asked |
 | **Admin API, Schema Registry, Streams** | out of scope |
-| **SASL** | out of scope; TLS is in, with verification on and no way to turn it off from this API |
+| **SASL** | out of scope; TLS is in, and **certificate trust cannot be turned off** — the key that would do it is refused on both arms, because it exists only on the one without an oracle ([B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md)). Hostname checking is the one thing that can still be relaxed, with `ssl.endpoint.identification.algorithm=none` |
 | **`linuxArm64`** | designed for and not built: a line in the build and a row in the matrix, and the klib's C archives would be built a second time |
 | **macOS, Windows, `musl`** | out of scope. The spike measured `macosArm64` and it links; the cost of leaving it out is that a contributor on a Mac cannot run the native arm locally and has to use the Linux box or CI |
 

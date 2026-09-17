@@ -72,13 +72,13 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md) `[~]` | Certificate verification: the README and the contract disagree | P1 | S | - |
 | [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[ ]` | RQ-C: does the artefact resolve and link on a machine that has never seen this repository? | P1 | S | - |
 | [B-22](docs/backlog/B-22-a-dead-patch-must-say-so.md) `[ ]` | A bump that makes the patch dead must say so, not merely fail | P1 | S | - |
+| [B-24](docs/backlog/B-24-the-central-guard-times-out.md) `[ ]` | The accounting guard times out on a loaded box, and a timeout reads as a lost record | P1 | S | - |
 | [B-17](docs/backlog/B-17-consumer-is-the-wrong-word-here.md) `[ ]` | `ci/consumer` is the wrong word in a Kafka repository | P2 | XS | - |
 | [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[ ]` | The publish that returns before the acknowledgement — the shape RQ-A could not reach | P3 | M | - |
 
-## Closed (18)
+## Closed (19)
 
 **It builds, and a test can fail**
 
@@ -100,6 +100,7 @@ verdict.
 
 - [B-10](docs/backlog/B-10-record-headers.md) `[x]` - Record headers without rd_kafka_producev
 - [B-11](docs/backlog/B-11-tls.md) `[x]` - TLS on both arms
+- [B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md) `[x]` - Certificate verification: the README and the contract disagree
 
 **Someone else can use it**
 
