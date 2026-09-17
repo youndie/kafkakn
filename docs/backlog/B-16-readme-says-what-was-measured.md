@@ -1,7 +1,7 @@
 ---
 id: B-16
 title: "The README says what was measured, not what sounded right"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-3-usable-by-others
