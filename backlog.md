@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-29](docs/backlog/B-29-topic-metadata.md) `[ ]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
+| [B-29](docs/backlog/B-29-topic-metadata.md) `[~]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
 | [B-30](docs/backlog/B-30-transactions.md) `[ ]` | Transactions: records that become visible together, or not at all | P2 | L | B-25 |
 | [B-34](docs/backlog/B-34-a-minimal-admin.md) `[ ]` | A minimal admin client: create, delete and describe topics, describe the cluster | P2 | M | - |
 | [B-35](docs/backlog/B-35-the-consumer-designed-first.md) `[ ]` | The consumer, designed before it is built: a contract document and the defaults it starts from | P2 | M | - |

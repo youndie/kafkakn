@@ -1,7 +1,7 @@
 ---
 id: B-29
 title: "partitionsFor: what a topic looks like, from the producer that writes to it"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-5-producer-parity
