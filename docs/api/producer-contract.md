@@ -99,6 +99,39 @@ C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_p
 | `security.protocol=SSL` | verbatim, both arms | librdkafka's own key | the Java client's own key |
 | `ssl.ca.location` | path to a PEM certificate authority | librdkafka's own key | translated to `ssl.truststore.location` + `ssl.truststore.type=PEM` |
 | `ssl.endpoint.identification.algorithm` | `https` (the default) or `none` — **hostname** checking | librdkafka's own key, and its own spelling of off | `none` is translated to the empty string the Java client documents |
+| `ssl.certificate.location` | path to the client's PEM certificate, for a broker that requires one ([B-31](../backlog/B-31-client-certificates.md)) | librdkafka's own key | **read**, and handed over as `ssl.keystore.certificate.chain` with `ssl.keystore.type=PEM` |
+| `ssl.key.location` | path to that certificate's PEM private key — **with** the certificate or not at all | librdkafka's own key | **read**, and handed over as `ssl.keystore.key` |
+| `ssl.key.password` | the key's password, if it is encrypted | librdkafka's own key | the Java client's own key — the one TLS key both clients spell alike |
+
+#### A client certificate is two paths, and the Java client takes two contents
+
+**The JVM translation of the client certificate is not a rename**, and that was read out of
+`kafka-clients` 4.3.1 rather than assumed. Its PEM key store takes a *path* only as one file holding
+the chain **and** the key — `FileBasedPemStore` hands the same contents to both — and takes two
+separate things only as their contents, through `ssl.keystore.certificate.chain` and
+`ssl.keystore.key` (`DefaultSslEngineFactory`). So the JVM arm reads both files at construction. The
+rejected alternative, concatenating them into a temporary file, leaves a private key on disk where the
+caller did not put one.
+
+**The certificate and its key come together or not at all, on both arms.** Measured 2026-09-24:
+librdkafka constructs a producer from a certificate with no key — it checks the pair only when a key
+is set — and that producer presents nothing, so the refusal would arrive at the first handshake
+against a listener that asks. The Java client refuses the same half at construction. The contract
+refuses it at construction on both, and the message names both keys.
+
+**The key must be PKCS#8 for the JVM arm** — `-----BEGIN PRIVATE KEY-----` or
+`-----BEGIN ENCRYPTED PRIVATE KEY-----`. The Java client parses the key through
+`PKCS8EncodedKeySpec`/`EncryptedPrivateKeyInfo`; librdkafka hands the file to OpenSSL, which reads
+the older `BEGIN RSA PRIVATE KEY` form too. That difference was read in the source and is **not
+measured** here; [B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md) measures it and decides.
+An encrypted PKCS#8 key with `ssl.key.password` is measured on both arms: the suite's own key is one.
+
+**A certificate from an authority the broker does not trust is not sent at all — by either
+client.** librdkafka's `rd_kafka_ssl_cert_callback` withholds a client certificate whose issuer is not
+in the server's `certificate_authorities`, and the Java client sent none either — measured 2026-09-24:
+the broker answered `certificate_required` to both arms for a certificate they had been given. (Which
+part of JSSE decides that on the JVM side was not read here; the result was measured.) The caller meets *"certificate required"* for a certificate they did configure — the
+right answer to a question they will not think to ask first.
 
 #### Certificate trust cannot be turned off, and hostname checking can
 
@@ -227,7 +260,7 @@ So the contract splits the map in two, and says which half a key is in:
 
 | | |
 |---|---|
-| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location` — same name, same meaning, both arms |
+| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password` — same name, same meaning, both arms |
 | **platform** | everything else: `queue.buffering.max.messages`, `partitioner` (native); `buffer.memory`, `max.block.ms`, `linger.ms` (jvm) |
 
 A platform key travels to the arm that owns it and is **refused by the other at construction**. That

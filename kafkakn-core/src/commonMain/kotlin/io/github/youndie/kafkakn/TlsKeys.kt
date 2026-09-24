@@ -25,6 +25,13 @@ internal const val HOSTNAME_VERIFICATION: String = "ssl.endpoint.identification.
 internal val HOSTNAME_VERIFICATION_VALUES: Set<String> = setOf("none", "https")
 
 /**
+ * The client's certificate and its key (B-31), librdkafka's spelling, which the contract keeps as it
+ * keeps `ssl.ca.location`. `ssl.key.password` is the third, and both clients already spell it alike.
+ */
+internal const val CLIENT_CERTIFICATE: String = "ssl.certificate.location"
+internal const val CLIENT_KEY: String = "ssl.key.location"
+
+/**
  * Refuses the configuration this library will not carry, before either arm has touched a socket.
  *
  * Both actuals call it, which is the point: a rule enforced on one arm is a rule the caller meets
@@ -38,6 +45,14 @@ internal fun ProducerConfig.checkTlsKeys() {
         "$CERTIFICATE_VERIFICATION is refused on both arms: only one of the two clients has it, so " +
             "it could only ever be honoured where nothing checks the result. Certificate trust is " +
             "not configurable through this API — see docs/api/producer-contract.md"
+    }
+    // TOGETHER OR NOT AT ALL. Measured 2026-09-24: librdkafka constructs a producer from a
+    // certificate with no key - it checks the pair only when a key is set - and that producer then
+    // presents nothing, so the refusal arrives at the first handshake against a listener that asks.
+    // The Java client refuses the same half at construction. One rule on both arms, and the earlier.
+    require((CLIENT_CERTIFICATE in properties) == (CLIENT_KEY in properties)) {
+        "$CLIENT_CERTIFICATE and $CLIENT_KEY come together: a client certificate is presented with " +
+            "its key or not at all, and only ${if (CLIENT_CERTIFICATE in properties) CLIENT_CERTIFICATE else CLIENT_KEY} is set"
     }
     val hostname = properties[HOSTNAME_VERIFICATION] ?: return
     require(hostname in HOSTNAME_VERIFICATION_VALUES) {

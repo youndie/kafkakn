@@ -190,7 +190,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 | administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | absent — D2 |
 | compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | named portable in the contract and never measured until [B-26](../backlog/B-26-compression-was-never-measured.md): **all four, both arms, stored as asked** |
 | SASL | `PLAIN`, `SCRAM` and `OAUTHBEARER` compiled in; GSSAPI **not** (`--disable-gssapi`); OIDC **not** (`--disable-curl`) | all of them | absent — D2 |
-| client certificate (mTLS) | `ssl.certificate.location`, `ssl.key.location` | a keystore | absent — B-11 left it out |
+| client certificate (mTLS) | `ssl.certificate.location`, `ssl.key.location` | a keystore | since [B-31](../backlog/B-31-client-certificates.md), librdkafka's spelling, read into a PEM key store on the JVM — §2.20 |
 | metrics | `rd_kafka_conf_set_stats_cb` (JSON every `statistics.interval.ms`) | `Producer.metrics()` | absent |
 
 | Fact | Where verified |
@@ -889,6 +889,34 @@ jar, not assumed: on unless the caller set `acks` below all or `retries` to zero
 without a word; and more than five requests in flight is refused even with idempotence unset. A
 native default that was simply "on" would have made librdkafka refuse `acks=1`, which the reference
 accepts. `IdempotenceTest` holds all seven rows against both arms.
+
+### 2.20 A client certificate is two paths on one arm and two contents on the other
+
+[B-31](../backlog/B-31-client-certificates.md). The item's premise left one thing open on purpose:
+whether the Java client's PEM key store takes two separate files. **It does not**, and that was read
+in the source rather than tried:
+
+| Fact | Where verified |
+|---|---|
+| a PEM key store *path* is one file holding the chain **and** the key — the same contents are handed to both | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/common/security/ssl/DefaultSslEngineFactory.java` — `FileBasedPemStore.load` |
+| two separate things are taken only as contents: `ssl.keystore.certificate.chain` + `ssl.keystore.key`; a location beside them is refused (*"Both SSL key store location and separate private key are specified"*) | the same file, `createKeystore` |
+| the key is decoded as PKCS#8 only — `PKCS8EncodedKeySpec`, or `EncryptedPrivateKeyInfo` with `ssl.key.password` | the same file, `PemStore.privateKey` |
+| librdkafka reads two paths and hands them to OpenSSL; it checks the pair only when a key is set | `librdkafka-2.13.0.tar.gz!/src/rdkafka_ssl.c` — `SSL_CTX_use_certificate_chain_file`, `check_pkey` |
+| librdkafka withholds a client certificate whose issuer is not in the server's `certificate_authorities` | the same file, `rd_kafka_ssl_cert_callback` |
+| the image's `configure` script, given a global `KAFKA_SSL_CLIENT_AUTH=required`, demands a trust store file **and** a password file — which a PEM trust store refuses | `apache/kafka@4.3.1!/docker/resources/common-scripts/configure` |
+
+**Consequences.** The JVM arm reads both files at construction and passes their text; a temporary
+concatenated file was rejected because it leaves a private key on disk where the caller put none.
+The certificate and key are refused at construction unless both are set — measured on native, which
+constructed from a certificate alone and would have failed only at the first handshake. The broker
+fixture's third listener is configured with listener-scoped keys, so the image script never sees a
+global demand for client certificates.
+
+**Measured 2026-09-24**, `ci/b-31/run.sh`: the listener's own tools refused no certificate and the
+wrong authority's before anything else ran; 200/200 records with an encrypted PKCS#8 key on each arm,
+counted over plaintext; and **both** arms refused with `certificate_required` for a certificate from
+the wrong authority — the Java client withholds it too, which was measured and not read. What a
+PKCS#1 key does on the JVM arm was read and not measured — [B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md).
 
 ## 4. Risks, with the machinery that would catch them
 

@@ -1,0 +1,29 @@
+=== environment ===
+2026-09-24T23:23:46+02:00
+  topic kafkakn-mtls-1790285026, fresh
+
+=== broker: the plaintext, TLS and certificate-checking listeners, one fixture ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-mtls-1790285026	TopicId: B3hdHTloTH2aBvExbBPVcQ	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== the listener must be able to say NO, asked with the broker's own tools ===
+  mtls-selftest: no certificate refused, the wrong authority's refused, the right one connects
+  tls-selftest: the right CA connects, the wrong CA does not
+
+=== both arms, one test task per invocation, rerun every time ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== records sent with a client certificate, counted OVER PLAINTEXT ===
+  jvm       200/200 with a client certificate
+  linuxX64  200/200 with a client certificate
+
+=== and what each arm SAID when the broker refused it ===
+  jvm       mtls-no-certificate   SslAuthenticationException: Failed to process post-handshake messages <- SslAuthenticationException: Failed to process post-handshake messages <- SSLHandshakeException: (certificate_required) Received fatal alert: certif
+  jvm       mtls-wrong-authority  SslAuthenticationException: Failed to process post-handshake messages <- SslAuthenticationException: Failed to process post-handshake messages <- SSLHandshakeException: (certificate_required) Received fatal alert: certif
+  linuxX64  mtls-no-certificate   KafkaProduceException: kafkakn-mtls-1790285026: Local: Message timed out; last broker error: Local: Broker transport failure: ssl://127.0.0.1:9095/bootstrap: Receive failed: error:0A00045C:SSL routines::tlsv13 alert cert
+  linuxX64  mtls-wrong-authority  KafkaProduceException: kafkakn-mtls-1790285026: Local: Message timed out; last broker error: Local: Broker transport failure: ssl://127.0.0.1:9095/bootstrap: Receive failed: error:0A00045C:SSL routines::tlsv13 alert cert
+
+B-31: the right client certificate connects, none and the wrong authority's are refused - on both arms

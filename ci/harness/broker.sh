@@ -12,6 +12,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 COMPOSE="$HERE/../broker/docker-compose.yml"
 TLS_COMPOSE="$HERE/../broker/docker-compose.tls.yml"
 SSL_BOOTSTRAP=${SSL_BOOTSTRAP:-127.0.0.1:9094}
+MTLS_BOOTSTRAP=${MTLS_BOOTSTRAP:-127.0.0.1:9095}
 CONTAINER=kafkakn-broker
 BOOTSTRAP=${BOOTSTRAP:-127.0.0.1:9092}
 PARTITIONS=${PARTITIONS:-3}
@@ -79,6 +80,25 @@ case "${1:-}" in
         exit 1
     fi
     echo "  tls-selftest: the right CA connects, the wrong CA does not"
+    ;;
+  mtls-selftest)
+    # B-31's listener, asked the same question first: can it say NO? A listener that was configured
+    # to require a client certificate and quietly does not is exactly as green as one that works,
+    # for every client that presents a good certificate - so the refusals are asked before the
+    # acceptance, and the acceptance is asked at all so that "refused" cannot mean "down".
+    api() { kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$MTLS_BOOTSTRAP" \
+        --command-config "/etc/kafka/secrets/$1" >/dev/null 2>&1; }
+    if api client-ssl.properties; then
+        echo "mtls-selftest: a client with NO certificate was accepted - the listener asks nothing" >&2
+        exit 1
+    fi
+    if api client-mtls-wrong.properties; then
+        echo "mtls-selftest: a certificate from the WRONG authority was accepted" >&2
+        exit 1
+    fi
+    api client-mtls.properties \
+        || { echo "mtls-selftest: the RIGHT client certificate was refused - the fixture is broken" >&2; exit 1; }
+    echo "  mtls-selftest: no certificate refused, the wrong authority's refused, the right one connects"
     ;;
   ssl-offsets)
     # Deliberately absent: offsets are read over PLAINTEXT even when the records arrived over TLS,
@@ -169,7 +189,7 @@ case "${1:-}" in
     echo "selftest: the broker check fails against a dead port, as it must"
     ;;
   *)
-    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|keys <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest" >&2
+    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|keys <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest|mtls-selftest" >&2
     exit 2
     ;;
 esac

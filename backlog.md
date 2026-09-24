@@ -101,7 +101,6 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-31](docs/backlog/B-31-client-certificates.md) `[~]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
 | [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[ ]` | SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them | P1 | M | - |
 | [B-29](docs/backlog/B-29-topic-metadata.md) `[ ]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
 | [B-30](docs/backlog/B-30-transactions.md) `[ ]` | Transactions: records that become visible together, or not at all | P2 | L | B-25 |
@@ -110,12 +109,13 @@ verdict.
 | [B-36](docs/backlog/B-36-assign-and-poll.md) `[ ]` | A consumer without a group: assign partitions, seek, and read as a Flow | P2 | L | B-35 |
 | [B-37](docs/backlog/B-37-consumer-groups.md) `[ ]` | Consumer groups: subscribe, rebalance, commit — and a group with one consumer from each arm | P2 | XL | B-36 |
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[ ]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
+| [B-42](docs/backlog/B-42-a-pkcs1-key-works-on-one-arm.md) `[ ]` | A PKCS#1 client key: read in the source as working on one arm only | P2 | S | B-31 |
 | [B-33](docs/backlog/B-33-sasl-oauthbearer.md) `[ ]` | SASL OAUTHBEARER with a token the caller supplies | P3 | M | B-32 |
 | [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[ ]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (28)
+## Closed (29)
 
 **It builds, and a test can fail**
 
@@ -162,6 +162,10 @@ verdict.
 - [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[x]` - compression.type is named portable in the contract and no test has ever set it
 - [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[x]` - A record can name its partition, as it can in every other client
 - [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[x]` - A record carries its timestamp, and the metadata says which time the broker kept
+
+**It connects where it is deployed**
+
+- [B-31](docs/backlog/B-31-client-certificates.md) `[x]` - Client certificates: a broker that asks who is connecting gets an answer
 
 <!-- END INDEX -->
 

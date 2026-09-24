@@ -29,7 +29,7 @@ is invisible to it. The cost is that the suite needs Docker; that is accepted.
 | image | `apache/kafka:4.3.1`, pinned — a moving tag would silently re-point the environment between runs |
 | mode | KRaft, single node, controller and broker in one process |
 | topic | 3 partitions, replication factor 1 |
-| listeners | `PLAINTEXT` on 9092 **and** `SSL` on 9094, both always up — see below |
+| listeners | `PLAINTEXT` on 9092, `SSL` on 9094 **and** `MTLS` on 9095 — SSL that requires a client certificate ([B-31](../backlog/B-31-client-certificates.md)) — all always up |
 | server keystore | PKCS12; the clients read a PEM CA |
 | auto-create | **off**, so a test against a topic that does not exist fails instead of quietly succeeding |
 
@@ -70,6 +70,14 @@ be wrong in both directions at once.
   an SSL listener is advertised, exports the file's contents as the keystore password, and exits on
   `${!1}: unbound variable` if it is missing. So the **server** uses PKCS12 and both **clients** read
   a PEM CA, which is the half this library has to get right.
+- **The client-certificate listener is configured with listener-scoped keys**
+  (`KAFKA_LISTENER_NAME_MTLS_SSL_CLIENT_AUTH`, `…_TRUSTSTORE_TYPE`, `…_TRUSTSTORE_LOCATION`). Set
+  globally, `KAFKA_SSL_CLIENT_AUTH=required` makes the image's `configure` script demand a trust store
+  password file, and a PEM trust store refuses any password. The key store is the global one: Kafka
+  falls back to the unprefixed `ssl.*` for whatever a listener does not override.
+- **`broker.sh mtls-selftest` asks the listener to say no first** — no certificate, then a
+  certificate from the wrong authority — with the broker's own tools, and only then to say yes. A
+  listener that quietly does not ask is as green as one that works for every good certificate.
 - **Regenerating the certificates under a running broker breaks it silently.** The broker loads its
   keystore once, at startup; new certificates leave it presenting one no client trusts, and the
   symptom is an SSL handshake failure that looks exactly like a misconfigured client. Measured, and

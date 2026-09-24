@@ -23,6 +23,9 @@ DAYS=${DAYS:-3650}
 # A fixture password, in a fixture whose certificates are regenerated in a second. It is written to
 # a file because the broker image insists on reading it from one.
 KEY_PASSWORD=${KEY_PASSWORD:-kafkakn}
+# The client key's password, which the suite passes as `ssl.key.password` (B-31). A different value
+# from the broker's, so a client handed the wrong one cannot succeed by coincidence.
+CLIENT_KEY_PASSWORD=${CLIENT_KEY_PASSWORD:-kafkakn-client}
 
 # IDEMPOTENT, and that is a correctness property rather than a speed one. The broker loads its
 # keystore once, at startup; regenerating the certificates under a running broker leaves it holding
@@ -32,7 +35,8 @@ KEY_PASSWORD=${KEY_PASSWORD:-kafkakn}
 # FORCE=1 regenerates - and then the broker has to be recreated, not merely restarted into the same
 # container, which is what `broker.sh down` followed by `up` does.
 if [ -z "${FORCE:-}" ] && [ -s "$OUT/ca.pem" ] && [ -s "$OUT/broker.keystore.p12" ] \
-        && [ -s "$OUT/wrong-ca.pem" ] && openssl x509 -in "$OUT/broker.pem" -noout -checkend 86400 >/dev/null 2>&1; then
+        && [ -s "$OUT/wrong-ca.pem" ] && [ -s "$OUT/client.pem" ] && [ -s "$OUT/wrong-client.pem" ] \
+        && openssl x509 -in "$OUT/broker.pem" -noout -checkend 86400 >/dev/null 2>&1; then
     echo "  certificates already in $OUT, and the broker's is valid for another day - kept"
     exit 0
 fi
@@ -72,11 +76,33 @@ printf '%s' "$KEY_PASSWORD" > keystore-password
 openssl req -x509 -newkey rsa:2048 -nodes -days "$DAYS" \
     -keyout wrong-ca.key -out wrong-ca.pem -subj "/CN=kafkakn-wrong-ca" 2>/dev/null
 
+# CLIENT certificates, for the listener that requires one (B-31). Two again, for the same reason as
+# the two authorities: one signed by the CA the broker trusts, and one signed by the authority that
+# signed nothing - a certificate the broker must refuse even though it is a perfectly good one.
+#
+# The right client's key is ENCRYPTED, and as PKCS#8. Encrypted so that `ssl.key.password` is
+# exercised rather than merely accepted: an unencrypted key connects whatever the password says.
+# PKCS#8 because that is the only form `kafka-clients` 4.3.1 parses - its PEM key store reads
+# `PRIVATE KEY` / `ENCRYPTED PRIVATE KEY` through `PKCS8EncodedKeySpec` and `EncryptedPrivateKeyInfo`
+# (DefaultSslEngineFactory.PemStore), while librdkafka hands the file to OpenSSL and reads either.
+client_cert() { # <name> <ca>
+    openssl req -newkey rsa:2048 -nodes -keyout "$1.plain.key" -out "$1.csr" \
+        -subj "/CN=kafkakn-$1" 2>/dev/null
+    openssl x509 -req -in "$1.csr" -CA "$2.pem" -CAkey "$2.key" -CAcreateserial -days "$DAYS" \
+        -out "$1.pem" -extfile <(printf 'extendedKeyUsage=clientAuth\n') 2>/dev/null
+}
+client_cert client ca
+openssl pkcs8 -topk8 -in client.plain.key -out client.key -v2 aes-256-cbc \
+    -passout "pass:$CLIENT_KEY_PASSWORD" 2>/dev/null
+client_cert wrong-client wrong-ca
+mv wrong-client.plain.key wrong-client.key
+rm -f client.plain.key ./*.csr
+
 # The broker container does not run as root and has to be able to read these.
 chmod 644 ./*.pem key-password keystore-password
 
 # A fixture that produced nothing must not look like one that worked.
-for f in ca.pem broker.keystore.p12 wrong-ca.pem; do
+for f in ca.pem broker.keystore.p12 wrong-ca.pem client.pem client.key wrong-client.pem wrong-client.key; do
     [ -s "$f" ] || { echo "certs.sh produced no $f" >&2; exit 1; }
 done
 
@@ -94,6 +120,26 @@ if openssl verify -CAfile wrong-ca.pem broker.pem >/dev/null 2>&1; then
     exit 1
 fi
 
+# The same two questions for the client certificates: the broker's authority verifies the right
+# one and not the wrong one, and the right key really is encrypted - a key that opens without its
+# password would let the suite pass with `ssl.key.password` silently dropped.
+openssl verify -CAfile ca.pem client.pem >/dev/null || {
+    echo "the CA does not verify the client certificate" >&2; exit 1; }
+if openssl verify -CAfile ca.pem wrong-client.pem >/dev/null 2>&1; then
+    echo "the broker's CA verifies the wrong client certificate - it is not a wrong one" >&2
+    exit 1
+fi
+grep -q 'BEGIN ENCRYPTED PRIVATE KEY' client.key || {
+    echo "the client key is not encrypted PKCS#8 - ssl.key.password would go unexercised" >&2; exit 1; }
+if openssl pkey -in client.key -passin pass: -noout 2>/dev/null; then
+    echo "the client key opens without its password" >&2; exit 1
+fi
+
+# The broker's own tools take a PEM key store as ONE file holding the chain and the key - which is
+# exactly the shape the contract does not ask a caller for, and why the JVM arm passes contents.
+cat client.pem client.key > client-bundle.pem
+cat wrong-client.pem wrong-client.key > wrong-client-bundle.pem
+
 # Client configurations for the broker's OWN tools, so the fixture can be questioned without
 # involving kafkakn at all. The paths are the container's, because that is where they are read.
 cat > client-ssl.properties <<PROPS
@@ -106,7 +152,22 @@ security.protocol=SSL
 ssl.truststore.type=PEM
 ssl.truststore.location=/etc/kafka/secrets/wrong-ca.pem
 PROPS
-chmod 644 ./*.properties
+cat > client-mtls.properties <<PROPS
+security.protocol=SSL
+ssl.truststore.type=PEM
+ssl.truststore.location=/etc/kafka/secrets/ca.pem
+ssl.keystore.type=PEM
+ssl.keystore.location=/etc/kafka/secrets/client-bundle.pem
+ssl.key.password=$CLIENT_KEY_PASSWORD
+PROPS
+cat > client-mtls-wrong.properties <<PROPS
+security.protocol=SSL
+ssl.truststore.type=PEM
+ssl.truststore.location=/etc/kafka/secrets/ca.pem
+ssl.keystore.type=PEM
+ssl.keystore.location=/etc/kafka/secrets/wrong-client-bundle.pem
+PROPS
+chmod 644 ./*.properties ./*.pem client.key wrong-client.key
 
-echo "  certificates in $OUT: ca.pem, broker.keystore.p12, wrong-ca.pem"
+echo "  certificates in $OUT: ca.pem, broker.keystore.p12, wrong-ca.pem, client.pem, wrong-client.pem"
 echo "  the right CA verifies the broker, the wrong CA does not - both checked, not assumed"
