@@ -1,7 +1,7 @@
 ---
 id: B-27
 title: "A record can name its partition, as it can in every other client"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-5-producer-parity

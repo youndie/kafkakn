@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[ ]` | A record can name its partition, as it can in every other client | P1 | S | - |
+| [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[~]` | A record can name its partition, as it can in every other client | P1 | S | - |
 | [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[ ]` | A record carries its timestamp, and the metadata says which time the broker kept | P1 | S | - |
 | [B-31](docs/backlog/B-31-client-certificates.md) `[ ]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
 | [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[ ]` | SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them | P1 | M | - |
