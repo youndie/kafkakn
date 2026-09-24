@@ -183,7 +183,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 | Capability | librdkafka 2.13.0 | kafka-clients 4.3.1 | kafkakn today |
 |---|---|---|---|
 | transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | absent |
-| explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | absent — the record has topic, key, value, headers |
+| explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | partition since [B-27](../backlog/B-27-a-record-can-name-its-partition.md); timestamp absent |
 | topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | absent |
 | consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | absent — D2 |
 | consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |

@@ -42,7 +42,9 @@ rm -rf "$OBS"
 # which refuses to run without the topic its own runner creates (B-24). A filter that silently covers
 # half of what it was given is worse than no filter: the other half fails for someone else's reason.
 for task in jvmTest linuxX64Test; do
-    ./gradlew --console=plain ":kafkakn-core:$task" --tests '*CompressionTest*' 2>&1 | tail -1
+    # `--rerun`: the topic arrives through the environment, which Gradle does not track as an input, so
+    # an unchanged tree would find the task UP-TO-DATE and run nothing (found by the next item, B-27).
+    ./gradlew --console=plain ":kafkakn-core:$task" --rerun --tests '*CompressionTest*' 2>&1 | tail -1
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "  THE SENDS FAILED on $task"; exit 1; }
 done
 

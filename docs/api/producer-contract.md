@@ -45,7 +45,7 @@ Construction is a top-level `expect fun` rather than an `expect class`: the inte
 common code that both arms implement, and only the factory is platform-specific.
 
 Nothing else is public in M1. `sendAll`, headers, transactions and partitioner overrides are absent
-until an item asks for them.
+until an item asks for them. (Headers arrived with B-10; an explicit partition with B-27, below.)
 
 ## What each call promises
 
@@ -296,6 +296,22 @@ This is the list the differential suite exists to check
    there — one partition per batch, switching when the batch is sent — and librdkafka picks at
    random. Neither is wrong and no setting reconciles them, so agreement is only claimed for keyed
    records and `PartitionerAgreementTest` only produces those.
+
+   **A record can also name its partition** (`ProducerRecord.partition`, measured 2026-09-24,
+   [B-27](../backlog/B-27-a-record-can-name-its-partition.md)). Then the partitioner is not
+   consulted, key or no key, and the record is where it says — read back by the broker's own
+   consumer one partition at a time, 50 of 50 on the named partition and none elsewhere, on both
+   arms. A negative partition is refused where the record is made. **A partition the topic does
+   not have fails on both arms, and not in the same way:**
+
+   | | what it says | how long it takes |
+   |---|---|---|
+   | JVM | *"Partition 99 of topic … with partition count 3 is not present in metadata after 20000 ms"* | **`max.block.ms`** — 20 s with the suite's setting, **60 s** at the client's default |
+   | native | *"…: Local: Unknown partition"* | **4 ms** |
+
+   The Java client waits for metadata that might yet grow the topic; librdkafka answers from the
+   metadata it has. Neither is wrong, so this is recorded rather than equalised — but a caller on the
+   JVM arm who mistypes a partition waits a minute to find out, and should know that.
 2. the offset sequence a series of records produces on one partition;
 3. which situations throw and which suspend;
 4. the value of `RecordMetadata` for the same input;

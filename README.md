@@ -156,7 +156,7 @@ is surface, not implementation.
 
 | Not done yet | Where it stands |
 |---|---|
-| **Explicit partition, timestamp, topic metadata** | planned first among new surface — [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md), [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md), [B-29](docs/backlog/B-29-topic-metadata.md) |
+| **Timestamp, topic metadata** | planned next — [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md), [B-29](docs/backlog/B-29-topic-metadata.md). An explicit partition is in since [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) |
 | **Transactions** | planned — [B-30](docs/backlog/B-30-transactions.md), after the arms are made to agree on idempotence ([B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md)) |
 | **SASL, client certificates** | planned — PLAIN and SCRAM, then OAUTHBEARER with a caller-supplied token; mTLS. TLS is in today, and **certificate trust cannot be turned off** — the key that would do it is refused on both arms, because it exists only on the one without an oracle ([B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md)). Hostname checking is the one thing that can be relaxed, with `ssl.endpoint.identification.algorithm=none` |
 | **Admin API** | planned, minimal — [B-34](docs/backlog/B-34-a-minimal-admin.md) |
