@@ -45,7 +45,7 @@ Construction is a top-level `expect fun` rather than an `expect class`: the inte
 common code that both arms implement, and only the factory is platform-specific.
 
 Nothing else is public in M1. `sendAll`, headers, transactions and partitioner overrides are absent
-until an item asks for them. (Headers arrived with B-10; an explicit partition with B-27, below.)
+until an item asks for them. (Headers arrived with B-10; an explicit partition and a timestamp with B-27 and B-28, below.)
 
 ## What each call promises
 
@@ -53,7 +53,7 @@ until an item asks for them. (Headers arrived with B-10; an explicit partition w
 
 | | |
 |---|---|
-| returns | `RecordMetadata` — topic, partition, offset — **after the broker has acknowledged** at the configured `acks` |
+| returns | `RecordMetadata` — topic, partition, offset, timestamp — **after the broker has acknowledged** at the configured `acks` |
 | suspends while | the record cannot yet be accepted, i.e. the producer is at its queue bound ([research §1.4](../research/research-architecture.md)) |
 | throws | only for failures that are not retryable by the producer: an unknown topic with auto-creation off, an invalid configuration, a closed producer |
 | never | returns having silently dropped the record |
@@ -99,30 +99,6 @@ C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_p
 | `security.protocol=SSL` | verbatim, both arms | librdkafka's own key | the Java client's own key |
 | `ssl.ca.location` | path to a PEM certificate authority | librdkafka's own key | translated to `ssl.truststore.location` + `ssl.truststore.type=PEM` |
 | `ssl.endpoint.identification.algorithm` | `https` (the default) or `none` — **hostname** checking | librdkafka's own key, and its own spelling of off | `none` is translated to the empty string the Java client documents |
-
-#### Idempotence is on by default on both arms — the reference arm's default, conditions included
-
-**Decided 2026-09-24** ([B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md)). The two
-clients disagreed: `enable.idempotence` defaults to `true` in `kafka-clients` and to `false` in
-librdkafka. Under a broker that loses acknowledgements the native arm wrote **200** records twice where
-the JVM arm, left at its default, wrote none ([research §2.19](../research/research-architecture.md)).
-
-The native arm now takes the Java client's default, and that default is conditional, measured
-against `kafka-clients` 4.3.1:
-
-| the caller set | idempotence |
-|---|---|
-| nothing | **on** |
-| `acks` other than `all` | off, **silently** |
-| `retries=0` | off, **silently** |
-| `enable.idempotence` | what they set |
-| `acks=1` and `enable.idempotence=true` | refused at construction |
-| `max.in.flight.requests.per.connection` above 5 | **refused at construction**, even with idempotence unset |
-
-The silent rows are the Java client's behaviour, kept on purpose: a default that was simply "on"
-would make librdkafka refuse `acks=1`, which the reference accepts — a configuration that works on the
-arm a caller runs locally and fails on the one they ship. The last row is the surprising one, and it
-is also the reference's.
 
 #### Certificate trust cannot be turned off, and hostname checking can
 
@@ -210,6 +186,30 @@ native arm puts the caller's key and value first.
 A key neither actual honours is a **failure at construction**, not a silently ignored entry. The
 prior art's sibling lesson applies: an option accepted and dropped looks identical to one that
 worked, right up until it matters.
+
+### Idempotence is on by default on both arms — the reference arm's default, conditions included
+
+**Decided 2026-09-24** ([B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md)). The two
+clients disagreed: `enable.idempotence` defaults to `true` in `kafka-clients` and to `false` in
+librdkafka. Under a broker that loses acknowledgements the native arm wrote **200** records twice where
+the JVM arm, left at its default, wrote none ([research §2.19](../research/research-architecture.md)).
+
+The native arm now takes the Java client's default, and that default is conditional, measured
+against `kafka-clients` 4.3.1:
+
+| the caller set | idempotence |
+|---|---|
+| nothing | **on** |
+| `acks` other than `all` | off, **silently** |
+| `retries=0` | off, **silently** |
+| `enable.idempotence` | what they set |
+| `acks=1` and `enable.idempotence=true` | refused at construction |
+| `max.in.flight.requests.per.connection` above 5 | **refused at construction**, even with idempotence unset |
+
+The silent rows are the Java client's behaviour, kept on purpose: a default that was simply "on"
+would make librdkafka refuse `acks=1`, which the reference accepts — a configuration that works on the
+arm a caller runs locally and fails on the one they ship. The last row is the surprising one, and it
+is also the reference's.
 
 ### A key honoured by exactly one arm is the harder case, and it is not portable
 
@@ -312,6 +312,19 @@ This is the list the differential suite exists to check
    The Java client waits for metadata that might yet grow the topic; librdkafka answers from the
    metadata it has. Neither is wrong, so this is recorded rather than equalised — but a caller on the
    JVM arm who mistypes a partition waits a minute to find out, and should know that.
+
+   **A record can name its time** (`ProducerRecord.timestamp`, epoch milliseconds, measured
+   2026-09-24, [B-28](../backlog/B-28-a-record-carries-its-timestamp.md)), and
+   `RecordMetadata.timestamp` is **the time the broker kept** — the record's own on an ordinary topic,
+   **the broker's clock on a topic configured with `message.timestamp.type=LogAppendTime`**, which is
+   the only way a caller learns their time was replaced. Read back by the broker's own consumer:
+   `CreateTime:1600000000000` for the time named, and `LogAppendTime:<the broker's clock>` on the
+   other topic, on both arms. A record that names none carries the client's clock at `send`; a
+   negative timestamp is refused where the record is made.
+
+   **There is no field saying which of the two times it is, by decision.** librdkafka reports the
+   type with the value; the Java client's `RecordMetadata` exposes the value alone, so a type here
+   would be a field one arm fills and the other guesses.
 2. the offset sequence a series of records produces on one partition;
 3. which situations throw and which suspend;
 4. the value of `RecordMetadata` for the same input;

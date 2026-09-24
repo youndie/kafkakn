@@ -97,11 +97,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (14)
+## Open (13)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[~]` | A record carries its timestamp, and the metadata says which time the broker kept | P1 | S | - |
 | [B-31](docs/backlog/B-31-client-certificates.md) `[ ]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
 | [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[ ]` | SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them | P1 | M | - |
 | [B-29](docs/backlog/B-29-topic-metadata.md) `[ ]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
@@ -116,7 +115,7 @@ verdict.
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (27)
+## Closed (28)
 
 **It builds, and a test can fail**
 
@@ -162,6 +161,7 @@ verdict.
 - [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[x]` - The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other
 - [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[x]` - compression.type is named portable in the contract and no test has ever set it
 - [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[x]` - A record can name its partition, as it can in every other client
+- [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[x]` - A record carries its timestamp, and the metadata says which time the broker kept
 
 <!-- END INDEX -->
 

@@ -47,6 +47,7 @@ import rdkafka.rd_kafka_error_code
 import rdkafka.rd_kafka_error_destroy
 import rdkafka.rd_kafka_flush
 import rdkafka.rd_kafka_message_t
+import rdkafka.rd_kafka_message_timestamp
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_outq_len
 import rdkafka.rd_kafka_poll
@@ -208,7 +209,15 @@ private val deliveryReport =
             val topic = rd_kafka_topic_name(record.rkt)?.toKString() ?: "<unknown topic>"
             if (error == RD_KAFKA_RESP_ERR_NO_ERROR) {
                 slot.complete(
-                    RecordMetadata(topic = topic, partition = record.partition, offset = record.offset),
+                    RecordMetadata(
+                        topic = topic,
+                        partition = record.partition,
+                        offset = record.offset,
+                        // What the broker kept: the record's own time on an ordinary topic, the
+                        // broker's clock on a LogAppendTime one. librdkafka also reports which of the
+                        // two it was; the Java client cannot, so that half stays here (B-28).
+                        timestamp = rd_kafka_message_timestamp(message, null),
+                    ),
                 )
             } else {
                 // The topic is spelled into the message deliberately. rd_kafka_err2str gives
@@ -429,7 +438,8 @@ internal class NativeKafkaProducer(
     ): rd_kafka_resp_err_t =
         memScoped {
             val count =
-                4 + (if (record.key != null) 1 else 0) + (if (record.partition != null) 1 else 0) + record.headers.size
+                4 + (if (record.key != null) 1 else 0) + (if (record.partition != null) 1 else 0) +
+                    (if (record.timestamp != null) 1 else 0) + record.headers.size
             val vus = allocArray<rd_kafka_vu_t>(count)
             var at = 0
 
@@ -460,6 +470,14 @@ internal class NativeKafkaProducer(
             record.partition?.let { partition ->
                 vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_PARTITION
                 vus[at].u.i32 = partition
+                at++
+            }
+
+            // `int64_t` milliseconds, the union's `i64`, as rdkafka.h declares for this tag. Absent,
+            // librdkafka stamps the record with its own clock when it is enqueued.
+            record.timestamp?.let { timestamp ->
+                vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_TIMESTAMP
+                vus[at].u.i64 = timestamp
                 at++
             }
 
