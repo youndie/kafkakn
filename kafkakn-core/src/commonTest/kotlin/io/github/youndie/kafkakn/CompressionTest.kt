@@ -43,7 +43,8 @@ class CompressionTest {
                 coroutineScope {
                     (0 until RECORDS)
                         .map { index ->
-                            async { producer.send(ProducerRecord(testTopic, "$stamp:$index:$PADDING".encodeToByteArray())) }
+                            val value = "$stamp:$index:$PADDING".encodeToByteArray()
+                            async { producer.send(ProducerRecord(testTopic, value)) }
                         }.awaitAll()
                 }
                 producer.flush()
@@ -78,22 +79,24 @@ class CompressionTest {
             }
         // Recorded as well as asserted: the two clients word this differently, and whether either calls
         // a known key with a bad value "unknown" is worth being able to read.
-        recordArmFact("compression.refusal", failure.message.orEmpty().replace('\n', ' ').take(300))
+        val said = failure.message.orEmpty()
+        recordArmFact("compression.refusal", said.replace('\n', ' ').take(REFUSAL_CHARS))
         assertTrue(
-            failure.message.orEmpty().contains("compression.type"),
-            "the refusal must name the key the caller typed. It said: ${failure.message}",
+            said.contains("compression.type"),
+            "the refusal must name the key the caller typed. It said: $said",
         )
         // The key is real and the VALUE is wrong. The native arm used to call every refusal "unknown
         // producer configuration", which sends a caller looking for a typo in a key they spelled
         // correctly - measured the first time this test ran.
         assertFalse(
-            failure.message.orEmpty().lowercase().contains("unknown"),
-            "a known key with a bad value is not an unknown key. It said: ${failure.message}",
+            said.lowercase().contains("unknown"),
+            "a known key with a bad value is not an unknown key. It said: $said",
         )
     }
 
     private companion object {
         const val RECORDS = 300
+        const val REFUSAL_CHARS = 300
 
         /** Compressible on purpose: a codec that has nothing to remove is hard to tell from none. */
         val PADDING = "kafkakn".repeat(40)
