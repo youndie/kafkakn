@@ -107,6 +107,11 @@ drops records ([research §2.7](../research/research-architecture.md)).
 - **A small round trip cannot find any of this.** The queue bound is 100 000 records by default; a
   2 000-record test never reaches it. The bound is lowered in the suite so the case is reachable in
   a test that finishes.
+- **End offsets are a count only on a topic nothing transactional writes to.** A commit or abort
+  marker takes an offset, and aborted records take theirs; on such a topic the reconciliation counts
+  records under a named isolation level instead ([B-30](../backlog/B-30-transactions.md),
+  [producer-contract](../api/producer-contract.md)). The accounting topic here is written by
+  non-transactional producers only, which is what keeps the delta meaningful.
 - **The accounting topic is fresh, and per arm.** The oracle is a delta on end offsets, and a delta
   is only attributable while nothing else writes to the topic — both arms run against one broker in
   one pass, so a shared topic would add their two counts into a number no assertion could check.

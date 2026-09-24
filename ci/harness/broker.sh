@@ -196,9 +196,23 @@ case "${1:-}" in
   values)
     # Every value on the topic, one per line, read by the broker's own consumer: the oracle for "was
     # anything written twice". Only meaningful for values that are unique by construction.
+    #
+    # ISOLATION is named every time rather than left to the tool's default (read_uncommitted), because
+    # since B-30 the two answers differ on a transactional topic and a count that does not say which
+    # one it is is not a count of anything. `--command-property`, not `--consumer-property`: the old
+    # spelling still works in 4.3.1 but prints its deprecation notice on STDOUT, as a line of the
+    # output - measured, it made a 200-record topic count 201.
     kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
         --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
+        --command-property "isolation.level=${ISOLATION:-read_uncommitted}" \
         --formatter-property print.value=true 2>/dev/null
+    ;;
+  txn-state)
+    # How the broker says a transactional id's last transaction ended - CompleteCommit, CompleteAbort
+    # or anything else - from the transaction coordinator itself, not from the client that ran it.
+    kc /opt/kafka/bin/kafka-transactions.sh --bootstrap-server "$BOOTSTRAP" describe \
+        --transactional-id "$2" 2>/dev/null \
+        | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "TransactionState") c = i } NR == 2 { print $c }'
     ;;
   timed-values)
     # Every record's stored timestamp WITH ITS TYPE, then its value: "CreateTime:<ms>" or

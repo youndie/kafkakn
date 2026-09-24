@@ -48,6 +48,14 @@ internal class NaiveProducer(
 
     override suspend fun partitionsFor(topic: String): List<PartitionInfo> = delegate.partitionsFor(topic)
 
+    override suspend fun initTransactions() = delegate.initTransactions()
+
+    override suspend fun beginTransaction() = delegate.beginTransaction()
+
+    override suspend fun commitTransaction() = delegate.commitTransaction()
+
+    override suspend fun abortTransaction() = delegate.abortTransaction()
+
     override suspend fun flush() = delegate.flush()
 
     override suspend fun close() = delegate.close()

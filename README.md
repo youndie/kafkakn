@@ -157,7 +157,7 @@ is surface, not implementation.
 | Not done yet | Where it stands |
 |---|---|
 | **Topic metadata** | planned — [B-29](docs/backlog/B-29-topic-metadata.md). An explicit partition and a record timestamp are in since [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) and [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) |
-| **Transactions** | planned — [B-30](docs/backlog/B-30-transactions.md), after the arms are made to agree on idempotence ([B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md)) |
+| **Exactly-once read-process-write** | planned — [B-38](docs/backlog/B-38-exactly-once-read-process-write.md). Transactions themselves are in since [B-30](docs/backlog/B-30-transactions.md); `sendOffsetsToTransaction` needs a consumer |
 | **SASL OAUTHBEARER** | planned — [B-33](docs/backlog/B-33-sasl-oauthbearer.md), with a caller-supplied token. PLAIN and SCRAM are in since [B-32](docs/backlog/B-32-sasl-plain-and-scram.md), TLS since B-11, client certificates since [B-31](docs/backlog/B-31-client-certificates.md), and **certificate trust cannot be turned off** — the key that would do it is refused on both arms, because it exists only on the one without an oracle ([B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md)). Hostname checking is the one thing that can be relaxed, with `ssl.endpoint.identification.algorithm=none` |
 | **Admin API** | planned, minimal — [B-34](docs/backlog/B-34-a-minimal-admin.md) |
 | **Consumers, consumer groups, rebalancing** | planned **last**, and designed before it is built ([B-35](docs/backlog/B-35-the-consumer-designed-first.md)): group coordination is where most of a Kafka client's difficulty lives, and a thin consumer shipped for symmetry would be worse than none |

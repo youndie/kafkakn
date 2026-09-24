@@ -1,0 +1,44 @@
+=== environment ===
+2026-09-25T00:40:15+02:00
+  topic kafkakn-txn-1790289615, fresh
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-txn-1790289615	TopicId: beadbSt6SkmWqoQjTtPlAw	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== both arms, one test task per invocation, rerun every time ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== the topic, read twice by the broker's own consumer ===
+  read_committed: 300 records, read_uncommitted: 500
+  jvm       commit        read_committed     50  (expected 50)
+  jvm       helper-commit read_committed     50  (expected 50)
+  jvm       abort         read_committed      0  (expected 0)
+  jvm       abort         read_uncommitted   50  (expected 50)
+  jvm       helper-abort  read_committed      0  (expected 0)
+  jvm       helper-abort  read_uncommitted   50  (expected 50)
+  jvm       fenced        read_committed      0  (expected 0)
+  jvm       fenced        read_uncommitted   50  (expected 50)
+  linuxX64  commit        read_committed     50  (expected 50)
+  linuxX64  helper-commit read_committed     50  (expected 50)
+  linuxX64  abort         read_committed     50  EXPECTED 0
+  linuxX64  abort         read_uncommitted   50  (expected 50)
+  linuxX64  helper-abort  read_committed     50  EXPECTED 0
+  linuxX64  helper-abort  read_uncommitted   50  (expected 50)
+  linuxX64  fenced        read_committed      0  (expected 0)
+  linuxX64  fenced        read_uncommitted   50  (expected 50)
+
+=== how the transaction coordinator says each one ended ===
+  jvm       commit  CompleteCommit
+  jvm       abort   CompleteAbort
+  linuxX64  commit  CompleteCommit
+  linuxX64  abort   CompleteCommit  EXPECTED CompleteAbort
+
+=== what each arm's fenced producer said, under the one exception ===
+  jvm       ProducerFencedException: fenced by a newer producer with the same transactional.id: There is a newer producer with the same transactionalId which fences the current one. <- ProducerFencedException: fenced by a newer producer with the same transactional.id: There is a newer producer with the same tra
+  linuxX64  ProducerFencedException: fenced by a newer producer with the same transactional.id: commitTransaction: _FENCED (-144): Failed to end transaction: Local: This instance has been fenced by a newer instance [fatal]
+
+B-30: RED

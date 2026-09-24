@@ -28,6 +28,10 @@ and against each other.
 interface KafkaProducer {
     suspend fun send(record: ProducerRecord): RecordMetadata
     suspend fun partitionsFor(topic: String): List<PartitionInfo>   // B-29
+    suspend fun initTransactions()                                 // B-30
+    suspend fun beginTransaction()
+    suspend fun commitTransaction()
+    suspend fun abortTransaction()
     suspend fun flush()
     suspend fun close()
 }
@@ -46,7 +50,7 @@ Construction is a top-level `expect fun` rather than an `expect class`: the inte
 common code that both arms implement, and only the factory is platform-specific.
 
 Nothing else is public in M1. `sendAll`, headers, transactions and partitioner overrides are absent
-until an item asks for them. (Headers arrived with B-10; an explicit partition and a timestamp with B-27 and B-28, below; `partitionsFor` with B-29.)
+until an item asks for them. (Headers arrived with B-10; an explicit partition and a timestamp with B-27 and B-28, below; `partitionsFor` with B-29; transactions with B-30.)
 
 ## What each call promises
 
@@ -74,6 +78,15 @@ a delivery word with a quantity word. A `sentCount` would be truthful about what
 read as a success rate, which is precisely the number that reported complete success while 264 826
 records of 1 000 000 had never been queued. The reconciliation lives in the suite, against the
 broker's end offsets ([B-09](../backlog/B-09-accounting.md)).
+
+**That oracle does not survive transactions, and the contract says so here rather than leaving it to
+be discovered.** A commit or abort marker occupies an offset of its own, so on a topic written by a
+transactional producer the end offset is no longer a count of records — it is larger by one per
+transaction per partition, and an aborted transaction's records are counted too. The reconciliation
+there counts **records** read by `kafka-console-consumer`, and names the isolation level every time:
+`read_committed` for the claim, `read_uncommitted` to show that what was aborted was written
+([B-30](../backlog/B-30-transactions.md), `ci/b-30/run.sh`). An end-offset delta on such a topic
+proves nothing either way.
 
 ### Headers
 
@@ -240,6 +253,39 @@ The native answer arrives as a *described topic carrying an error*, not as a fai
 implementation that read only the call's return code would report an unknown topic as a topic with
 no partitions.
 
+### Transactions
+
+`initTransactions`, `beginTransaction`, `commitTransaction`, `abortTransaction` — Kafka's names, as
+suspending functions — with `transactional.id` an ordinary configuration key that both clients spell
+alike ([B-30](../backlog/B-30-transactions.md)). `inTransaction { … }` commits when its block
+returns and aborts when it throws, and is built **on** the four: a caller who decides for themselves
+when to abort needs the calls. Its abort runs even on cancellation, since an open transaction holds
+`read_committed` readers back until it times out; an abort that fails too is attached as suppressed.
+It does not retry or abort a failing commit — that is the caller's decision.
+
+Measured 2026-09-24, `ci/b-30/run.sh`, on both arms: 50 records committed are all visible under
+`read_committed`; 50 aborted are none of them, **and all 50 under `read_uncommitted`**, which is what
+says the abort happened rather than the records never being sent; the transaction coordinator's own
+`kafka-transactions.sh describe` reports `CompleteCommit` and `CompleteAbort` for the two ids.
+
+**Init, commit and abort block inside both clients**, so they wait on `Dispatchers.IO`. The native
+arm passes `-1` for every timeout, as librdkafka's header asks — twice `transaction.timeout.ms` for
+init, the transaction's remaining time for commit and abort — because it warns that any other value
+risks "internal state desynchronization". The JVM arm waits `max.block.ms`.
+
+**A fenced producer throws `ProducerFencedException` — one type, on both arms — from its next call,
+and from every call after it.** A second producer with the same `transactional.id` fences the first
+by initialising, and aborts the first one's open transaction on the way (its 50 records: none under
+`read_committed`, all 50 under `read_uncommitted`). What each client said underneath is the cause and
+is recorded, not promised:
+
+| arm | `commitTransaction` | the `send` after it |
+|---|---|---|
+| JVM | the client's own `ProducerFencedException`: *"There is a newer producer with the same transactionalId which fences the current one."* | *"Producer with transactionalId '…' and (producerId=…, epoch=0) has been fenced by another producer with the same transactionalId"* |
+| native | `_FENCED (-144)`, fatal: *"Failed to end transaction: Local: This instance has been fenced by a newer instance"* | *"Local: This instance has been fenced by a newer instance"* |
+
+A fenced producer is finished; the only call left that means anything is `close`.
+
 ### `flush`
 
 Returns when every record handed to `send` on this producer has been acknowledged or has failed.
@@ -332,7 +378,7 @@ So the contract splits the map in two, and says which half a key is in:
 
 | | |
 |---|---|
-| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password`, `sasl.mechanism`, `sasl.username`, `sasl.password` — same name, same meaning, both arms |
+| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password`, `sasl.mechanism`, `sasl.username`, `sasl.password`, `transactional.id` — same name, same meaning, both arms |
 | **platform** | everything else: `queue.buffering.max.messages`, `partitioner` (native); `buffer.memory`, `max.block.ms`, `linger.ms` (jvm) |
 
 A platform key travels to the arm that owns it and is **refused by the other at construction**. That
@@ -352,6 +398,7 @@ than a workaround.
 | the broker refuses a configuration value | `send` throws, and the message carries the broker's own text |
 | TLS peer not verifiable | `send` throws and the message names certificate verification — but **not promptly on native**, see below |
 | SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
+| another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | producer closed | `send` throws `IllegalStateException` |
 
 Error **text** is not part of the contract; error **type** and the fact that something is thrown at
