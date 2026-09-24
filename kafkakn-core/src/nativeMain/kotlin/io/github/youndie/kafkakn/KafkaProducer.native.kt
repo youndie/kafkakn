@@ -31,6 +31,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
+import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN
 import rdkafka.RD_KAFKA_RESP_ERR__QUEUE_FULL
@@ -273,8 +274,20 @@ internal class NativeKafkaProducer(
             (config.properties + defaults).forEach { (key, value) ->
                 // librdkafka reports an unknown key here, so this arm refuses it at construction too -
                 // the contract says an unusable configuration fails, and the earlier the better.
-                if (rd_kafka_conf_set(conf, key, value, errstr, ERRSTR.convert()) != RD_KAFKA_CONF_OK) {
+                // TWO REFUSALS, NOT ONE. librdkafka separates a name it does not know from a value it will
+                // not take, and this used to report both as "unknown producer configuration" - so
+                // `compression.type=brotli` sent the caller looking for a typo in a key they had spelled
+                // correctly (B-26). librdkafka's own text also names the key by its canonical spelling,
+                // `compression.codec`, which is not the one the caller wrote; the caller's key and value
+                // go first, and librdkafka's sentence follows as the evidence.
+                val result = rd_kafka_conf_set(conf, key, value, errstr, ERRSTR.convert())
+                if (result == RD_KAFKA_CONF_UNKNOWN) {
                     throw IllegalArgumentException("unknown producer configuration: $key (${errstr.toKString()})")
+                }
+                if (result != RD_KAFKA_CONF_OK) {
+                    throw IllegalArgumentException(
+                        "producer configuration $key refuses the value '$value' (${errstr.toKString()})",
+                    )
                 }
             }
             rd_kafka_conf_set_dr_msg_cb(conf, deliveryReport)

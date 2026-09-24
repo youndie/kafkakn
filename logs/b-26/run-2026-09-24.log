@@ -1,0 +1,41 @@
+=== environment ===
+2026-09-24T22:21:58+02:00
+  topic kafkakn-comp-1790281318, fresh, so every batch on it is this run's
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-comp-1790281318	TopicId: BURi3TQyTMuD96heXQvWfg	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== the sends, both arms ===
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+
+=== what the broker stored, read by the broker's own tool ===
+  49 batches, 3000 records
+
+=== each arm, each codec: how many records, and which codec their batches carry ===
+  jvm       none    records  300 of 300   stored as: none 
+  jvm       gzip    records  300 of 300   stored as: gzip 
+  jvm       snappy  records  300 of 300   stored as: snappy 
+  jvm       lz4     records  300 of 300   stored as: lz4 
+  jvm       zstd    records  300 of 300   stored as: zstd 
+  linuxX64  none    records  300 of 300   stored as: none 
+  linuxX64  gzip    records  300 of 300   stored as: gzip 
+  linuxX64  snappy  records  300 of 300   stored as: snappy 
+  linuxX64  lz4     records  300 of 300   stored as: lz4 
+  linuxX64  zstd    records  300 of 300   stored as: zstd 
+
+=== the control: five labels, five different codecs on disk, per arm ===
+  jvm       5 distinct codecs
+  linuxX64  5 distinct codecs
+
+=== and the values read back, byte for byte, by the broker's own consumer ===
+  every value intact
+
+=== what each arm says about a codec that does not exist ===
+  jvm       Invalid value brotli for configuration compression.type: String must be one of: none, gzip, snappy, lz4, zstd
+  linuxX64  unknown producer configuration: compression.type (Invalid value "brotli" for configuration property "compression.codec")
+
+B-26: every codec, on both arms, is what the broker stored - and none is what none looks like

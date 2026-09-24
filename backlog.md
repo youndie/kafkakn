@@ -97,11 +97,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (16)
+## Open (15)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[ ]` | compression.type is named portable in the contract and no test has ever set it | P1 | S | - |
 | [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[ ]` | A record can name its partition, as it can in every other client | P1 | S | - |
 | [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[ ]` | A record carries its timestamp, and the metadata says which time the broker kept | P1 | S | - |
 | [B-31](docs/backlog/B-31-client-certificates.md) `[ ]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
@@ -118,7 +117,7 @@ verdict.
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (25)
+## Closed (26)
 
 **It builds, and a test can fail**
 
@@ -162,6 +161,7 @@ verdict.
 **The producer other clients have**
 
 - [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[x]` - The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other
+- [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[x]` - compression.type is named portable in the contract and no test has ever set it
 
 <!-- END INDEX -->
 
