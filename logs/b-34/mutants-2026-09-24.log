@@ -1,0 +1,11 @@
+/home/youndie/b34-mut-jvm.log:AdminTest[jvm] > no_call_holds_the_callers_dispatcher()[jvm] FAILED
+/home/youndie/b34-mut-jvm.log:    org.opentest4j.AssertionFailedError: the caller's dispatcher was held for 5.001565623s while describeCluster waited 5.013117675s
+/home/youndie/b34-mut-jvm.log:AdminTest[jvm] > creating_a_topic_that_exists_fails_with_one_kafkakn_exception_on_both_arms()[jvm] FAILED
+/home/youndie/b34-mut-jvm.log:    org.opentest4j.AssertionFailedError: Expected an exception of class io.github.youndie.kafkakn.TopicExistsException to be thrown, but was java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.TopicExistsException: Topic 'kafkakn-b34mut-1790290970' already exists.
+/home/youndie/b34-mut-jvm.log:6 tests completed, 2 failed
+/home/youndie/b34-mut-jvm.log:> Task :kafkakn-core:jvmTest FAILED
+/home/youndie/b34-mut-jvm.log:BUILD FAILED in 18s
+/home/youndie/b34-mut-native.log:io.github.youndie.kafkakn.AdminTest.creating_a_topic_that_exists_fails_with_one_kafkakn_exception_on_both_arms[linuxX64] FAILED
+/home/youndie/b34-mut-native.log:> Task :kafkakn-core:linuxX64Test FAILED
+/home/youndie/b34-mut-native.log:6 tests completed, 1 failed
+/home/youndie/b34-mut-native.log:BUILD FAILED in 9s
