@@ -34,7 +34,10 @@ public actual fun kafkaProducer(config: ProducerConfig): KafkaProducer = JvmKafk
  * A caller who sets `ssl.truststore.location` themselves is left alone: theirs is the Java client's
  * own key and it travels untouched.
  */
-internal fun translateForJava(properties: Map<String, String>): Map<String, String> {
+internal fun translateForJava(
+    properties: Map<String, String>,
+    read: (String) -> String = ::readPem,
+): Map<String, String> {
     var translated = properties
     // The second translation, and the same argument as the first: the clients disagree about the
     // VALUE here rather than the key. librdkafka refuses an empty one — "cannot be set to empty
@@ -43,6 +46,7 @@ internal fun translateForJava(properties: Map<String, String>): Map<String, Stri
     if (translated[HOSTNAME_VERIFICATION] == "none") {
         translated = translated + (HOSTNAME_VERIFICATION to "")
     }
+    translated = translateClientCertificate(translated, read)
     val ca = translated["ssl.ca.location"] ?: return translated
     return translated - "ssl.ca.location" +
         mapOf(
@@ -51,17 +55,64 @@ internal fun translateForJava(properties: Map<String, String>): Map<String, Stri
         )
 }
 
+/**
+ * The third translation (B-31), and the first that is not a rename.
+ *
+ * librdkafka takes the client's certificate and key as two paths. The Java client's PEM key store
+ * takes a path only as ONE file holding both — `FileBasedPemStore` hands the same contents to the
+ * chain and to the key — and takes two separate things only as their contents, through
+ * `ssl.keystore.certificate.chain` and `ssl.keystore.key` (DefaultSslEngineFactory, kafka-clients
+ * 4.3.1). So the two files are read here, at construction, and handed over as text.
+ *
+ * **The rejected alternative was writing the two into one temporary file** and passing its path:
+ * it leaves a private key on disk somewhere the caller did not put one, for as long as the producer
+ * lives. Reading costs nothing the caller would notice — the Java client reads its key store once,
+ * at construction, as well.
+ *
+ * `ssl.key.password` is spelled the same by both clients and travels untouched. Half a pair is
+ * translated as half a pair; [checkTlsKeys] has refused it before this runs.
+ */
+private fun translateClientCertificate(
+    properties: Map<String, String>,
+    read: (String) -> String,
+): Map<String, String> {
+    val certificate = properties[CLIENT_CERTIFICATE]
+    val key = properties[CLIENT_KEY]
+    if (certificate == null && key == null) return properties
+    return properties - CLIENT_CERTIFICATE - CLIENT_KEY +
+        buildMap {
+            put("ssl.keystore.type", "PEM")
+            certificate?.let { put("ssl.keystore.certificate.chain", read(it)) }
+            key?.let { put("ssl.keystore.key", read(it)) }
+        }
+}
+
+private fun readPem(path: String): String =
+    try {
+        java.io.File(path).readText()
+    } catch (unreadable: java.io.IOException) {
+        // The path, and that it was a client certificate file: the Java client would otherwise meet
+        // this as "Invalid PEM keystore configs", which names neither.
+        throw IllegalArgumentException(
+            "cannot read the client certificate file '$path': ${unreadable.message}",
+            unreadable,
+        )
+    }
+
 internal class JvmKafkaProducer(
     config: ProducerConfig,
 ) : KafkaProducer {
-    private val properties = translateForJava(config.properties)
-
     init {
         // FIRST, so that a key this library refuses by decision says so, rather than being reported
         // as one `kafka-clients` has never heard of. The two are different answers to the caller:
-        // one is "we will not carry this", the other is "you misspelled something".
+        // one is "we will not carry this", the other is "you misspelled something". And before the
+        // translation below, which reads the client certificate's files.
         config.checkTlsKeys()
+    }
 
+    private val properties = translateForJava(config.properties)
+
+    init {
         // A key nobody honours fails HERE, not silently. kafka-clients logs unknown configuration at
         // WARN and carries on, which is the shape this project refuses: an option accepted and
         // dropped behaves exactly like one that worked, until it matters.

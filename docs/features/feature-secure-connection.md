@@ -23,7 +23,9 @@ the binary, which costs nothing additional at runtime — the measured binary's 
 change when TLS is turned on ([research §1.2](../research/research-architecture.md)).
 
 **Built and measured 2026-09-17**: 500 records over the SSL listener on each arm, counted over the
-plaintext one, and both arms refusing a broker signed by an authority they were not given.
+plaintext one, and both arms refusing a broker signed by an authority they were not given. **Client
+certificates since 2026-09-24** ([B-31](../backlog/B-31-client-certificates.md)): a third listener
+that requires one, and both arms answering it.
 
 ## 2. Business rules
 
@@ -33,10 +35,13 @@ plaintext one, and both arms refusing a broker signed by an authority they were 
 - Hostname checking can be relaxed, and that is the only part of TLS this API lets a caller weaken:
   `ssl.endpoint.identification.algorithm=none`.
 - A peer that cannot be verified fails loudly, and the failure names certificate verification.
+- A broker that requires a client certificate gets one: `ssl.certificate.location`,
+  `ssl.key.location` and, for an encrypted key, `ssl.key.password` — librdkafka's spelling, as for the
+  CA ([B-31](../backlog/B-31-client-certificates.md)). The certificate and its key come together or
+  not at all, refused at construction on both arms.
 - SASL is not built yet. Since D2 was amended on 2026-09-24 it is planned — PLAIN and SCRAM in
   [B-32](../backlog/B-32-sasl-plain-and-scram.md), OAUTHBEARER in
-  [B-33](../backlog/B-33-sasl-oauthbearer.md) — and client certificates in
-  [B-31](../backlog/B-31-client-certificates.md).
+  [B-33](../backlog/B-33-sasl-oauthbearer.md).
 
 ## 3. Scenarios (BDD / test cases)
 
@@ -89,6 +94,40 @@ plaintext one, and both arms refusing a broker signed by an authority they were 
 * *Construction succeeding does not prove the translation is right: `kafka-clients` accepts `none`
   as well and quietly enforces nothing, so the translation is asserted directly.*
 
+### Scenario: The right client certificate connects where one is required
+* **Given:** a listener set to `ssl.client.auth=required`, beside the plaintext and TLS ones, which
+  the broker's own tools have just shown refusing a client with no certificate and one with a
+  certificate from the wrong authority (`broker.sh mtls-selftest`).
+* **When:** 200 records are sent with a certificate the broker's authority signed, its key encrypted
+  PKCS#8 and `ssl.key.password` set.
+* **Then:** all 200 are there, **counted over the plaintext listener** by `kafka-console-consumer`.
+* **Automated:** `MutualTlsTest.the_right_client_certificate_connects`, counted by `ci/b-31/run.sh`.
+  Measured 200/200 on each arm.
+
+### Scenario: No certificate is refused, and the refusal says so
+* **Given:** the same listener, and the configuration that connects to the TLS listener next door.
+* **When:** a record is sent.
+* **Then:** the call throws, and the failure names the certificate.
+* **Automated:** `MutualTlsTest.no_certificate_is_refused_and_the_message_says_so`. Measured — the
+  native arm: *"… SSL routines::tlsv13 alert certificate required: SSL alert number 116"*; the JVM
+  arm, two causes down: *"(certificate_required) Received fatal alert: certificate_required"*.
+
+### Scenario: A certificate from the wrong authority is refused
+* **Given:** a well-formed client certificate signed by an authority the broker does not trust.
+* **When:** a record is sent.
+* **Then:** the call throws, and the failure names the certificate.
+* **Automated:** `MutualTlsTest.a_certificate_from_the_wrong_authority_is_refused`.
+* *Neither client sends this certificate — see the quirks — so the broker's refusal is the same
+  sentence as for no certificate at all, on both arms.*
+
+### Scenario: A certificate without its key is refused at construction, on both arms
+* **Given:** `ssl.certificate.location` without `ssl.key.location`, and the reverse.
+* **When:** a producer is constructed.
+* **Then:** construction throws, and the message names both keys.
+* **Automated:** `MutualTlsTest.a_certificate_without_its_key_is_refused_at_construction_on_both_arms`,
+  asserting on the message. Watched failing on native before the rule: librdkafka constructed a
+  producer from the certificate alone.
+
 ## 4. Quirks
 
 - **Nothing about TLS is proved by the fact that OpenSSL is linked.** A linked library that was
@@ -126,6 +165,19 @@ plaintext one, and both arms refusing a broker signed by an authority they were 
   string, so the JVM arm translates. It is the only remaining way to weaken TLS through this API and
   the contract says so out loud.
 
+- **The client certificate is the one TLS translation that reads files.** librdkafka takes two
+  paths; the Java client's PEM key store takes a path only as one file holding both, and two separate
+  things only as their contents. So the JVM arm reads the certificate and the key at construction
+  and hands the text over ([producer-contract](../api/producer-contract.md), TLS).
+- **Neither client sends a client certificate the broker would not trust.** librdkafka's
+  `rd_kafka_ssl_cert_callback` (`librdkafka-2.13.0.tar.gz!/src/rdkafka_ssl.c`) withholds one whose issuer is not in the
+  server's `certificate_authorities`, and the Java client sends none either — measured, not read:
+  the broker answered `certificate_required` to both arms. A caller with a certificate from
+  the wrong authority therefore reads *"certificate required"* — true, and not the sentence they will
+  look for.
+- **librdkafka constructs a producer from a certificate with no key.** It checks the pair only when a
+  key is set (`check_pkey`). Refused by this library on both arms, measured 2026-09-24.
+
 ## 5. Code anchors
 
 | What | Where |
@@ -137,3 +189,6 @@ plaintext one, and both arms refusing a broker signed by an authority they were 
 | the two TLS keys and what each arm may do with them | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/TlsKeys.kt` |
 | what librdkafka last complained about | `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt` |
 | the run that measured it | `ci/b-11/run.sh` |
+| the client-certificate scenarios | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/MutualTlsTest.kt` |
+| the listener that requires one, and its self-test | `ci/broker/docker-compose.tls.yml`, `ci/harness/broker.sh` |
+| the run that measured client certificates | `ci/b-31/run.sh` |

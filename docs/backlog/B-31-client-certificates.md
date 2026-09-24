@@ -1,7 +1,7 @@
 ---
 id: B-31
 title: "Client certificates: a broker that asks who is connecting gets an answer"
-status: open
+status: done
 priority: P1
 size: M
 stage: stage-6-real-deployments
@@ -35,3 +35,33 @@ out on purpose; the owner's request of 2026-09-24 brings it in
 - Anchors: `kafkakn-core/src/jvmMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.jvm.kt`,
   `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/TlsKeys.kt`,
   `ci/broker/docker-compose.tls.yml`, `ci/broker/certs.sh`.
+
+## Findings (2026-09-24)
+
+**The open question, answered by reading `kafka-clients` 4.3.1.** Its PEM key store takes a path only
+as one file holding the chain and the key; two separate files reach it only as their contents
+(`ssl.keystore.certificate.chain`, `ssl.keystore.key`). The JVM arm reads both at construction —
+[research §2.20](../research/research-architecture.md) has the addresses.
+
+**Measured, `ci/b-31/run.sh`:**
+
+- the listener's own tools refused no certificate and a certificate from the wrong authority, then
+  accepted the right one — before the suite ran;
+- 200/200 records on each arm with an encrypted PKCS#8 key and `ssl.key.password`, counted over the
+  plaintext listener by `kafka-console-consumer`;
+- no certificate: both arms throw and name it — native *"tlsv13 alert certificate required"*, JVM
+  *"(certificate_required) Received fatal alert"*;
+- a certificate from the wrong authority: the **same** sentences, because neither client sends it —
+  librdkafka's `rd_kafka_ssl_cert_callback` withholds a certificate whose issuer the server did not
+  list, and the Java client was measured doing the same.
+
+**Watched red first.** Before the translation the JVM arm refused `ssl.certificate.location` and
+`ssl.key.location` as unknown keys, and `TranslateForJavaTest`'s three new cases failed on their
+assertions. The native arm then showed what the item had not asked: **librdkafka constructs a producer
+from a certificate with no key** (it checks the pair only when a key is set), so a new rule refuses
+half a pair at construction on both arms — `MutualTlsTest` asserts on its message, because on the JVM
+arm "it threw" had been green for the unknown-key reason.
+
+**Left out, as new work.** A PKCS#1 key (`BEGIN RSA PRIVATE KEY`) reads in the source as working on
+native and refused on the JVM; it is [B-42](B-42-a-pkcs1-key-works-on-one-arm.md), not measured here.
+Certificate rotation stays out, as the item said.

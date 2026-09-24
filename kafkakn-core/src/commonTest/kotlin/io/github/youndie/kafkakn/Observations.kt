@@ -149,6 +149,29 @@ internal val wrongCaPath: String get() =
         ?: "${testEnv("HOME")}/.cache/kafkakn/tls/wrong-ca.pem"
 
 /**
+ * The listener that **requires** a client certificate (B-31), a third one beside the plaintext and
+ * the TLS listeners rather than a stricter version of either.
+ */
+internal val mtlsBootstrap: String get() = testEnv("KAFKAKN_MTLS_BOOTSTRAP") ?: "127.0.0.1:9095"
+
+private fun tlsFile(name: String): String = "${testEnv("HOME")}/.cache/kafkakn/tls/$name"
+
+/** A client certificate the broker's authority signed, and its key — encrypted PKCS#8. */
+internal val clientCertPath: String get() = testEnv("KAFKAKN_CLIENT_CERT") ?: tlsFile("client.pem")
+internal val clientKeyPath: String get() = testEnv("KAFKAKN_CLIENT_KEY") ?: tlsFile("client.key")
+
+/** The fixture password `ci/broker/certs.sh` encrypted [clientKeyPath] with. */
+internal val clientKeyPassword: String get() = testEnv("KAFKAKN_CLIENT_KEY_PASSWORD") ?: "kafkakn-client"
+
+/**
+ * A good certificate from the wrong authority: signed by the CA that signed nothing the broker
+ * trusts. Without it, "the broker checked the certificate" cannot be told from "the broker only
+ * checked that there was one".
+ */
+internal val wrongClientCertPath: String get() = testEnv("KAFKAKN_WRONG_CLIENT_CERT") ?: tlsFile("wrong-client.pem")
+internal val wrongClientKeyPath: String get() = testEnv("KAFKAKN_WRONG_CLIENT_KEY") ?: tlsFile("wrong-client.key")
+
+/**
  * Timeouts short enough that a connection which will never succeed fails inside a test.
  *
  * Per-arm for the same reason as [smallQueueConfig]: librdkafka gives up on a record after

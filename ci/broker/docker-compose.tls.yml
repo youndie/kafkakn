@@ -18,12 +18,14 @@ services:
       # namespace and nothing outside can reach fails exactly like a broker that is down, and the
       # test would then be red for a reason that has nothing to do with TLS.
       - "9094:9094"
+      # The listener that asks who is connecting (B-31), published for the same reason.
+      - "9095:9095"
     volumes:
       - ${KAFKAKN_TLS_DIR:-${HOME}/.cache/kafkakn/tls}:/etc/kafka/secrets:ro
     environment:
-      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,SSL://:9094"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9094"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,SSL://:9094,MTLS://:9095"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9094,MTLS://127.0.0.1:9095"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,MTLS:SSL"
       # PKCS12 on the SERVER side only. PEM was tried and refused: `SSL key store password cannot
       # be specified with PEM format`, and this image always specifies one. Both CLIENTS still read
       # the PEM CA, which is the half the library has to get right.
@@ -35,8 +37,21 @@ services:
       KAFKA_SSL_KEYSTORE_FILENAME: "broker.keystore.p12"
       KAFKA_SSL_KEY_CREDENTIALS: "key-password"
       KAFKA_SSL_KEYSTORE_CREDENTIALS: "keystore-password"
-      # No client certificates: mTLS is out of scope for B-11, and asking for one would make every
-      # scenario fail for a reason the scenario is not about.
+      # No client certificates on THIS listener: B-11's scenarios are about the broker's certificate,
+      # and asking for the client's would make every one of them fail for a reason it is not about.
       KAFKA_SSL_CLIENT_AUTH: "none"
+      # B-31's listener, a third one BESIDE the two rather than a stricter SSL listener in their place:
+      # a fixture that changed what 9094 demands would turn every B-11 scenario red, and the fix
+      # people reach for then is a mode switch - the thing that lets scenarios quietly not run.
+      #
+      # LISTENER-SCOPED keys. Kafka falls back to the unprefixed `ssl.*` for whatever a listener does
+      # not override, so the key store is the one above and only the demand and the authority it
+      # checks clients against are new. Set globally instead, `KAFKA_SSL_CLIENT_AUTH=required` makes
+      # the image's configure script `ensure` a trust store filename AND a credentials file and export
+      # its contents as the trust store password (docker/resources/common-scripts/configure, 4.3.1) -
+      # and a PEM trust store refuses any password (DefaultSslEngineFactory.createTruststore).
+      KAFKA_LISTENER_NAME_MTLS_SSL_CLIENT_AUTH: "required"
+      KAFKA_LISTENER_NAME_MTLS_SSL_TRUSTSTORE_TYPE: "PEM"
+      KAFKA_LISTENER_NAME_MTLS_SSL_TRUSTSTORE_LOCATION: "/etc/kafka/secrets/ca.pem"
       # The broker talks to itself over PLAINTEXT (see docker-compose.yml), so it needs no trust
       # store of its own.
