@@ -1,7 +1,7 @@
 ---
 id: B-30
 title: "Transactions: records that become visible together, or not at all"
-status: open
+status: wip
 priority: P2
 size: L
 stage: stage-5-producer-parity
