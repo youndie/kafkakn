@@ -180,6 +180,13 @@ internal val metadataTopic: String get() = testEnv("KAFKAKN_METADATA_TOPIC") ?: 
 internal val metadataPartitions: Int get() = testEnv("KAFKAKN_METADATA_PARTITIONS")?.toInt() ?: METADATA_PARTITIONS
 private const val METADATA_PARTITIONS = 7
 
+/**
+ * The consumer's fixture (B-36): one partition of twenty records written by the Kafka distribution's
+ * own client, created and filled once by `broker.sh up`.
+ */
+internal val consumeTopic: String get() = testEnv("KAFKAKN_CONSUME_TOPIC") ?: "kafkakn-consume"
+internal const val CONSUME_COUNT: Int = 20
+
 /** The SASL listeners (B-32): over plaintext, and over TLS — the second is what hosted Kafka is. */
 internal val saslBootstrap: String get() = testEnv("KAFKAKN_SASL_BOOTSTRAP") ?: "127.0.0.1:9096"
 internal val saslSslBootstrap: String get() = testEnv("KAFKAKN_SASL_SSL_BOOTSTRAP") ?: "127.0.0.1:9097"

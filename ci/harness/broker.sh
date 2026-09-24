@@ -62,6 +62,29 @@ case "${1:-}" in
     # what a default nobody creates costs, and B-29 paid it again in its own full-suite run.
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
         --topic kafkakn-metadata --partitions 7 --replication-factor 1 >/dev/null 2>&1
+    # B-36's topic: one partition holding twenty records written by the Kafka distribution's own client
+    # (ci/harness/Records.java) - null keys, a tombstone, bytes that are not UTF-8, duplicate header
+    # names. Written once: only when the partition is empty, so every run reads the same twenty.
+    #
+    # RETENTION OFF, and that is not tidiness. The records carry timestamps from 2023 on purpose - a
+    # seek to a time needs one right answer - and time-based retention reads the RECORDS' time: with
+    # the broker's default seven days the whole partition was deleted within minutes of being written,
+    # and the next run found earliest = latest = 20. A topic already emptied that way is recreated.
+    earliest=$(kc /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server "$BOOTSTRAP" --topic kafkakn-consume \
+        --time -2 2>/dev/null | cut -d: -f3)
+    if [ -n "$earliest" ] && [ "$earliest" != "0" ]; then
+        kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --delete --topic kafkakn-consume >/dev/null 2>&1
+        for _ in $(seq 1 15); do
+            kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --list 2>/dev/null \
+                | grep -qx kafkakn-consume || break
+            sleep 1
+        done
+    fi
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
+        --topic kafkakn-consume --partitions 1 --replication-factor 1 --config retention.ms=-1 >/dev/null 2>&1
+    if [ "$(bash "$0" offsets kafkakn-consume)" = "0" ]; then
+        bash "$0" records write kafkakn-consume >/dev/null || { echo "  could not write kafkakn-consume" >&2; exit 1; }
+    fi
     # SCRAM credentials (B-32), on every `up`: they live in the metadata log, which a recreated
     # container does not have. `--alter` replaces, so running it on a broker that has them is a no-op
     # in effect. PLAIN's users are in the JAAS file and need nothing here.
@@ -206,6 +229,15 @@ case "${1:-}" in
         --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
         --command-property "isolation.level=${ISOLATION:-read_uncommitted}" \
         --formatter-property print.value=true 2>/dev/null
+    ;;
+  records)
+    # The consumer's third party (B-36): ci/harness/Records.java on the Kafka distribution's own client,
+    # run on this host against the published port. The jars are the ones Gradle already resolved for
+    # the JVM arm, pinned to the same version - kafkakn itself is not on the classpath.
+    CLIENTS=$(find "$HOME/.gradle/caches/modules-2" -name 'kafka-clients-4.3.1.jar' | head -1)
+    SLF4J=$(find "$HOME/.gradle/caches/modules-2" -name 'slf4j-api-*.jar' | sort | tail -1)
+    [ -n "$CLIENTS" ] && [ -n "$SLF4J" ] || { echo "records: kafka-clients or slf4j-api is not in the Gradle cache" >&2; exit 1; }
+    java -cp "$CLIENTS:$SLF4J" "$HERE/Records.java" "$2" "$BOOTSTRAP" "$3" 2>/dev/null
     ;;
   txn-state)
     # How the broker says a transactional id's last transaction ended - CompleteCommit, CompleteAbort
