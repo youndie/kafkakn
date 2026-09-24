@@ -172,6 +172,80 @@ differential suite.
 
 ---
 
+### 1.8 What the two clients underneath already do, and how much of it kafkakn lets through
+
+Read out of the artefacts on 2026-09-24, because the question "how far is this from other Kafka
+clients" has an unusual answer here: **both arms already are full clients.** librdkafka 2.13.0 and
+`kafka-clients` 4.3.1 each implement producing, consuming, groups, transactions, administration and
+SASL. What kafkakn lacks is not an implementation — it is the part of its `expect` surface that would
+let those through, and the tests that would hold the two arms to one answer for each.
+
+| Capability | librdkafka 2.13.0 | kafka-clients 4.3.1 | kafkakn today |
+|---|---|---|---|
+| transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | absent |
+| explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | absent — the record has topic, key, value, headers |
+| topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | absent |
+| consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | absent — D2 |
+| consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |
+| administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | absent — D2 |
+| compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | **named portable in the contract, never measured** |
+| SASL | `PLAIN`, `SCRAM` and `OAUTHBEARER` compiled in; GSSAPI **not** (`--disable-gssapi`); OIDC **not** (`--disable-curl`) | all of them | absent — D2 |
+| client certificate (mTLS) | `ssl.certificate.location`, `ssl.key.location` | a keystore | absent — B-11 left it out |
+| metrics | `rd_kafka_conf_set_stats_cb` (JSON every `statistics.interval.ms`) | `Producer.metrics()` | absent |
+
+| Fact | Where verified |
+|---|---|
+| every librdkafka function in the first table is declared | `librdkafka-2.13.0.tar.gz!/src/rdkafka.h` — `rd_kafka_subscribe` at line 4186, `rd_kafka_offsets_for_times` at 3376, `rd_kafka_query_watermark_offsets` at 3318 (declared at the start of a line, which a pattern expecting a space before the name misses) |
+| SASL `PLAIN`, `SCRAM`, `OAUTHBEARER` are in our bundle; Cyrus/GSSAPI and the OIDC token refresher are not | `nm --defined-only librdkafka-static.a` from `ci/librdkafka/build.sh`: `rd_kafka_sasl_plain_provider`, `…_scram_provider`, `…_oauthbearer_provider` defined; `rd_kafka_sasl_cyrus_provider`, `rd_kafka_sasl_oauthbearer_oidc_token_refresh_cb` absent |
+| all four codecs are in our bundle | the same archives: snappy inside `librdkafka-static.a`, `LZ4_compress_default` bundled there, `ZSTD_compress` in `libzstd.a`, `deflate` in `libz.a` |
+| every JVM method in the first table exists | `javap` against `kafka-clients-4.3.1.jar!/org/apache/kafka/clients/producer/Producer.class`, `…/ProducerRecord.class`, `…/consumer/Consumer.class`, `…/admin/Admin.class` |
+| the JVM arm resolves the codec libraries | `./gradlew :kafkakn-core:dependencies --configuration jvmRuntimeClasspath`: `zstd-jni` 1.5.6-10, `lz4-java` 1.10.2, `snappy-java` 1.1.10.7 |
+
+**And the defaults do not agree, in one place that matters.** Read from the same two artefacts:
+
+| Key | kafka-clients 4.3.1 | librdkafka 2.13.0 |
+|---|---|---|
+| **`enable.idempotence`** | **`true`** | **`false`** |
+| `max.in.flight.requests.per.connection` | 5 | 1 000 000 |
+| `acks` | `all` | `-1` (all) |
+| `linger.ms` | 5 | 5 |
+| `retries` | 2 147 483 647 | 2 147 483 647 |
+| `compression.type` | `none` | `none` |
+
+*Verified:* `ProducerConfig.configDef().defaultValues()` executed against `kafka-clients-4.3.1.jar`;
+the default column of `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`.
+
+**Consequence 1, and it is the same shape as §2.2.** The JVM arm is idempotent by default and the
+native arm is not, with retries unbounded on both. A record whose acknowledgement is lost and which is
+retried can therefore be written **twice by one arm and once by the other**, and each arm is
+individually consistent with the broker. That the defaults differ is read out of the artefacts; that
+it produces a duplicate is **H6**, and it is not measured yet.
+
+**The consumer side has its own disagreement**, read the same way — `ConsumerConfig.configDef()` and
+the same `CONFIGURATION.md`:
+
+| Key | kafka-clients 4.3.1 | librdkafka 2.13.0 |
+|---|---|---|
+| **`isolation.level`** | **`read_uncommitted`** | **`read_committed`** |
+| `partition.assignment.strategy` | `RangeAssignor`, `CooperativeStickyAssignor` | `range,roundrobin` |
+| `auto.offset.reset` | `latest` | `largest` (the same thing, spelled differently) |
+| `enable.auto.commit` | `true` | `true` |
+| `group.protocol` | `classic` | `classic` |
+
+A consumer on one arm would therefore see records from aborted transactions that the same consumer
+on the other arm hides. It is written down now, before any consumer exists, so that the design item
+starts from it rather than meeting it in a test.
+
+**And one thing is simpler than it looked.** librdkafka accepts **`sasl.mechanism`**, singular, as an
+alias of its own `sasl.mechanisms` — the row reads *"Alias for `sasl.mechanisms`"* — so the mechanism
+is portable under the Java client's name. What differs is the credentials: librdkafka takes
+`sasl.username` and `sasl.password`; the Java client takes one `sasl.jaas.config` string. Both default
+the mechanism to `GSSAPI`, which our bundle does not contain.
+
+**Consequence 2.** Closing the distance to other clients is mostly surface and tests, not
+implementation — which is also why each capability has to arrive with its own differential test.
+Everything in the first table is a place where the two arms could disagree without either noticing.
+
 ## 2. Decisions
 
 **D1 — the JVM arm is the oracle, and it ships in M0.** One `expect` surface, two actuals; the
@@ -184,6 +258,25 @@ coordination, no transactions, no exactly-once, no Admin API, no Schema Registry
 SASL. Group coordination in particular is where most of a Kafka client's difficulty lives, and
 pretending otherwise by shipping a thin consumer would be the worse outcome. *Rejected:* a
 "minimal consumer" for symmetry.
+
+**Amended 2026-09-24, at the owner's request: the fence becomes an ordered roadmap.** The request was
+to bring kafkakn closer to what other Kafka clients do, and §1.8 is what that means here — both arms
+already implement it, so the distance is surface and tests. The order is the part of the old decision
+that survives, and its reason is unchanged:
+
+1. **what already ships and has never been measured** — the idempotence default the arms disagree
+   on, and a compression key the contract calls portable with no test behind it;
+2. **the producer surface other clients have** — explicit partition, timestamp, topic metadata,
+   transactions;
+3. **what a real deployment needs to connect at all** — client certificates and SASL;
+4. **a minimal administration surface**;
+5. **the consumer, last, and designed before it is built.** "Group coordination is where most of a
+   client's difficulty lives" is still true, which is why it comes after everything else and why its
+   first item produces a document rather than code. A thin consumer shipped for symmetry is still the
+   outcome to avoid; the difference is that it is now avoided by sequencing rather than by exclusion.
+
+Schema Registry and Streams stay out: neither is in either client underneath, so neither is a gap
+between kafkakn and the clients it wraps.
 
 **D3 — `produce` suspends.** The API is `suspend fun send(record): RecordMetadata`, and backpressure
 is expressed by the call not returning yet. *Rejected:* returning `Result` and letting the caller
@@ -241,7 +334,9 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H2 | ~~Per-message headers can be carried without `rd_kafka_producev` (§1.5)~~ — **settled 2026-09-17: `rd_kafka_produceva` takes the same fields as an array, see §2.10** | [B-10](../backlog/B-10-record-headers.md) `done` |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
-| H5 | `linuxArm64` costs a matrix row and no code (D6) | not scheduled; claimed nowhere until it is |
+| H5 | `linuxArm64` costs a matrix row and no code (D6) | [B-39](../backlog/B-39-linux-arm64.md) |
+| H6 | Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8) | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) |
+| H7 | A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model | [B-35](../backlog/B-35-the-consumer-designed-first.md) |
 
 ### 2.1 H1, settled: three kinds of assertion, and only one of them needs machinery
 

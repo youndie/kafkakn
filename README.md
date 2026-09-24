@@ -147,16 +147,23 @@ Everything about this API follows from that:
   comes from calling it concurrently, and both clients batch internally once records are in flight
   together.
 
-## What it deliberately does not do
+## What it does not do yet
 
-| Not done | Why |
+**None of this exists today.** Since 2026-09-24 most of it is planned, in an order that keeps the hard
+part last ([backlog.md](backlog.md), stages 5 to 9) — and every item arrives with a test that holds
+the two arms to one answer, because both clients underneath already implement all of it and the gap
+is surface, not implementation.
+
+| Not done yet | Where it stands |
 |---|---|
-| **Consumers, consumer groups, rebalancing** | where most of a Kafka client's difficulty lives; a thin consumer shipped for symmetry would be worse than none |
-| **Transactions, exactly-once** | out of scope until asked |
-| **Admin API, Schema Registry, Streams** | out of scope |
-| **SASL** | out of scope; TLS is in, and **certificate trust cannot be turned off** — the key that would do it is refused on both arms, because it exists only on the one without an oracle ([B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md)). Hostname checking is the one thing that can still be relaxed, with `ssl.endpoint.identification.algorithm=none` |
-| **`linuxArm64`** | designed for and not built: a line in the build and a row in the matrix, and the klib's C archives would be built a second time |
-| **macOS, Windows, `musl`** | out of scope. The spike measured `macosArm64` and it links; the cost of leaving it out is that a contributor on a Mac cannot run the native arm locally and has to use the Linux box or CI |
+| **Explicit partition, timestamp, topic metadata** | planned first among new surface — [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md), [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md), [B-29](docs/backlog/B-29-topic-metadata.md) |
+| **Transactions** | planned — [B-30](docs/backlog/B-30-transactions.md), after the arms are made to agree on idempotence ([B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md)) |
+| **SASL, client certificates** | planned — PLAIN and SCRAM, then OAUTHBEARER with a caller-supplied token; mTLS. TLS is in today, and **certificate trust cannot be turned off** — the key that would do it is refused on both arms, because it exists only on the one without an oracle ([B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md)). Hostname checking is the one thing that can be relaxed, with `ssl.endpoint.identification.algorithm=none` |
+| **Admin API** | planned, minimal — [B-34](docs/backlog/B-34-a-minimal-admin.md) |
+| **Consumers, consumer groups, rebalancing** | planned **last**, and designed before it is built ([B-35](docs/backlog/B-35-the-consumer-designed-first.md)): group coordination is where most of a Kafka client's difficulty lives, and a thin consumer shipped for symmetry would be worse than none |
+| **`linuxArm64`** | designed for and not built — [B-39](docs/backlog/B-39-linux-arm64.md) settles whether it costs a matrix row and no code |
+| **macOS** | for contributors first, so the native arm runs without the Linux box — [B-40](docs/backlog/B-40-macos-for-contributors.md) |
+| **Schema Registry, Streams, Windows, `musl`** | not planned. The first two are in neither client underneath, so they are not a gap between kafkakn and what it wraps |
 
 ## Documentation
 
