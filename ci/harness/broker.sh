@@ -57,6 +57,11 @@ case "${1:-}" in
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
         --topic kafkakn-logappend --partitions "$PARTITIONS" --replication-factor 1 \
         --config message.timestamp.type=LogAppendTime >/dev/null 2>&1
+    # B-29's topic: seven partitions, a count nothing else here has, so a description of the wrong
+    # topic cannot pass for this one. Created here because the suite's default names it - §2.18 is
+    # what a default nobody creates costs, and B-29 paid it again in its own full-suite run.
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
+        --topic kafkakn-metadata --partitions 7 --replication-factor 1 >/dev/null 2>&1
     # SCRAM credentials (B-32), on every `up`: they live in the metadata log, which a recreated
     # container does not have. `--alter` replaces, so running it on a broker that has them is a no-op
     # in effect. PLAIN's users are in the JAAS file and need nothing here.

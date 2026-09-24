@@ -6,6 +6,7 @@ import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.COpaquePointer
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.CPointerVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.alloc
@@ -25,10 +26,12 @@ import kotlinx.cinterop.value
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
@@ -48,13 +51,18 @@ import rdkafka.rd_kafka_error_destroy
 import rdkafka.rd_kafka_flush
 import rdkafka.rd_kafka_message_t
 import rdkafka.rd_kafka_message_timestamp
+import rdkafka.rd_kafka_metadata
+import rdkafka.rd_kafka_metadata_destroy
+import rdkafka.rd_kafka_metadata_t
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_outq_len
 import rdkafka.rd_kafka_poll
 import rdkafka.rd_kafka_produceva
 import rdkafka.rd_kafka_resp_err_t
 import rdkafka.rd_kafka_t
+import rdkafka.rd_kafka_topic_destroy
 import rdkafka.rd_kafka_topic_name
+import rdkafka.rd_kafka_topic_new
 import rdkafka.rd_kafka_type_t
 import rdkafka.rd_kafka_vtype_t
 import rdkafka.rd_kafka_vu_t
@@ -245,6 +253,11 @@ private val deliveryReport =
 /** A scope-lived pointer to [bytes]; an empty array still needs an address librdkafka can hold. */
 private fun MemScope.bytes(bytes: ByteArray): CPointer<ByteVar> =
     if (bytes.isEmpty()) allocArray(1) else bytes.refTo(0).getPointer(this)
+
+/** librdkafka could not describe a topic: no answer in time, or a topic the cluster does not have. */
+public class KafkaMetadataException(
+    message: String,
+) : RuntimeException(message)
 
 /** A failure reported by librdkafka for one record. */
 public class KafkaProduceException(
@@ -505,6 +518,70 @@ internal class NativeKafkaProducer(
             code
         }
 
+    /**
+     * On `Dispatchers.IO`: `rd_kafka_metadata` blocks for up to its timeout, and on the caller's
+     * dispatcher that held a single-lane dispatcher for 5 s against a broker that was not there —
+     * measured before this was moved (`TopicMetadataTest`). Cancelling the caller stops it waiting;
+     * it does not interrupt librdkafka, which returns when its timeout does.
+     */
+    override suspend fun partitionsFor(topic: String): List<PartitionInfo> =
+        withContext(Dispatchers.IO) { describe(topic) }
+
+    /**
+     * `rd_kafka_metadata` for one topic, and the blocking call this function exists to wrap.
+     *
+     * The timeout is the effective `socket.timeout.ms` — librdkafka's "default timeout for network
+     * requests", and this is one. The Java client bounds the same question by `max.block.ms`, a key
+     * that exists only there.
+     */
+    private fun describe(topic: String): List<PartitionInfo> =
+        memScoped {
+            val timeout = effectiveConfig("socket.timeout.ms")?.toIntOrNull() ?: DEFAULT_SOCKET_TIMEOUT_MS
+            val rkt = rd_kafka_topic_new(handle, topic, null) ?: error("rd_kafka_topic_new returned null for $topic")
+            try {
+                val described = alloc<CPointerVar<rd_kafka_metadata_t>>()
+                val err = rd_kafka_metadata(handle, 0, rkt, described.ptr, timeout)
+                if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    throw KafkaMetadataException("partitionsFor($topic): ${rd_kafka_err2str(err)?.toKString()}")
+                }
+                val metadata = described.value ?: error("rd_kafka_metadata succeeded and described nothing")
+                try {
+                    partitionsOf(topic, metadata.pointed)
+                } finally {
+                    rd_kafka_metadata_destroy(metadata)
+                }
+            } finally {
+                rd_kafka_topic_destroy(rkt)
+            }
+        }
+
+    private fun partitionsOf(
+        topic: String,
+        metadata: rd_kafka_metadata_t,
+    ): List<PartitionInfo> {
+        val described =
+            (0 until metadata.topic_cnt).map { metadata.topics!![it] }.singleOrNull { it.topic?.toKString() == topic }
+                ?: throw KafkaMetadataException(
+                    "partitionsFor($topic): the cluster's answer did not describe the topic",
+                )
+        // A topic the broker does not have comes back as a described topic carrying an error, not as
+        // a failed call - the error has to be read here or an unknown topic is an empty list.
+        if (described.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+            throw KafkaMetadataException("partitionsFor($topic): ${rd_kafka_err2str(described.err)?.toKString()}")
+        }
+        return (0 until described.partition_cnt)
+            .map { index ->
+                val partition = described.partitions!![index]
+                PartitionInfo(
+                    topic = topic,
+                    partition = partition.id,
+                    leader = partition.leader.takeIf { it >= 0 },
+                    replicas = (0 until partition.replica_cnt).map { partition.replicas!![it] },
+                    inSyncReplicas = (0 until partition.isr_cnt).map { partition.isrs!![it] },
+                )
+            }.sortedBy { it.partition }
+    }
+
     override suspend fun flush() {
         // rd_kafka_flush returns an ERROR CODE, not a count. Reading it as "how many are left" is
         // how a sibling measurement printed -185, which is a timeout wearing a quantity's clothes.
@@ -528,6 +605,9 @@ internal class NativeKafkaProducer(
         /** Longer than any value librdkafka keeps for a single key; a longer one reads as absent. */
         const val CONFIG_VALUE_MAX = 512
         const val FLUSH_MS = 30_000
+
+        /** librdkafka's own default for `socket.timeout.ms`, for a value that somehow reads as absent. */
+        const val DEFAULT_SOCKET_TIMEOUT_MS = 60_000
         const val POLL_IDLE_MS = 2L
         const val BACKPRESSURE_DELAY_MS = 1L
 

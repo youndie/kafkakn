@@ -252,6 +252,23 @@ internal class JvmKafkaProducer(
             headers.map { ApacheHeader(it.name, it.value) },
         )
 
+    /**
+     * On `Dispatchers.IO`, for the reason `send` is: `partitionsFor` waits inside the client for up to
+     * `max.block.ms` — measured, 20 s of a held single-lane dispatcher before this was moved
+     * (`TopicMetadataTest`). Cancelling the caller stops it waiting; it does not interrupt the client.
+     */
+    override suspend fun partitionsFor(topic: String): List<PartitionInfo> =
+        withContext(Dispatchers.IO) { delegate.partitionsFor(topic) }
+            .map { info ->
+                PartitionInfo(
+                    topic = info.topic(),
+                    partition = info.partition(),
+                    leader = info.leader()?.takeUnless { it.isEmpty }?.id(),
+                    replicas = info.replicas().map { it.id() },
+                    inSyncReplicas = info.inSyncReplicas().map { it.id() },
+                )
+            }.sortedBy { it.partition }
+
     override suspend fun flush() {
         // Blocking too, and for longer: it waits for every record in flight.
         withContext(Dispatchers.IO) { delegate.flush() }

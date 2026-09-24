@@ -184,7 +184,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 |---|---|---|---|
 | transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | absent |
 | explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | partition since [B-27](../backlog/B-27-a-record-can-name-its-partition.md), timestamp since [B-28](../backlog/B-28-a-record-carries-its-timestamp.md) |
-| topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | absent |
+| topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | `partitionsFor` since [B-29](../backlog/B-29-topic-metadata.md) — §2.22 |
 | consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | absent — D2 |
 | consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |
 | administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | absent — D2 |
@@ -636,6 +636,8 @@ not the count.
 **Consequence.** The JVM actual does its waiting on `Dispatchers.IO`. That is what "suspends" can
 honestly mean over a blocking client: the caller's dispatcher stays free, and the wait happens on a
 thread that exists for waiting. The native arm reaches the same promise by never blocking at all.
+*(Questioned 2026-09-24: its `flush` begins with a blocking `rd_kafka_flush` — read, not measured;
+[B-43](../backlog/B-43-native-flush-may-hold-the-callers-thread.md).)*
 
 ### 2.14 RQ-A, measured: the shutdown order held, and what that green does not cover
 
@@ -942,6 +944,32 @@ belong to PLAIN or SCRAM only.
 and SCRAM first; then 100/100 records on each arm for PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 and
 SCRAM-SHA-512 over `SASL_SSL`, counted over plaintext; and 100/100 for a password holding a double
 quote and a backslash — the native arm sending it raw, which is what says the broker holds it.
+
+### 2.22 A seam test that started its clock after the silence
+
+[B-29](../backlog/B-29-topic-metadata.md). `partitionsFor` is a blocking call on both arms, so it was
+written first as one — on the caller's thread — to watch the dispatcher test go red. **It stayed
+green on both arms.** The ticker that measures the silence ran on the same single lane as the call,
+started its clock on its first turn, and its first turn came after the call returned; it was then
+cancelled before measuring a single gap. The silence it existed to see happened before it started
+looking.
+
+Corrected — the mark taken before the call and read once more after it — the same blocking
+implementation held the lane for **20.0 s on the JVM and 5.0 s on native**, each arm's whole bound
+(`max.block.ms`, `socket.timeout.ms`), against a broker that was not there. On `Dispatchers.IO` it
+stays under the tolerated 500 ms. `JvmDispatcherSeamTest` does not have this defect only because its
+sends are `launch`ed and the ticker gets the thread first.
+
+**Consequence.** A dispatcher test is watched red against a blocking implementation before it is
+believed; the order in which the ticker and the call get the lane is part of the fixture. And the
+same reading turned up a claim in §2.13 that no test holds —
+[B-43](../backlog/B-43-native-flush-may-hold-the-callers-thread.md).
+
+| Fact | Where verified |
+|---|---|
+| an unknown topic comes back from `rd_kafka_metadata` as a described topic with `err` set, the call itself succeeding | measured 2026-09-24, native `TopicMetadataTest`: *"Broker: Unknown topic or partition"* in 57 ms |
+| the Java client waits for an unknown topic's metadata and throws `TimeoutException` naming `max.block.ms` | measured, 20 021 ms and 17 081 ms in two runs at `max.block.ms=20000` |
+| both arms describe a 7-partition topic exactly as `kafka-topics.sh --describe` does | `ci/b-29/run.sh` |
 
 ## 4. Risks, with the machinery that would catch them
 

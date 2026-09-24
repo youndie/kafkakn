@@ -100,6 +100,15 @@ Every one is **target**: nothing is built.
 * *An **invalid** value would prove nothing: `kafka-clients` refuses `acks=99` at construction,
   before any broker sees it (B-06). The probe has to be a valid value the broker cannot satisfy.*
 
+### Scenario: The producer describes a topic as the broker does
+* **Given:** a topic of seven partitions — a count no other topic in the fixture has.
+* **When:** `partitionsFor` is asked about it, and about a topic that does not exist.
+* **Then:** the partitions, leaders, replicas and in-sync replicas are what `kafka-topics.sh
+  --describe` says; the unknown topic fails; and neither call holds the caller's dispatcher.
+* **Automated:** `TopicMetadataTest`, compared with the broker's description by `ci/b-29/run.sh`
+  ([B-29](../backlog/B-29-topic-metadata.md)). How the unknown topic fails differs per arm and is in
+  [producer-contract](../api/producer-contract.md).
+
 ## 4. Quirks
 
 - **The offsets are the oracle, never this library's own consumer.** A producer checked by its own
