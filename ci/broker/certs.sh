@@ -36,6 +36,7 @@ CLIENT_KEY_PASSWORD=${CLIENT_KEY_PASSWORD:-kafkakn-client}
 # container, which is what `broker.sh down` followed by `up` does.
 if [ -z "${FORCE:-}" ] && [ -s "$OUT/ca.pem" ] && [ -s "$OUT/broker.keystore.p12" ] \
         && [ -s "$OUT/wrong-ca.pem" ] && [ -s "$OUT/client.pem" ] && [ -s "$OUT/wrong-client.pem" ] \
+        && [ -s "$OUT/broker-jaas.conf" ] \
         && openssl x509 -in "$OUT/broker.pem" -noout -checkend 86400 >/dev/null 2>&1; then
     echo "  certificates already in $OUT, and the broker's is valid for another day - kept"
     exit 0
@@ -140,6 +141,24 @@ fi
 cat client.pem client.key > client-bundle.pem
 cat wrong-client.pem wrong-client.key > wrong-client-bundle.pem
 
+# SASL (B-32). The broker's users live in a JAAS file because the image insists on one: its configure
+# script `ensure`s KAFKA_OPTS the moment a SASL listener is advertised, and the one thing worth putting
+# there is `java.security.auth.login.config`. One KafkaServer section carries both login modules - the
+# PLAIN users are listed here, the SCRAM credentials are created through the broker's own tools once
+# it is up (`broker.sh up`), because SCRAM keeps them in the metadata log and not in a file.
+#
+# `quoted` is the user the item exists for: a password with a double quote and a backslash, which a
+# JAAS string must escape. Written here ESCAPED, because this file is parsed too - and the proof it
+# was escaped right is the native arm, which sends the password raw and still has to get in.
+cat > broker-jaas.conf <<'JAAS'
+KafkaServer {
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+        user_alice="alice-secret"
+        user_quoted="kafkakn\"quote\\slash";
+    org.apache.kafka.common.security.scram.ScramLoginModule required;
+};
+JAAS
+
 # Client configurations for the broker's OWN tools, so the fixture can be questioned without
 # involving kafkakn at all. The paths are the container's, because that is where they are read.
 cat > client-ssl.properties <<PROPS
@@ -167,7 +186,25 @@ ssl.truststore.location=/etc/kafka/secrets/ca.pem
 ssl.keystore.type=PEM
 ssl.keystore.location=/etc/kafka/secrets/wrong-client-bundle.pem
 PROPS
-chmod 644 ./*.properties ./*.pem client.key wrong-client.key
+sasl_props() { # <file> <protocol> <mechanism> <user> <password, JAAS-escaped>
+    local module=org.apache.kafka.common.security.scram.ScramLoginModule
+    [ "$3" = PLAIN ] && module=org.apache.kafka.common.security.plain.PlainLoginModule
+    {
+        echo "security.protocol=$2"
+        echo "sasl.mechanism=$3"
+        echo "sasl.jaas.config=$module required username=\"$4\" password=\"$5\";"
+        if [ "$2" = SASL_SSL ]; then
+            echo "ssl.truststore.type=PEM"
+            echo "ssl.truststore.location=/etc/kafka/secrets/ca.pem"
+        fi
+    } > "$1"
+}
+sasl_props client-sasl-plain.properties SASL_PLAINTEXT PLAIN alice alice-secret
+sasl_props client-sasl-plain-wrong.properties SASL_PLAINTEXT PLAIN alice not-the-password
+sasl_props client-sasl-scram256.properties SASL_PLAINTEXT SCRAM-SHA-256 alice alice-secret
+sasl_props client-sasl-scram256-wrong.properties SASL_PLAINTEXT SCRAM-SHA-256 alice not-the-password
+sasl_props client-sasl-ssl-scram512.properties SASL_SSL SCRAM-SHA-512 alice alice-secret
+chmod 644 ./*.properties ./*.pem ./*.conf client.key wrong-client.key
 
 echo "  certificates in $OUT: ca.pem, broker.keystore.p12, wrong-ca.pem, client.pem, wrong-client.pem"
 echo "  the right CA verifies the broker, the wrong CA does not - both checked, not assumed"

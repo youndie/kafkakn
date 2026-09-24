@@ -47,6 +47,7 @@ internal fun translateForJava(
         translated = translated + (HOSTNAME_VERIFICATION to "")
     }
     translated = translateClientCertificate(translated, read)
+    translated = translateSaslCredentials(translated)
     val ca = translated["ssl.ca.location"] ?: return translated
     return translated - "ssl.ca.location" +
         mapOf(
@@ -87,6 +88,57 @@ private fun translateClientCertificate(
         }
 }
 
+/**
+ * The fourth translation (B-32): `sasl.username` and `sasl.password` become `sasl.jaas.config`.
+ *
+ * The Java client has no keys for the two; it takes credentials only inside a JAAS string, a Java
+ * format the contract does not ask a native caller to learn. [checkSaslKeys] has already made sure the
+ * pair is whole and the mechanism is one they belong to, so the only thing left to get wrong is the
+ * quoting — which is why [jaasQuoted] is the whole of this function's risk.
+ *
+ * A caller who writes `sasl.jaas.config` themselves is left alone, as one who writes
+ * `ssl.truststore.location` is — unless they also wrote the pair, which would be two answers to one
+ * question with nothing to say which wins.
+ */
+private fun translateSaslCredentials(properties: Map<String, String>): Map<String, String> {
+    val user = properties[SASL_USERNAME] ?: return properties
+    val password = properties.getValue(SASL_PASSWORD_KEY)
+    require(JAAS_CONFIG !in properties) {
+        "$JAAS_CONFIG and $SASL_USERNAME/$SASL_PASSWORD_KEY are two spellings of the same credentials; pass one"
+    }
+    val module =
+        when (properties.getValue(SASL_MECHANISM).uppercase()) {
+            "PLAIN" -> "org.apache.kafka.common.security.plain.PlainLoginModule"
+            else -> "org.apache.kafka.common.security.scram.ScramLoginModule"
+        }
+    return properties - SASL_USERNAME - SASL_PASSWORD_KEY +
+        (JAAS_CONFIG to "$module required username=${jaasQuoted(user)} password=${jaasQuoted(password)};")
+}
+
+private const val JAAS_CONFIG = "sasl.jaas.config"
+
+/**
+ * A JAAS option value, quoted the way `kafka-clients` reads it back.
+ *
+ * Its parser is `java.io.StreamTokenizer` (`JaasConfig`, 4.3.1): inside double quotes a backslash
+ * starts an escape, a double quote ends the value, and **a line break ends it too** — so all three are
+ * escaped, and the rest travels as it is.
+ */
+internal fun jaasQuoted(value: String): String =
+    buildString {
+        append('"')
+        for (char in value) {
+            when (char) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                else -> append(char)
+            }
+        }
+        append('"')
+    }
+
 private fun readPem(path: String): String =
     try {
         java.io.File(path).readText()
@@ -108,6 +160,7 @@ internal class JvmKafkaProducer(
         // one is "we will not carry this", the other is "you misspelled something". And before the
         // translation below, which reads the client certificate's files.
         config.checkTlsKeys()
+        config.checkSaslKeys()
     }
 
     private val properties = translateForJava(config.properties)

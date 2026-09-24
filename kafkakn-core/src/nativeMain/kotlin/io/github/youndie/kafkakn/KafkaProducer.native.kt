@@ -260,6 +260,7 @@ internal class NativeKafkaProducer(
         // on purpose: a configuration refused on one arm only is a configuration the caller meets
         // for the first time on the platform they do not run locally.
         config.checkTlsKeys()
+        config.checkSaslKeys()
     }
 
     private val handle: CPointer<rd_kafka_t> =

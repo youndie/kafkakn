@@ -97,11 +97,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (13)
+## Open (12)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[ ]` | SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them | P1 | M | - |
 | [B-29](docs/backlog/B-29-topic-metadata.md) `[ ]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
 | [B-30](docs/backlog/B-30-transactions.md) `[ ]` | Transactions: records that become visible together, or not at all | P2 | L | B-25 |
 | [B-34](docs/backlog/B-34-a-minimal-admin.md) `[ ]` | A minimal admin client: create, delete and describe topics, describe the cluster | P2 | M | - |
@@ -115,7 +114,7 @@ verdict.
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (29)
+## Closed (30)
 
 **It builds, and a test can fail**
 
@@ -166,6 +165,7 @@ verdict.
 **It connects where it is deployed**
 
 - [B-31](docs/backlog/B-31-client-certificates.md) `[x]` - Client certificates: a broker that asks who is connecting gets an answer
+- [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[x]` - SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them
 
 <!-- END INDEX -->
 

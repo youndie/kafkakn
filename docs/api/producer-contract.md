@@ -168,6 +168,46 @@ is not free on the native side: the record is only enqueued, so it comes back as
 timed out` like any other unreachable broker, and the sentence that explains it arrived on the error
 callback ([research §2.9](../research/research-architecture.md)).
 
+### SASL
+
+| Key | Meaning | On native | On the JVM |
+|---|---|---|---|
+| `security.protocol` | `SASL_PLAINTEXT` or `SASL_SSL` | librdkafka's own key | the Java client's own key |
+| `sasl.mechanism` | `PLAIN`, `SCRAM-SHA-256` or `SCRAM-SHA-512` — **required** with a SASL protocol | an alias librdkafka accepts for its `sasl.mechanisms` | the Java client's own key |
+| `sasl.username`, `sasl.password` | the credentials of those three mechanisms — **together** or not at all | librdkafka's own keys | **built into `sasl.jaas.config`**, the only place the Java client takes credentials |
+
+Since [B-32](../backlog/B-32-sasl-plain-and-scram.md). The spelling is librdkafka's for the credentials
+and both clients' for the mechanism; the rejected alternative was making `sasl.jaas.config` the
+contract's only spelling, which is a Java string format a native caller would have to learn. A caller
+who writes `sasl.jaas.config` themselves is left alone on the JVM arm — it is a platform key there,
+and unknown to librdkafka — and one who writes it **and** the pair is refused: two answers to one
+question.
+
+**The JAAS string is where this translation can go wrong, and it is quoted the way the Java client
+reads it back.** Its parser is `java.io.StreamTokenizer`: inside double quotes a backslash starts an
+escape, a double quote ends the value, and so does a line break. All three are escaped. What decides
+that it is right is the client's own parser — `JaasContext.loadClientContext` reading the password
+back out in `TranslateForJavaTest` — and a broker user whose password holds a double quote and a
+backslash, which both arms reach; the native arm sends that password raw, so its getting in is what
+says the broker holds the password the test means.
+
+**Three refusals at construction, on both arms,** each watched answered differently per arm before the
+rule existed:
+
+- a SASL protocol with **no mechanism**. Both clients default to `GSSAPI`, which the native bundle
+  does not have (`--disable-gssapi`); librdkafka said *"No provider for SASL mechanism GSSAPI:
+  recompile librdkafka with libsasl2 or openssl support"*, a sentence that does not name the key the
+  caller forgot;
+- `sasl.username` **without** `sasl.password`, or the reverse — librdkafka: *"sasl.username and
+  sasl.password must be set"*; the JVM arm had not heard of either key;
+- credentials for a mechanism that takes none, or for no mechanism at all — librdkafka would drop
+  them, and the JVM arm has no login module to put them in.
+
+A wrong password makes `send` throw, and the message **names authentication**. As for an
+unverifiable peer, the native arm reports it through the error callback — measured, *"… SASL
+authentication error: Authentication failed: Invalid username or password"* — and waits out
+`message.timeout.ms` first; the JVM arm throws `SaslAuthenticationException` at once.
+
 ### `flush`
 
 Returns when every record handed to `send` on this producer has been acknowledged or has failed.
@@ -260,7 +300,7 @@ So the contract splits the map in two, and says which half a key is in:
 
 | | |
 |---|---|
-| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password` — same name, same meaning, both arms |
+| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password`, `sasl.mechanism`, `sasl.username`, `sasl.password` — same name, same meaning, both arms |
 | **platform** | everything else: `queue.buffering.max.messages`, `partitioner` (native); `buffer.memory`, `max.block.ms`, `linger.ms` (jvm) |
 
 A platform key travels to the arm that owns it and is **refused by the other at construction**. That
@@ -279,6 +319,7 @@ than a workaround.
 | the client refuses a configuration **value** | construction throws — see below |
 | the broker refuses a configuration value | `send` throws, and the message carries the broker's own text |
 | TLS peer not verifiable | `send` throws and the message names certificate verification — but **not promptly on native**, see below |
+| SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
 | producer closed | `send` throws `IllegalStateException` |
 
 Error **text** is not part of the contract; error **type** and the fact that something is thrown at

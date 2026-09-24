@@ -13,6 +13,8 @@ COMPOSE="$HERE/../broker/docker-compose.yml"
 TLS_COMPOSE="$HERE/../broker/docker-compose.tls.yml"
 SSL_BOOTSTRAP=${SSL_BOOTSTRAP:-127.0.0.1:9094}
 MTLS_BOOTSTRAP=${MTLS_BOOTSTRAP:-127.0.0.1:9095}
+SASL_BOOTSTRAP=${SASL_BOOTSTRAP:-127.0.0.1:9096}
+SASL_SSL_BOOTSTRAP=${SASL_SSL_BOOTSTRAP:-127.0.0.1:9097}
 CONTAINER=kafkakn-broker
 BOOTSTRAP=${BOOTSTRAP:-127.0.0.1:9092}
 PARTITIONS=${PARTITIONS:-3}
@@ -55,6 +57,17 @@ case "${1:-}" in
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
         --topic kafkakn-logappend --partitions "$PARTITIONS" --replication-factor 1 \
         --config message.timestamp.type=LogAppendTime >/dev/null 2>&1
+    # SCRAM credentials (B-32), on every `up`: they live in the metadata log, which a recreated
+    # container does not have. `--alter` replaces, so running it on a broker that has them is a no-op
+    # in effect. PLAIN's users are in the JAAS file and need nothing here.
+    #
+    # One mechanism per call: both in one `--add-config` is refused by the broker - measured,
+    # "A user credential cannot be altered twice in the same request".
+    for mechanism in SCRAM-SHA-256 SCRAM-SHA-512; do
+        kc /opt/kafka/bin/kafka-configs.sh --bootstrap-server "$BOOTSTRAP" --alter --entity-type users \
+            --entity-name alice --add-config "$mechanism=[password=alice-secret]" >/dev/null 2>&1 \
+            || { echo "  could not create the $mechanism credential" >&2; exit 1; }
+    done
     for _ in $(seq 1 30); do
         if kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$SSL_BOOTSTRAP" \
                 --command-config /etc/kafka/secrets/client-ssl.properties >/dev/null 2>&1; then
@@ -80,6 +93,27 @@ case "${1:-}" in
         exit 1
     fi
     echo "  tls-selftest: the right CA connects, the wrong CA does not"
+    ;;
+  sasl-selftest)
+    # B-32's listeners, asked with the broker's own tools: the wrong password is refused for PLAIN and
+    # for SCRAM, and only then are the right ones asked to connect - including SCRAM-SHA-512 over TLS,
+    # which is the listener hosted Kafka looks like. A listener that accepted any password would make
+    # every "connects" scenario green.
+    api() { kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$1" \
+        --command-config "/etc/kafka/secrets/$2" >/dev/null 2>&1; }
+    for wrong in client-sasl-plain-wrong.properties client-sasl-scram256-wrong.properties; do
+        if api "$SASL_BOOTSTRAP" "$wrong"; then
+            echo "sasl-selftest: $wrong was accepted - the listener does not check passwords" >&2
+            exit 1
+        fi
+    done
+    for right in client-sasl-plain.properties client-sasl-scram256.properties; do
+        api "$SASL_BOOTSTRAP" "$right" \
+            || { echo "sasl-selftest: $right was refused - the fixture is broken" >&2; exit 1; }
+    done
+    api "$SASL_SSL_BOOTSTRAP" client-sasl-ssl-scram512.properties \
+        || { echo "sasl-selftest: SCRAM-SHA-512 over TLS was refused - the fixture is broken" >&2; exit 1; }
+    echo "  sasl-selftest: wrong passwords refused (PLAIN, SCRAM-SHA-256); PLAIN, SCRAM-SHA-256 and SCRAM-SHA-512 over TLS connect"
     ;;
   mtls-selftest)
     # B-31's listener, asked the same question first: can it say NO? A listener that was configured
@@ -189,7 +223,7 @@ case "${1:-}" in
     echo "selftest: the broker check fails against a dead port, as it must"
     ;;
   *)
-    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|keys <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest|mtls-selftest" >&2
+    echo "usage: broker.sh up|tls-up|down|topic <name>|offsets <name>|keys <name>|consume <name> <pattern>|produce <name>|selftest|tls-selftest|mtls-selftest|sasl-selftest" >&2
     exit 2
     ;;
 esac
