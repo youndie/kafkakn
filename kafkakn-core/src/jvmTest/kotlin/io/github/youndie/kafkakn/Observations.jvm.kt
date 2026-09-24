@@ -46,6 +46,12 @@ internal actual fun smallQueueConfig(): Map<String, String> =
 // would mean adding logic to the arm whose value is that it is not ours.
 internal actual fun backpressureWaitCount(): Long = -1
 
+internal actual fun adminFailFastConfig(): Map<String, String> =
+    mapOf(
+        "default.api.timeout.ms" to "5000",
+        "request.timeout.ms" to "4000",
+    )
+
 internal actual fun failFastConfig(): Map<String, String> =
     mapOf(
         "max.block.ms" to "20000",

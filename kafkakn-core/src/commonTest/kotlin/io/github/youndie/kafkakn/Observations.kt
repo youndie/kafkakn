@@ -204,6 +204,13 @@ internal const val QUOTED_PASSWORD: String = "kafkakn\"quote\\slash"
 internal expect fun failFastConfig(): Map<String, String>
 
 /**
+ * The admin client's version of [failFastConfig]: each arm's own key for how long an admin request
+ * waits. The JVM's `Admin` waits `default.api.timeout.ms`; the native arm bounds each request by
+ * `socket.timeout.ms`.
+ */
+internal expect fun adminFailFastConfig(): Map<String, String>
+
+/**
  * Whether a producer built from [config] is **actually** idempotent, read from the client underneath
  * rather than from what kafkakn asked it for — the Java client's own post-processed configuration on
  * one arm, `rd_kafka_conf_get` on a constructed handle on the other. Throws when the producer refuses
