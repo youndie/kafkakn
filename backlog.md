@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-37](docs/backlog/B-37-consumer-groups.md) `[ ]` | Consumer groups: subscribe, rebalance, commit — and a group with one consumer from each arm | P2 | XL | B-36 |
+| [B-37](docs/backlog/B-37-consumer-groups.md) `[~]` | Consumer groups: subscribe, rebalance, commit — and a group with one consumer from each arm | P2 | XL | B-36 |
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[ ]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
 | [B-42](docs/backlog/B-42-a-pkcs1-key-works-on-one-arm.md) `[ ]` | A PKCS#1 client key: read in the source as working on one arm only | P2 | S | B-31 |
 | [B-43](docs/backlog/B-43-native-flush-may-hold-the-callers-thread.md) `[ ]` | The native flush calls a blocking rd_kafka_flush on the caller's thread | P2 | S | - |

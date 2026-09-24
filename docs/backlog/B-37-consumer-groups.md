@@ -1,7 +1,7 @@
 ---
 id: B-37
 title: "Consumer groups: subscribe, rebalance, commit — and a group with one consumer from each arm"
-status: open
+status: wip
 priority: P2
 size: XL
 stage: stage-8-consume
