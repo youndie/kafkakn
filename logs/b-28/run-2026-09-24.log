@@ -1,0 +1,22 @@
+=== environment ===
+2026-09-24T23:00:22+02:00
+  topic kafkakn-time-1790283622, fresh; the LogAppendTime topic is the fixture's own, kafkakn-logappend
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-time-1790283622	TopicId: I5Ul-Z6_Rt2cC4G7M3g8tA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+  kafkakn-logappend: message.timestamp.type=LogAppendTime, confirmed by the broker
+
+=== the sends, one test task per invocation, rerun every time ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== what the broker stored ===
+  jvm       named 1600000000000 on an ordinary topic   -> stored CreateTime:1600000000000
+  jvm       named 1600000000000 on a LogAppendTime topic -> stored LogAppendTime:1790283630243
+  linuxX64  named 1600000000000 on an ordinary topic   -> stored CreateTime:1600000000000
+  linuxX64  named 1600000000000 on a LogAppendTime topic -> stored LogAppendTime:1790283632676
+
+B-28: the time a record names is stored as CreateTime, and a LogAppendTime topic replaces it - on both arms

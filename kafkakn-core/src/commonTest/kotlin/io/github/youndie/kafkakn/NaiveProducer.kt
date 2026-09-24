@@ -37,7 +37,7 @@ internal class NaiveProducer(
         if (!room.tryAcquire()) {
             // "The queue is full, so this one did not fit." Returned, not thrown - the caller has a
             // RecordMetadata in their hand and no reason to look at it.
-            return RecordMetadata(record.topic, NAIVE_DROP_PARTITION, NAIVE_DROP_OFFSET)
+            return RecordMetadata(record.topic, NAIVE_DROP_PARTITION, NAIVE_DROP_OFFSET, NAIVE_DROP_OFFSET)
         }
         try {
             return delegate.send(record)

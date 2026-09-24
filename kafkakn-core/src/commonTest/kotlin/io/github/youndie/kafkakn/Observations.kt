@@ -117,6 +117,16 @@ internal fun naiveProducerRequested(): Boolean = testEnv("KAFKAKN_NAIVE") == "1"
 internal val strictTopic: String get() = testEnv("KAFKAKN_STRICT_TOPIC") ?: "kafkakn-strict"
 
 /**
+ * A topic whose broker keeps **its own** clock: `message.timestamp.type=LogAppendTime`.
+ *
+ * Created by `ci/harness/broker.sh up` itself rather than by each script that runs the suite — six
+ * of them do, and a seventh topic added to six hand-written lists is the list that goes stale. The
+ * default therefore names something the fixture always creates, which is the condition a default has
+ * to meet here since B-24.
+ */
+internal val logAppendTopic: String get() = testEnv("KAFKAKN_LOGAPPEND_TOPIC") ?: "kafkakn-logappend"
+
+/**
  * The broker's TLS listener, which sits **beside** the plaintext one rather than replacing it.
  *
  * Both are always up (`ci/harness/broker.sh up`). A fixture with a plaintext mode and a TLS mode

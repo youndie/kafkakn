@@ -1,7 +1,7 @@
 ---
 id: B-28
 title: "A record carries its timestamp, and the metadata says which time the broker kept"
-status: open
+status: done
 priority: P1
 size: S
 stage: stage-5-producer-parity
@@ -34,4 +34,43 @@ means.
   record's own timestamp is shown to have been replaced.
 - AC: a record without one still gets a timestamp, and the contract says whose clock it is.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/ProducerRecord.kt`,
-  `docs/api/producer-contract.md`.
+  `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/TimestampTest.kt`,
+  `ci/b-28/run.sh`, `ci/harness/broker.sh`, `docs/api/producer-contract.md`.
+
+## What happened
+
+`timestamp: Long? = null` on `ProducerRecord` and `timestamp: Long` on `RecordMetadata`. The JVM arm
+passes it to `ProducerRecord(topic, partition, timestamp, …)` and reads `RecordMetadata.timestamp()`;
+the native arm adds `RD_KAFKA_VTYPE_TIMESTAMP` (`int64_t`, the union's `i64`) only when set, and reads
+`rd_kafka_message_timestamp` in the delivery report. A negative timestamp is refused where the record
+is made — `-1` is what both clients use internally for "no timestamp".
+
+**The type field the item left open is decided by reading, not by preference.** librdkafka's
+`rd_kafka_message_timestamp` returns the value and its type; the Java client's `RecordMetadata` has
+`timestamp()` and nothing that says which kind. A type field would be one arm's fact and the other's
+guess, so there is none, and the contract says why.
+
+**Red first on both arms**, for the intended reason: both reported `-1` until wired, failing the three
+timestamp assertions; the negative-timestamp refusal passed from the start because it lives in the
+record.
+
+**By the broker's own reading** (`ci/b-28/run.sh`, `kafka-console-consumer` printing each record's
+stored timestamp and its type):
+
+| | named 1600000000000 on an ordinary topic | named 1600000000000 on a LogAppendTime topic |
+|---|---|---|
+| jvm | `CreateTime:1600000000000` | `LogAppendTime:1790283630243` |
+| linuxX64 | `CreateTime:1600000000000` | `LogAppendTime:1790283632676` |
+
+`RecordMetadata.timestamp` equalled the broker's kept time on both topics on both arms, and a record
+that names none carries the client's clock at `send`.
+
+**The LogAppendTime topic is the fixture's, not the item's.** Six scripts run the whole suite, and
+each creates its own topics by hand; a seventh added to six lists is the list that goes stale. So
+`broker.sh up` creates it once, the default name in the suite names something the fixture always
+makes — the condition a default has to meet since B-24 — and `ci/b-28/run.sh` asks the broker to
+confirm the topic's configuration before reading anything from it.
+
+**`RecordMetadata` gained a required field, which breaks anything constructing one.** It is a
+snapshot and nothing outside this repository is known to build one; inside, only the test double
+`NaiveProducer` did.

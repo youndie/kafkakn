@@ -115,7 +115,14 @@ internal class JvmKafkaProducer(
 
                         else -> {
                             continuation.resume(
-                                RecordMetadata(metadata.topic(), metadata.partition(), metadata.offset()),
+                                RecordMetadata(
+                                    topic = metadata.topic(),
+                                    partition = metadata.partition(),
+                                    offset = metadata.offset(),
+                                    // The broker's kept time; the Java client exposes the value and not
+                                    // its type, which is why kafkakn has no type field (B-28).
+                                    timestamp = metadata.timestamp(),
+                                ),
                             )
                         }
                     }
@@ -126,16 +133,16 @@ internal class JvmKafkaProducer(
     /**
      * The five-argument constructor, because the shorter ones cannot carry headers.
      *
-     * `partition` is the caller's or null, and null lets the client's partitioner decide, which is
-     * what the three-argument form did; `timestamp` is still null. The headers are handed over in
-     * order and duplicates are kept: the Java client stores an ordered list too, so nothing has to be
-     * reconciled here.
+     * `partition` and `timestamp` are the caller's or null, and null lets the client decide — its
+     * partitioner for one, its own clock at `send` for the other — which is what the three-argument
+     * form did. The headers are handed over in order and duplicates are kept: the Java client stores an
+     * ordered list too, so nothing has to be reconciled here.
      */
     private fun ProducerRecord.toApache(): ApacheRecord<ByteArray, ByteArray> =
         ApacheRecord(
             topic,
             partition,
-            null,
+            timestamp,
             key,
             value,
             headers.map { ApacheHeader(it.name, it.value) },

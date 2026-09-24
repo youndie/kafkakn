@@ -26,6 +26,17 @@ public class ProducerRecord(
      * `send`, on both arms, and how each arm says so is in the contract rather than promised equal.
      */
     public val partition: Int? = null,
+    /**
+     * When this record happened, in milliseconds since the epoch, or `null` for "now" — the client's
+     * clock at the moment the record is handed to it, which is what every record before this field
+     * carried.
+     *
+     * Kafka's own unit, not `kotlin.time.Instant`: the wire carries a `Long` of milliseconds, and a
+     * caller holding an instant converts it where they can see the decision. On a topic configured
+     * with `message.timestamp.type=LogAppendTime` the broker replaces it with its own clock, and
+     * [RecordMetadata.timestamp] is how a caller learns which one was kept.
+     */
+    public val timestamp: Long? = null,
 ) {
     init {
         // Here, where the record is made, rather than at `send`: both clients refuse a negative
@@ -33,11 +44,14 @@ public class ProducerRecord(
         // about the broker at all. librdkafka's own "unassigned" is -1, which is exactly the value a
         // caller could pass by mistake and have silently mean "let the partitioner choose".
         require(partition == null || partition >= 0) { "partition must not be negative, was $partition" }
+        // Both clients refuse a negative timestamp, at different moments; and -1 is what both use
+        // internally for "no timestamp", which a caller could pass meaning a date.
+        require(timestamp == null || timestamp >= 0) { "timestamp must not be negative, was $timestamp" }
     }
 
     override fun toString(): String =
         "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=${value.size} bytes, " +
-            "headers=${headers.size}, partition=${partition ?: "any"})"
+            "headers=${headers.size}, partition=${partition ?: "any"}, timestamp=${timestamp ?: "now"})"
 }
 
 /**
@@ -70,4 +84,15 @@ public data class RecordMetadata(
     public val topic: String,
     public val partition: Int,
     public val offset: Long,
+    /**
+     * The record's timestamp **as the broker kept it**, in milliseconds since the epoch: the one the
+     * record carried on an ordinary topic, and the broker's own clock on a topic configured with
+     * `message.timestamp.type=LogAppendTime` — which is the only way a caller can learn that the
+     * time they set was replaced.
+     *
+     * There is no field saying which of the two it was, and that is a finding rather than an
+     * omission: the Java client's `RecordMetadata` exposes the value and not its type, so a type here
+     * would be a field one arm could fill and the other could only guess.
+     */
+    public val timestamp: Long,
 )

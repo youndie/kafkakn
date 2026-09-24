@@ -49,6 +49,11 @@ case "${1:-}" in
         docker logs "$CONTAINER" 2>&1 | grep -iE "exception|error|missing" | tail -3 >&2
         exit 1
     }
+    # The fixture's own topics, the ones the suite assumes rather than the ones a script names for a
+    # run. Here once rather than in every script that runs the suite: there are six of those.
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
+        --topic kafkakn-logappend --partitions "$PARTITIONS" --replication-factor 1 \
+        --config message.timestamp.type=LogAppendTime >/dev/null 2>&1
     for _ in $(seq 1 30); do
         if kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$SSL_BOOTSTRAP" \
                 --command-config /etc/kafka/secrets/client-ssl.properties >/dev/null 2>&1; then
@@ -135,6 +140,13 @@ case "${1:-}" in
     kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
         --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
         --formatter-property print.value=true 2>/dev/null
+    ;;
+  timed-values)
+    # Every record's stored timestamp WITH ITS TYPE, then its value: "CreateTime:<ms>" or
+    # "LogAppendTime:<ms>", a tab, the value. The type is the half the Java client cannot report.
+    kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
+        --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
+        --formatter-property print.timestamp=true --formatter-property print.value=true 2>/dev/null
     ;;
   partition-values)
     # One partition's values, from the beginning, read by the broker's own consumer: the oracle for
