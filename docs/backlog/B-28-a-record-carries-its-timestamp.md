@@ -1,7 +1,7 @@
 ---
 id: B-28
 title: "A record carries its timestamp, and the metadata says which time the broker kept"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-5-producer-parity
