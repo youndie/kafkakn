@@ -50,6 +50,8 @@ internal actual fun smallQueueConfig(): Map<String, String> =
 
 internal actual fun backpressureWaitCount(): Long = backpressureWaits.value
 
+internal actual fun adminFailFastConfig(): Map<String, String> = mapOf("socket.timeout.ms" to "5000")
+
 internal actual fun failFastConfig(): Map<String, String> =
     mapOf(
         // librdkafka gives the record back with `Local: Message timed out` after this, which is the

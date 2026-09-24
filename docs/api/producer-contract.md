@@ -388,6 +388,47 @@ ones per target — the suite does exactly that through a per-arm helper
 ([research §2.6](../research/research-architecture.md)), and that helper is the honest shape rather
 than a workaround.
 
+## The admin client
+
+A separate `kafkaAdmin(AdminConfig)`, not calls on the producer ([B-34](../backlog/B-34-a-minimal-admin.md)):
+administration is a different lifecycle and usually a different set of permissions, and both clients
+keep it apart.
+
+```kotlin
+interface KafkaAdmin {
+    suspend fun createTopics(topics: List<NewTopic>)          // name, partitions, replication, topic config
+    suspend fun deleteTopics(names: List<String>)
+    suspend fun describeTopics(names: List<String>): Map<String, List<PartitionInfo>>
+    suspend fun describeCluster(): ClusterDescription         // cluster id, controller, nodes
+    suspend fun close()
+}
+```
+
+`AdminConfig` is held to the producer's rules: a key neither client honours fails at construction —
+the JVM arm against `AdminClientConfig.configNames()` — and the TLS and SASL keys are spelled,
+refused and translated exactly as for a producer.
+
+**No call holds the caller's dispatcher, and the two arms get there differently.** The JVM arm awaits
+`Admin`'s own futures, which complete on the client's network thread. The native arm submits each
+request to an event queue of its own and polls it with a zero timeout and a `delay` between polls —
+the delivery report's seam, bridged the same way. A queue per request is what keeps two concurrent
+calls from reading each other's answers. Held against a single-lane dispatcher with no broker, both
+arms waited 5 s and held it for under the tolerated 500 ms; with the JVM arm blocking on `get()`
+instead, the same test went red.
+
+**An existing topic is `TopicExistsException` on both arms**, each client's own error as the cause:
+the JVM client's `TopicExistsException`, librdkafka's per-topic `TOPIC_ALREADY_EXISTS`. Other failures
+are each client's own — `KafkaAdminException` on native, the Java client's exceptions on the JVM — and
+recorded, not promised. With no broker: the JVM *"Timed out waiting for a node assignment. Call:
+listNodes"*, native *"Failed while waiting for controller: Local: Timed out"*, both after 5 s.
+
+`controller` is whatever broker the cluster reports in that role. Under KRaft it is not necessarily a
+member of the controller quorum; on the fixture both arms reported node 1.
+
+**The suite does not build its fixtures with this client.** Everything it created is read back by
+`kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
+the same rule that keeps a producer from being checked by its own consumer.
+
 ## Errors
 
 | Situation | What the contract says |
@@ -398,6 +439,7 @@ than a workaround.
 | the broker refuses a configuration value | `send` throws, and the message carries the broker's own text |
 | TLS peer not verifiable | `send` throws and the message names certificate verification — but **not promptly on native**, see below |
 | SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
+| an admin client creates a topic that exists | `TopicExistsException`, on both arms |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | producer closed | `send` throws `IllegalStateException` |
 
