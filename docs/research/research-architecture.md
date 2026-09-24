@@ -335,7 +335,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
 | H5 | `linuxArm64` costs a matrix row and no code (D6) | [B-39](../backlog/B-39-linux-arm64.md) |
-| H6 | Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8) | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) |
+| H6 | ~~Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8)~~ — **settled 2026-09-24: yes, and systematically; see §2.19** | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) `done` |
 | H7 | A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model | [B-35](../backlog/B-35-the-consumer-designed-first.md) |
 
 ### 2.1 H1, settled: three kinds of assertion, and only one of them needs machinery
@@ -844,6 +844,51 @@ genuinely was 11 at the time.
 The fix is the default's removal, not a new check: 60 s of silence becomes an immediate failure
 naming the script that creates the topic, and `testTopic` and `strictTopic` keep their defaults
 because those fall back to exactly the names the scripts use.
+
+### 2.19 H6, settled: every record in flight when the acknowledgement is lost is written twice
+
+[B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md). The default disagreement of §1.8 —
+`enable.idempotence` `true` on the JVM, `false` on librdkafka — was a fact about two configuration
+tables. Whether it costs anything was H6, and it needed a fault that loses an acknowledgement on
+purpose.
+
+**The fault** is `docker pause` on the broker for six seconds, five times, while a driver outside this
+build produces unique values from fifty concurrent senders against a two-second client request
+timeout. A batch the broker appended just before the freeze gets no acknowledgement in time; the
+client retries it after the thaw; without idempotence the retry is appended again.
+
+**One detail decided whether the fixture could see anything at all.** In librdkafka,
+`request.timeout.ms` *"is only enforced by the broker"* — which is frozen. The client gives up on a
+request after `socket.timeout.ms`, sixty seconds by default, longer than any pause here. Setting only
+the key the Java client uses would have left the native arm never retrying anything, and its zero
+would have been a zero for the wrong reason.
+
+**Measured 2026-09-24**, `ci/b-25/run.sh`, the candidate published from the branch and resolved by a
+driver the way a stranger's build resolves it:
+
+| run | records on the topic | distinct | written twice |
+|---|---|---|---|
+| native, idempotence off — the control, first | 105 966 | 105 766 | **200** |
+| JVM, idempotence off | 116 300 | 116 050 | **250** |
+| native, default — after this item | 107 184 | 107 184 | **0** |
+| JVM, default | 153 874 | 153 874 | **0** |
+
+In every run *distinct* equals the number of records the driver handed in, and nothing was refused:
+the fault lost no record, it only duplicated some. **200 and 250 are multiples of fifty — the
+driver's concurrency.** The reading, and it is a reading rather than a measurement: each freeze that
+caught requests in flight caught one per sender, and **every one of them was written twice** — four
+of five freezes on the native control, five of five on the JVM. The duplicate is not a rare race the
+fixture was lucky to hit; it is what happens to everything in flight when an acknowledgement is lost.
+
+So before this item, the same program would have written a quarter-thousand records twice on the
+native arm and none on the JVM arm under the same broker failure, and each arm would have been
+individually consistent with the broker — the shape of §2.2, found by the same method.
+
+**The default kafkakn now takes is the reference arm's, conditions included** — measured against the
+jar, not assumed: on unless the caller set `acks` below all or `retries` to zero, when it turns off
+without a word; and more than five requests in flight is refused even with idempotence unset. A
+native default that was simply "on" would have made librdkafka refuse `acks=1`, which the reference
+accepts. `IdempotenceTest` holds all seven rows against both arms.
 
 ## 4. Risks, with the machinery that would catch them
 

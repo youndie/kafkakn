@@ -97,11 +97,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (17)
+## Open (16)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[ ]` | The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other | P0 | M | - |
 | [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[ ]` | compression.type is named portable in the contract and no test has ever set it | P1 | S | - |
 | [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[ ]` | A record can name its partition, as it can in every other client | P1 | S | - |
 | [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[ ]` | A record carries its timestamp, and the metadata says which time the broker kept | P1 | S | - |
@@ -119,7 +118,7 @@ verdict.
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (24)
+## Closed (25)
 
 **It builds, and a test can fail**
 
@@ -159,6 +158,10 @@ verdict.
 - [B-20](docs/backlog/B-20-a-strangers-first-ten-minutes.md) `[x]` - RQ-C: does the artefact resolve and link on a machine that has never seen this repository?
 - [B-21](docs/backlog/B-21-does-anyone-want-this.md) `[-]` - RQ-B: does anyone outside this portfolio want it?
 - [B-23](docs/backlog/B-23-the-sink-that-does-not-wait.md) `[x]` - The publish that returns before the acknowledgement — the shape RQ-A could not reach
+
+**The producer other clients have**
+
+- [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[x]` - The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other
 
 <!-- END INDEX -->
 

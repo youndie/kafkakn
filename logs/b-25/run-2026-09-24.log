@@ -1,0 +1,29 @@
+=== environment ===
+2026-09-24T21:59:34+02:00
+  io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT, candidate from this checkout
+  45 s of producing per run, 5 pauses of 6 s against a 2 s request timeout
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+
+=== the candidate, and a driver built against it the way a stranger would build one ===
+25 actionable tasks: 10 executed, 15 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+8 actionable tasks: 1 executed, 7 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+
+=== the control: native, idempotence off - THIS MUST WRITE SOMETHING TWICE ===
+  native-off       records=105966  distinct=105766  written-twice=200   exit=0  handed-in=105766 refused=0 idempotence=false
+  it did: the fixture can see a record written twice
+
+=== the same fault, the Java client with idempotence off, for comparison ===
+  jvm-off          records=116300  distinct=116050  written-twice=250   exit=0  handed-in=116050 refused=0 idempotence=false
+
+=== the defaults, which is what this item changed ===
+  native-default   records=107184  distinct=107184  written-twice=0     exit=0  handed-in=107184 refused=0 idempotence=default
+  jvm-default      records=153874  distinct=153874  written-twice=0     exit=0  handed-in=153874 refused=0 idempotence=default
+
+=== verdict ===
+B-25: with idempotence off the native arm writes a retried record twice; by default neither arm does

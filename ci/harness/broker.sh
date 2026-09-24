@@ -129,6 +129,13 @@ case "${1:-}" in
         --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
         --formatter-property print.key=true --formatter-property print.value=false 2>/dev/null
     ;;
+  values)
+    # Every value on the topic, one per line, read by the broker's own consumer: the oracle for "was
+    # anything written twice". Only meaningful for values that are unique by construction.
+    kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
+        --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
+        --formatter-property print.value=true 2>/dev/null
+    ;;
   produce)
     # Reads stdin. Note kci, not kc.
     kci /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP" \

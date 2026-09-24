@@ -100,6 +100,30 @@ C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_p
 | `ssl.ca.location` | path to a PEM certificate authority | librdkafka's own key | translated to `ssl.truststore.location` + `ssl.truststore.type=PEM` |
 | `ssl.endpoint.identification.algorithm` | `https` (the default) or `none` — **hostname** checking | librdkafka's own key, and its own spelling of off | `none` is translated to the empty string the Java client documents |
 
+#### Idempotence is on by default on both arms — the reference arm's default, conditions included
+
+**Decided 2026-09-24** ([B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md)). The two
+clients disagreed: `enable.idempotence` defaults to `true` in `kafka-clients` and to `false` in
+librdkafka. Under a broker that loses acknowledgements the native arm wrote **200** records twice where
+the JVM arm, left at its default, wrote none ([research §2.19](../research/research-architecture.md)).
+
+The native arm now takes the Java client's default, and that default is conditional, measured
+against `kafka-clients` 4.3.1:
+
+| the caller set | idempotence |
+|---|---|
+| nothing | **on** |
+| `acks` other than `all` | off, **silently** |
+| `retries=0` | off, **silently** |
+| `enable.idempotence` | what they set |
+| `acks=1` and `enable.idempotence=true` | refused at construction |
+| `max.in.flight.requests.per.connection` above 5 | **refused at construction**, even with idempotence unset |
+
+The silent rows are the Java client's behaviour, kept on purpose: a default that was simply "on"
+would make librdkafka refuse `acks=1`, which the reference accepts — a configuration that works on the
+arm a caller runs locally and fails on the one they ship. The last row is the surprising one, and it
+is also the reference's.
+
 #### Certificate trust cannot be turned off, and hostname checking can
 
 **`enable.ssl.certificate.verification` is refused at construction on both arms, by decision**
