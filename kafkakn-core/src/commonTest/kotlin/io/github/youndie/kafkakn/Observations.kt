@@ -171,6 +171,15 @@ internal val clientKeyPassword: String get() = testEnv("KAFKAKN_CLIENT_KEY_PASSW
 internal val wrongClientCertPath: String get() = testEnv("KAFKAKN_WRONG_CLIENT_CERT") ?: tlsFile("wrong-client.pem")
 internal val wrongClientKeyPath: String get() = testEnv("KAFKAKN_WRONG_CLIENT_KEY") ?: tlsFile("wrong-client.key")
 
+/**
+ * A topic with a partition count no other topic here has, so an answer describing the wrong topic
+ * cannot pass for the right one. The default is the fixture's own (`broker.sh up` creates it);
+ * `ci/b-29/run.sh` makes a fresh one.
+ */
+internal val metadataTopic: String get() = testEnv("KAFKAKN_METADATA_TOPIC") ?: "kafkakn-metadata"
+internal val metadataPartitions: Int get() = testEnv("KAFKAKN_METADATA_PARTITIONS")?.toInt() ?: METADATA_PARTITIONS
+private const val METADATA_PARTITIONS = 7
+
 /** The SASL listeners (B-32): over plaintext, and over TLS — the second is what hosted Kafka is. */
 internal val saslBootstrap: String get() = testEnv("KAFKAKN_SASL_BOOTSTRAP") ?: "127.0.0.1:9096"
 internal val saslSslBootstrap: String get() = testEnv("KAFKAKN_SASL_SSL_BOOTSTRAP") ?: "127.0.0.1:9097"

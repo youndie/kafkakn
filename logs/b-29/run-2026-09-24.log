@@ -1,0 +1,27 @@
+=== environment ===
+2026-09-25T00:11:19+02:00
+  topics kafkakn-b29-1790287879 and kafkakn-metadata-1790287879 (7 partitions), fresh
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-b29-1790287879	TopicId: iP6ymRWGSWmRTS1CznR_cA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+Topic: kafkakn-metadata-1790287879	TopicId: 69bN4dtISHi29G5jgY8LxQ	PartitionCount: 7	ReplicationFactor: 1	Configs: min.insync.replicas=1
+  the broker says: 0:1:1:1;1:1:1:1;2:1:1:1;3:1:1:1;4:1:1:1;5:1:1:1;6:1:1:1
+
+=== both arms, one test task per invocation, rerun every time ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== what each arm answered, against what the broker described ===
+  jvm       agrees: 0:1:1:1;1:1:1:1;2:1:1:1;3:1:1:1;4:1:1:1;5:1:1:1;6:1:1:1
+  linuxX64  agrees: 0:1:1:1;1:1:1:1;2:1:1:1;3:1:1:1;4:1:1:1;5:1:1:1;6:1:1:1
+
+=== an unknown topic, and a broker that is not there - recorded, not compared ===
+  jvm       unknown topic after 20021 ms: TimeoutException: Topic kafkakn-no-such-topic-46tspdec1 not present in metadata after 20000 ms.
+  jvm       no broker, waited 20169 ms off the caller's dispatcher
+  linuxX64  unknown topic after 57 ms: KafkaMetadataException: partitionsFor(kafkakn-no-such-topic-17902879525u2e): Broker: Unknown topic or partition
+  linuxX64  no broker, waited 5002 ms off the caller's dispatcher
+
+B-29: both arms describe the topic as the broker does, and neither holds the caller's dispatcher

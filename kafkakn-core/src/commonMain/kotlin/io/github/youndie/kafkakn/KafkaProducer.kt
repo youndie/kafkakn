@@ -23,6 +23,19 @@ public interface KafkaProducer {
      */
     public suspend fun send(record: ProducerRecord): RecordMetadata
 
+    /**
+     * The partitions of [topic], as this producer's connection to the cluster sees them, ordered by
+     * partition id ([B-29](../../../../../../../docs/backlog/B-29-topic-metadata.md)).
+     *
+     * **Suspends, and waits off the caller's dispatcher on both arms.** Both clients answer this with
+     * a blocking call — `Producer.partitionsFor` for up to `max.block.ms`, `rd_kafka_metadata` for up
+     * to its timeout — and a suspend signature over a blocking call holds the thread it was called on.
+     *
+     * An unknown topic fails. How, and after how long, differs per arm and is recorded in the
+     * contract rather than promised here.
+     */
+    public suspend fun partitionsFor(topic: String): List<PartitionInfo>
+
     /** Returns when every record handed to [send] has been acknowledged or has failed. */
     public suspend fun flush()
 
@@ -50,7 +63,25 @@ public expect fun kafkaProducer(config: ProducerConfig): KafkaProducer
 internal object UnimplementedProducer : KafkaProducer {
     override suspend fun send(record: ProducerRecord): RecordMetadata = TODO("no producer yet")
 
+    override suspend fun partitionsFor(topic: String): List<PartitionInfo> = TODO("no producer yet")
+
     override suspend fun flush(): Unit = TODO("no producer yet")
 
     override suspend fun close(): Unit = TODO("no producer yet")
 }
+
+/**
+ * One partition of a topic, as the cluster described it.
+ *
+ * Node ids rather than nodes: both clients describe a broker by id, host and port, and the id is the
+ * part a caller can compare with `kafka-topics.sh --describe`. [leader] is null when the partition
+ * has none — the Java client reports that as a null or `Node.noNode()`, librdkafka as `-1`, and one
+ * answer is what a caller should have to handle.
+ */
+public data class PartitionInfo(
+    public val topic: String,
+    public val partition: Int,
+    public val leader: Int?,
+    public val replicas: List<Int>,
+    public val inSyncReplicas: List<Int>,
+)

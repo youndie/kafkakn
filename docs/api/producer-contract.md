@@ -27,6 +27,7 @@ and against each other.
 ```kotlin
 interface KafkaProducer {
     suspend fun send(record: ProducerRecord): RecordMetadata
+    suspend fun partitionsFor(topic: String): List<PartitionInfo>   // B-29
     suspend fun flush()
     suspend fun close()
 }
@@ -45,7 +46,7 @@ Construction is a top-level `expect fun` rather than an `expect class`: the inte
 common code that both arms implement, and only the factory is platform-specific.
 
 Nothing else is public in M1. `sendAll`, headers, transactions and partitioner overrides are absent
-until an item asks for them. (Headers arrived with B-10; an explicit partition and a timestamp with B-27 and B-28, below.)
+until an item asks for them. (Headers arrived with B-10; an explicit partition and a timestamp with B-27 and B-28, below; `partitionsFor` with B-29.)
 
 ## What each call promises
 
@@ -207,6 +208,37 @@ A wrong password makes `send` throw, and the message **names authentication**. A
 unverifiable peer, the native arm reports it through the error callback — measured, *"… SASL
 authentication error: Authentication failed: Invalid username or password"* — and waits out
 `message.timeout.ms` first; the JVM arm throws `SaslAuthenticationException` at once.
+
+### `partitionsFor`
+
+`suspend fun partitionsFor(topic: String): List<PartitionInfo>` — partition id, leader, replicas and
+in-sync replicas, ordered by partition, as the producer's own connection to the cluster sees them
+([B-29](../backlog/B-29-topic-metadata.md)). `Producer.partitionsFor` on the JVM, `rd_kafka_metadata`
+on native. `leader` is null when a partition has none — the Java client says that with a null or
+`Node.noNode()`, librdkafka with `-1`.
+
+**It waits off the caller's dispatcher on both arms**, and the test that says so was wrong first.
+Both clients answer with a blocking call. Its first version measured the silence from inside a
+ticker that could not start until the call was over, and passed on both arms against an
+implementation that blocked the caller; corrected, it held a single-lane dispatcher for **20 s on the
+JVM and 5 s on native** against a broker that was not there, and for well under the 500 ms it
+tolerates once the call moved to `Dispatchers.IO`. Cancelling the caller stops it waiting; it does
+not interrupt the client underneath.
+
+**How long it waits is each client's own bound, and they are different keys.** The JVM arm waits
+`max.block.ms`; the native arm passes the effective `socket.timeout.ms` — librdkafka's timeout for
+network requests — because `max.block.ms` does not exist there.
+
+**An unknown topic fails on both arms, and not alike.** Recorded, not promised, measured 2026-09-24:
+
+| arm | how | after |
+|---|---|---|
+| native | `KafkaMetadataException: … Broker: Unknown topic or partition` — the broker's answer, read from the described topic's own error | 57 ms, in each of two runs |
+| JVM | `TimeoutException: Topic … not present in metadata after 20000 ms` | 20 021 ms and 17 081 ms in two runs, with `max.block.ms` at 20 000 — the message names the bound, not the wait |
+
+The native answer arrives as a *described topic carrying an error*, not as a failed call: an
+implementation that read only the call's return code would report an unknown topic as a topic with
+no partitions.
 
 ### `flush`
 
