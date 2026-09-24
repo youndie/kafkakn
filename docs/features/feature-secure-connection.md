@@ -33,7 +33,10 @@ plaintext one, and both arms refusing a broker signed by an authority they were 
 - Hostname checking can be relaxed, and that is the only part of TLS this API lets a caller weaken:
   `ssl.endpoint.identification.algorithm=none`.
 - A peer that cannot be verified fails loudly, and the failure names certificate verification.
-- SASL in every form is out of scope ([D2](../research/research-architecture.md)).
+- SASL is not built yet. Since D2 was amended on 2026-09-24 it is planned — PLAIN and SCRAM in
+  [B-32](../backlog/B-32-sasl-plain-and-scram.md), OAUTHBEARER in
+  [B-33](../backlog/B-33-sasl-oauthbearer.md) — and client certificates in
+  [B-31](../backlog/B-31-client-certificates.md).
 
 ## 3. Scenarios (BDD / test cases)
 

@@ -42,6 +42,22 @@ The third question — whether anybody outside this portfolio wants it — **is 
 mechanism, announcing, and nothing from this project is posted anywhere; the item that held it is
 dropped with the cost of dropping it written down ([B-21](docs/backlog/B-21-does-anyone-want-this.md)).
 
+### Stages 5 to 9: toward the clients underneath
+
+**Opened 2026-09-24 at the owner's request** — bring kafkakn closer to what other Kafka clients do.
+[D2](docs/research/research-architecture.md) is amended rather than removed: the fence becomes an
+ordered roadmap, and the order is the part of it that survives.
+
+The unusual thing about this distance is where it lies. **Both arms already are full clients** —
+librdkafka and `kafka-clients` each consume, coordinate groups, run transactions, administer topics
+and speak SASL ([research §1.8](docs/research/research-architecture.md), read out of the artefacts).
+What kafkakn lacks is surface and tests, so every item below arrives with a differential test, and
+each is a place the two arms could disagree without either noticing.
+
+The first thing §1.8 found is not a missing feature: **the arms disagree by default on
+`enable.idempotence`** — `true` on the JVM, `false` on librdkafka — which is why the stage opens with
+[B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) at P0, ahead of anything new.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -69,6 +85,11 @@ verdict.
 | `stage-2-real-use` | Usable against a real deployment | Headers and TLS. |
 | `stage-3-usable-by-others` | Someone else can use it | Snapshots, and a build outside this repository that proves it. |
 | `stage-4-a-real-user` | Somebody actually runs it | A publisher in a deployment no test harness controls, a stranger's first ten minutes, and whether anyone outside the portfolio wants it. |
+| `stage-5-producer-parity` | The producer other clients have | What already ships and was never measured, then explicit partition, timestamp, topic metadata and transactions. |
+| `stage-6-real-deployments` | It connects where it is deployed | Client certificates, SASL, and the metrics an operator reads. |
+| `stage-7-admin` | It can manage what it writes to | Topics and the cluster, created and described through the same two arms. |
+| `stage-8-consume` | It reads — designed before it is built | The consumer, in the order that keeps group coordination last: a design, assign-and-poll, groups, exactly-once. |
+| `stage-9-targets` | Where it runs | `linuxArm64`, and macOS so a contributor can run the native arm locally. |
 
 ## Marks
 
@@ -76,9 +97,27 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (17)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[ ]` | The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other | P0 | M | - |
+| [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[ ]` | compression.type is named portable in the contract and no test has ever set it | P1 | S | - |
+| [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[ ]` | A record can name its partition, as it can in every other client | P1 | S | - |
+| [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[ ]` | A record carries its timestamp, and the metadata says which time the broker kept | P1 | S | - |
+| [B-31](docs/backlog/B-31-client-certificates.md) `[ ]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
+| [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[ ]` | SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them | P1 | M | - |
+| [B-29](docs/backlog/B-29-topic-metadata.md) `[ ]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
+| [B-30](docs/backlog/B-30-transactions.md) `[ ]` | Transactions: records that become visible together, or not at all | P2 | L | B-25 |
+| [B-34](docs/backlog/B-34-a-minimal-admin.md) `[ ]` | A minimal admin client: create, delete and describe topics, describe the cluster | P2 | M | - |
+| [B-35](docs/backlog/B-35-the-consumer-designed-first.md) `[ ]` | The consumer, designed before it is built: a contract document and the defaults it starts from | P2 | M | - |
+| [B-36](docs/backlog/B-36-assign-and-poll.md) `[ ]` | A consumer without a group: assign partitions, seek, and read as a Flow | P2 | L | B-35 |
+| [B-37](docs/backlog/B-37-consumer-groups.md) `[ ]` | Consumer groups: subscribe, rebalance, commit — and a group with one consumer from each arm | P2 | XL | B-36 |
+| [B-39](docs/backlog/B-39-linux-arm64.md) `[ ]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
+| [B-33](docs/backlog/B-33-sasl-oauthbearer.md) `[ ]` | SASL OAUTHBEARER with a token the caller supplies | P3 | M | B-32 |
+| [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[ ]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
+| [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
+| [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
 ## Closed (24)
 
@@ -136,10 +175,13 @@ place in [the producer contract](docs/api/producer-contract.md) or in Kafka's ow
 A test written from common sense is not accepted — the common sense here says a produce call that
 returns has sent something, and on the native side that is false.
 
-**Producer only.** No consumer, no group coordination, no transactions, no Admin API, no SASL. Group
-coordination is where most of a Kafka client's difficulty lives, and a thin consumer shipped for
-symmetry would be the worse outcome. The fence moves when somebody asks, not because the shape looks
-incomplete.
+**Producer first, and the consumer last.** Until 2026-09-24 this read *producer only*: no consumer,
+no group coordination, no transactions, no Admin API, no SASL, and "the fence moves when somebody
+asks". Somebody asked — the owner, to bring kafkakn closer to the clients underneath it — and the
+fence became an order rather than a wall ([D2](docs/research/research-architecture.md), amended).
+What it kept is the reason: group coordination is where most of a Kafka client's difficulty lives, so
+the consumer comes after everything else, and its first item is a design document rather than code.
+A thin consumer shipped for symmetry is still the worse outcome; it is now avoided by sequencing.
 
 **A record that was never queued yields no delivery report.** This is the mechanism behind a measured
 loss of 264 826 records in 1 000 000 with every indicator green. Everything in

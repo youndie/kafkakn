@@ -1,11 +1,15 @@
 # CLAUDE.md — kafkakn
 
-A Kafka **producer** for Kotlin Multiplatform: one `expect` surface, two actuals — librdkafka
-through cinterop on Kotlin/Native, `org.apache.kafka:kafka-clients` on the JVM. Targets `jvm` and
-`linuxX64` are mandatory; `linuxArm64` is designed for and not built.
+A Kafka client for Kotlin Multiplatform — a **producer** today: one `expect` surface, two actuals —
+librdkafka through cinterop on Kotlin/Native, `org.apache.kafka:kafka-clients` on the JVM. Targets
+`jvm` and `linuxX64` are mandatory; `linuxArm64` is designed for and not built.
 
-**State: nothing is implemented.** The repository holds the research, the contract, the features and
-the backlog. Read before writing code — the obvious design is wrong in four documented ways.
+**State: the producer is built, measured and published as snapshots** — stages 0 to 4 are closed.
+Stages 5 to 9 (opened 2026-09-24) bring it toward what the clients underneath already do: producer
+parity, SASL and client certificates, a minimal admin, and a consumer that comes last and is designed
+first. This line used to say *nothing is implemented*, and said it for twenty-four closed items after
+it stopped being true. Read before writing code — the obvious design is wrong in four documented
+ways.
 
 ## Where to start a session
 
