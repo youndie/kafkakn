@@ -185,7 +185,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 | transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | the four since [B-30](../backlog/B-30-transactions.md) — §2.23; `sendOffsetsToTransaction` is B-38 |
 | explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | partition since [B-27](../backlog/B-27-a-record-can-name-its-partition.md), timestamp since [B-28](../backlog/B-28-a-record-carries-its-timestamp.md) |
 | topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | `partitionsFor` since [B-29](../backlog/B-29-topic-metadata.md) — §2.22 |
-| consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | absent — D2 |
+| consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | assign, seek and poll since [B-36](../backlog/B-36-assign-and-poll.md) — §2.25 |
 | consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |
 | administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | create, delete and describe topics, describe the cluster since [B-34](../backlog/B-34-a-minimal-admin.md); the rest is not planned |
 | compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | named portable in the contract and never measured until [B-26](../backlog/B-26-compression-was-never-measured.md): **all four, both arms, stored as asked** |
@@ -336,7 +336,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
 | H5 | `linuxArm64` costs a matrix row and no code (D6) | [B-39](../backlog/B-39-linux-arm64.md) |
 | H6 | ~~Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8)~~ — **settled 2026-09-24: yes, and systematically; see §2.19** | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) `done` |
-| H7 | A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model — **restated 2026-09-24, not settled: see §2.24** | [B-36](../backlog/B-36-assign-and-poll.md) |
+| H7 | ~~A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model~~ — **settled 2026-09-24 for assign and poll: yes, see §2.25; groups are B-37's** | [B-36](../backlog/B-36-assign-and-poll.md) `done` |
 
 ### 2.1 H1, settled: three kinds of assertion, and only one of them needs machinery
 
@@ -1018,6 +1018,32 @@ contract rather than leaking from one platform. That is an argument, and H7 is s
 consumer concurrently never produce a `ConcurrentModificationException`; cancelling a `poll` that is
 waiting returns promptly and leaves the consumer usable; and neither holds the caller's dispatcher,
 held with the mark taken before the call (§2.22).
+
+### 2.25 H7, settled for assign and poll — and two things the reading did not predict
+
+[B-36](../backlog/B-36-assign-and-poll.md) built the surface §2.24 designed and made the three
+measurements it named, on both arms, each watched red against a mutant:
+
+| Measurement | Result | The mutant that turned it red |
+|---|---|---|
+| eight coroutines polling one consumer at once | every record once, nothing thrown | JVM lane replaced by `Dispatchers.IO`: *"KafkaConsumer is not safe for multi-threaded access"* |
+| a waiting `poll` cancelled, then the next call | released in 16 ms (JVM) / 0 ms (native); next call at once | JVM without `wakeup()`: released at once, **next call 55 s later** |
+| a waiting `poll` against a single-lane caller | under 500 ms of silence | native blocking in `rd_kafka_consumer_poll(timeout)`: 3.0 s |
+
+**The second row's first version passed its mutant.** It timed the cancellation, which returns at once
+either way because the waiting call is detached from its caller; what the missing `wakeup()` breaks is
+the *next* call, queued behind a `poll` nobody is waiting for. §2.22's lesson again, in a new shape:
+the fixture measured the moment next to the one that matters.
+
+**Two librdkafka requirements the design did not know**, each answered by the native arm doing more:
+`rd_kafka_assign` needs a `group.id` (*"Local: Unknown group"*; the native arm supplies a private one
+that joins nothing — `kafka-consumer-groups.sh --list` confirms it never appears), and a seek before
+fetching has started is refused (*"Local: Erroneous state"*, as `rdkafka.h` warns; the native arm seeks
+by re-assigning).
+
+**And one about the fixture.** Records stamped in 2023, so that a seek to a time has one right
+answer, were deleted by the broker within minutes: time-based retention reads the records' time. The
+consumer's topic is created with `retention.ms=-1`.
 
 ## 4. Risks, with the machinery that would catch them
 

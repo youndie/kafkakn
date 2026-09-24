@@ -6,12 +6,13 @@ status: active
 services:
   - kafkakn-core
 contract_source:
-  - "kafkakn:kafkakn-core io.github.youndie.kafkakn.KafkaConsumer (target — nothing is built yet)"
+  - kafkakn:kafkakn-core io.github.youndie.kafkakn.KafkaConsumer
 ---
 
 # The consumer contract
 
-**Nothing here is built.** This document is [B-35](../backlog/B-35-the-consumer-designed-first.md):
+**Assign, seek and poll are built and measured** ([B-36](../backlog/B-36-assign-and-poll.md),
+2026-09-24); groups are not. This document began as [B-35](../backlog/B-35-the-consumer-designed-first.md):
 the consumer designed before any of it is written, because the questions that decide its shape are
 questions about the two clients underneath, and none of them is answered by writing a `poll` loop.
 Every promise below is ***target*** until the item named beside it measures it; the facts it rests
@@ -41,7 +42,7 @@ half of it twice ([research §2.3, §2.13](../research/research-architecture.md)
 `librdkafka-2.13.0.tar.gz!/INTRODUCTION.md` ("Threads and callbacks", and the offset store: *"updated by
 `consumer_poll()` … to store the offset of the last message passed to the application"*).
 
-**The decision (*target*, [B-36](../backlog/B-36-assign-and-poll.md)).**
+**The decision — built and measured in [B-36](../backlog/B-36-assign-and-poll.md).**
 
 - **JVM arm:** every call to the Java consumer runs on a lane of its own —
   `Dispatchers.IO.limitedParallelism(1)` per consumer. One lane means no two calls ever overlap, which
@@ -55,6 +56,14 @@ half of it twice ([research §2.3, §2.13](../research/research-architecture.md)
 - **Native arm:** `rd_kafka_consumer_poll(rk, 0)` in a loop with `delay` between empty polls — the
   producer's delivery-report pump, again. Nothing waits inside C, so cancellation is immediate and no
   thread is held.
+- **Measured, both arms**: eight coroutines polling one consumer at once read every record exactly
+  once and nothing threw; with the JVM lane replaced by plain `Dispatchers.IO`, the Java client threw
+  *"KafkaConsumer is not safe for multi-threaded access"* — the check read above, seen. A cancelled
+  `poll` returned in 16 ms (JVM) and 0 ms (native), and the next call was served at once; with the
+  `wakeup()` removed the caller was still released at once — and the next call waited 55 s behind the
+  abandoned `poll`, which is why the test times the next call and not the cancellation. A waiting
+  `poll` held a single-lane caller for under 500 ms on both arms; the native arm made to block in
+  `rd_kafka_consumer_poll(timeout)` held it for 3.0 s.
 - **Neither arm hides `max.poll.interval.ms`.** A caller who takes longer than that between polls is
   removed from the group on both arms. That is Kafka's rule rather than a platform's, so the contract
   states it instead of working around it — and it is the reason for §2.
@@ -62,14 +71,14 @@ half of it twice ([research §2.3, §2.13](../research/research-architecture.md)
 ## 2. Shape: an explicit `poll` first, a `Flow` built on it later
 
 ```kotlin
-interface KafkaConsumer {                                   // target
+interface KafkaConsumer {                                   // B-36
     suspend fun assign(partitions: List<TopicPartition>)   // B-36
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
     suspend fun poll(timeout: Duration): List<ConsumerRecord>
     suspend fun close()
 }
 
-data class ConsumerRecord(                                  // target
+class ConsumerRecord(                                       // B-36
     val topic: String,
     val partition: Int,
     val offset: Long,
@@ -93,6 +102,19 @@ data class ConsumerRecord(                                  // target
   `Flow` as the first and only shape.
 - **Groups come second** ([B-37](../backlog/B-37-consumer-groups.md)): `subscribe`, `commit`, and the
   rebalance callbacks, which run inside `poll` on both arms and therefore on the lane of §1.
+
+### Two things librdkafka needs that the design did not know
+
+Found by B-36, and each is the native arm doing more so that both arms mean the same.
+
+- **`rd_kafka_assign` needs a `group.id`.** Without one it answers *"Local: Unknown group"*; the Java
+  client assigns without. A caller who names no group gets a private one on the native arm,
+  `kafkakn-assign-<random>`, which joins nothing and commits nothing — `kafka-consumer-groups.sh --list`
+  shows no such group after the run.
+- **A seek before fetching has started is refused**: *"Local: Erroneous state"*, as `rdkafka.h`
+  warns — a seek is for partitions *"already assigned/consumed"*. The Java client seeks at any moment
+  after `assign`. So the native arm seeks by **re-assigning**, with the partition moved and every other
+  one at the next offset this side has handed out.
 
 ## 3. Defaults: every key this contract names, read from both artefacts
 
@@ -143,8 +165,13 @@ client's own semantics, and the contract says which.
 
 ## 4. The oracle
 
-- **Records are written by `kafka-console-producer`, not by this library**, and include what a
-  text-shaped path would damage: non-UTF-8 values, null keys, null values, duplicate header names.
+- **Records are written by a third party, not by this library**, and include what a text-shaped path
+  would damage: non-UTF-8 values, null keys, null values, duplicate header names, empty next to null.
+  **Not `kafka-console-producer`**, which this section first named: the console tools carry text, and a
+  value that is not UTF-8 comes back from them as U+FFFD. The third party is the Kafka distribution's
+  own client, run as a program of its own (`ci/harness/Records.java`) that writes the records and reads
+  them back as hex; kafkakn is not on its classpath. Measured, B-36: both arms read all twenty byte for
+  byte as it does, and as each other.
   A consumer checked against our own producer can be wrong in the same way as it and agree with
   itself — the reverse of the rule the producer lives by.
 - **Both arms read the same partitions, and their readings are compared with each other and with

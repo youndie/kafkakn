@@ -1,0 +1,17 @@
+/home/youndie/b36-mut-jvm.log:ConsumerTest[jvm] > cancelling_a_waiting_poll_returns_promptly_and_the_consumer_stays_usable()[jvm] FAILED
+/home/youndie/b36-mut-jvm.log:ConsumerTest[jvm] > overlapping_calls_on_one_consumer_are_queued_not_interleaved()[jvm] FAILED
+/home/youndie/b36-mut-jvm.log:5 tests completed, 2 failed
+/home/youndie/b36-mut-jvm.log:> Task :kafkakn-core:jvmTest FAILED
+/home/youndie/b36-mut-jvm.log:BUILD FAILED in 20s
+/home/youndie/b36-mut-native.log:io.github.youndie.kafkakn.ConsumerTest.cancelling_a_waiting_poll_returns_promptly_and_the_consumer_stays_usable[linuxX64] FAILED
+/home/youndie/b36-mut-native.log:io.github.youndie.kafkakn.ConsumerTest.a_waiting_poll_does_not_hold_the_callers_dispatcher[linuxX64] FAILED
+/home/youndie/b36-mut-native.log:> Task :kafkakn-core:linuxX64Test FAILED
+/home/youndie/b36-mut-native.log:5 tests completed, 2 failed
+/home/youndie/b36-mut-native.log:BUILD FAILED in 1m 25s
+/home/youndie/b36-mut3-jvm.log:ConsumerTest[jvm] > cancelling_a_waiting_poll_returns_promptly_and_the_consumer_stays_usable()[jvm] FAILED
+/home/youndie/b36-mut3-jvm.log:5 tests completed, 1 failed
+/home/youndie/b36-mut3-jvm.log:> Task :kafkakn-core:jvmTest FAILED
+/home/youndie/b36-mut3-jvm.log:BUILD FAILED in 1m 15s
+ConcurrentModificationException: KafkaConsumer is not safe for multi-threaded access. currentThread(name: DefaultDispa
+ConcurrentModificationException: KafkaConsumer is not safe for multi-threaded access. currentThread(name: DefaultDispa
+took 55.221925068s to serve the next call after a cancelled poll
