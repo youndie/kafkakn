@@ -182,7 +182,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 
 | Capability | librdkafka 2.13.0 | kafka-clients 4.3.1 | kafkakn today |
 |---|---|---|---|
-| transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | absent |
+| transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | the four since [B-30](../backlog/B-30-transactions.md) — §2.23; `sendOffsetsToTransaction` is B-38 |
 | explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | partition since [B-27](../backlog/B-27-a-record-can-name-its-partition.md), timestamp since [B-28](../backlog/B-28-a-record-carries-its-timestamp.md) |
 | topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | `partitionsFor` since [B-29](../backlog/B-29-topic-metadata.md) — §2.22 |
 | consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | absent — D2 |
@@ -970,6 +970,25 @@ same reading turned up a claim in §2.13 that no test holds —
 | an unknown topic comes back from `rd_kafka_metadata` as a described topic with `err` set, the call itself succeeding | measured 2026-09-24, native `TopicMetadataTest`: *"Broker: Unknown topic or partition"* in 57 ms |
 | the Java client waits for an unknown topic's metadata and throws `TimeoutException` naming `max.block.ms` | measured, 20 021 ms and 17 081 ms in two runs at `max.block.ms=20000` |
 | both arms describe a 7-partition topic exactly as `kafka-topics.sh --describe` does | `ci/b-29/run.sh` |
+
+### 2.23 Transactions retire the end-offset oracle on the topics they touch
+
+[B-30](../backlog/B-30-transactions.md). Every accounting check since B-09 reconciled against end
+offsets. A transaction's commit or abort marker takes an offset, and an aborted transaction's
+records take theirs, so on a transactional topic the end offset is not a count of anything a caller
+asked for. The oracle there is records read by `kafka-console-consumer` under a **named** isolation
+level — `read_committed` for the claim, `read_uncommitted` as the positive control that an abort's
+records were written — and the coordinator's own `kafka-transactions.sh describe`.
+
+| Fact | Where verified |
+|---|---|
+| `-1` is the timeout librdkafka recommends for init (twice `transaction.timeout.ms`), commit and abort (the remaining time); other values "risk internal state desynchronization" | `librdkafka-2.13.0.tar.gz!/src/rdkafka.h`, the `rd_kafka_*_transaction` declarations |
+| fencing reaches the native caller as `_FENCED` from the transactional call, and as a fatal state afterwards | `librdkafka-2.13.0.tar.gz!/src/rdkafka.h`; measured, `TransactionTest` |
+| `kafka-console-consumer --consumer-property` still works in 4.3.1 and prints its deprecation notice **on stdout**, so it is counted as a record | measured 2026-09-24: 201 lines for 200 committed records; `--command-property` gives 200 |
+
+**Measured**, `ci/b-30/run.sh`, both arms: committed 50/50 under `read_committed`; aborted 0 under
+`read_committed` and 50 under `read_uncommitted`; `CompleteCommit` and `CompleteAbort` from the
+coordinator; a fenced producer's commit and next `send` both `ProducerFencedException`.
 
 ## 4. Risks, with the machinery that would catch them
 

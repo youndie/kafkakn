@@ -97,11 +97,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (12)
+## Open (11)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-30](docs/backlog/B-30-transactions.md) `[~]` | Transactions: records that become visible together, or not at all | P2 | L | B-25 |
 | [B-34](docs/backlog/B-34-a-minimal-admin.md) `[ ]` | A minimal admin client: create, delete and describe topics, describe the cluster | P2 | M | - |
 | [B-35](docs/backlog/B-35-the-consumer-designed-first.md) `[ ]` | The consumer, designed before it is built: a contract document and the defaults it starts from | P2 | M | - |
 | [B-36](docs/backlog/B-36-assign-and-poll.md) `[ ]` | A consumer without a group: assign partitions, seek, and read as a Flow | P2 | L | B-35 |
@@ -114,7 +113,7 @@ verdict.
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (31)
+## Closed (32)
 
 **It builds, and a test can fail**
 
@@ -162,6 +161,7 @@ verdict.
 - [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[x]` - A record can name its partition, as it can in every other client
 - [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[x]` - A record carries its timestamp, and the metadata says which time the broker kept
 - [B-29](docs/backlog/B-29-topic-metadata.md) `[x]` - partitionsFor: what a topic looks like, from the producer that writes to it
+- [B-30](docs/backlog/B-30-transactions.md) `[x]` - Transactions: records that become visible together, or not at all
 
 **It connects where it is deployed**
 

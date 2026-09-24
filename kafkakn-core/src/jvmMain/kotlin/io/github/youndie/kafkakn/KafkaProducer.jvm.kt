@@ -3,12 +3,14 @@ package io.github.youndie.kafkakn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import org.apache.kafka.clients.producer.ProducerConfig as ApacheProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord as ApacheRecord
+import org.apache.kafka.common.errors.ProducerFencedException as ApacheProducerFencedException
 import org.apache.kafka.common.header.internals.RecordHeader as ApacheHeader
 
 /**
@@ -151,6 +153,26 @@ private fun readPem(path: String): String =
         )
     }
 
+/**
+ * The Java client's fencing, as the one exception kafkakn throws for it on both arms (B-30).
+ *
+ * Found anywhere in the cause chain, because the client does not always throw it directly: once
+ * fenced, a producer is in an error state, and later calls can report that state with the fencing
+ * as its cause. The client's own exception stays attached as the cause.
+ */
+private fun Throwable.asFenced(): ProducerFencedException? =
+    generateSequence(this) { it.cause }
+        .take(CAUSE_DEPTH)
+        .firstOrNull { it is ApacheProducerFencedException }
+        ?.let {
+            ProducerFencedException(
+                "fenced by a newer producer with the same transactional.id: ${it.message}",
+                this,
+            )
+        }
+
+private const val CAUSE_DEPTH = 10
+
 internal class JvmKafkaProducer(
     config: ProducerConfig,
 ) : KafkaProducer {
@@ -214,7 +236,7 @@ internal class JvmKafkaProducer(
                 delegate.send(record.toApache()) { metadata, failure ->
                     when {
                         failure != null -> {
-                            continuation.resumeWithException(failure)
+                            continuation.resumeWithException(failure.asFenced() ?: failure)
                         }
 
                         else -> {
@@ -268,6 +290,25 @@ internal class JvmKafkaProducer(
                     inSyncReplicas = info.inSyncReplicas().map { it.id() },
                 )
             }.sortedBy { it.partition }
+
+    // The transactional calls block inside the client - `initTransactions` and the two that end a
+    // transaction for up to `max.block.ms` - so they wait on `Dispatchers.IO`, as `send` does.
+    override suspend fun initTransactions() = transactional { delegate.initTransactions() }
+
+    override suspend fun beginTransaction() = transactional { delegate.beginTransaction() }
+
+    override suspend fun commitTransaction() = transactional { delegate.commitTransaction() }
+
+    override suspend fun abortTransaction() = transactional { delegate.abortTransaction() }
+
+    private suspend fun transactional(call: () -> Unit) =
+        withContext(Dispatchers.IO) {
+            try {
+                call()
+            } catch (failure: KafkaException) {
+                throw failure.asFenced() ?: failure
+            }
+        }
 
     override suspend fun flush() {
         // Blocking too, and for longer: it waits for every record in flight.

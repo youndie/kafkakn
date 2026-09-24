@@ -109,6 +109,25 @@ Every one is **target**: nothing is built.
   ([B-29](../backlog/B-29-topic-metadata.md)). How the unknown topic fails differs per arm and is in
   [producer-contract](../api/producer-contract.md).
 
+### Scenario: Records in a transaction become visible together, or not at all
+* **Given:** a transactional producer (`transactional.id`) on each arm.
+* **When:** 50 records are committed in one transaction, and 50 more aborted in another — directly and
+  through `inTransaction`.
+* **Then:** under `read_committed` the committed 50 are all there and the aborted none; under
+  `read_uncommitted` the aborted 50 are there too; the coordinator reports `CompleteCommit` and
+  `CompleteAbort`.
+* **Automated:** `TransactionTest`, counted by `ci/b-30/run.sh` through `kafka-console-consumer`
+  under both isolation levels and `kafka-transactions.sh describe`
+  ([B-30](../backlog/B-30-transactions.md)).
+
+### Scenario: A fenced producer fails with one exception on both arms
+* **Given:** a producer in an open transaction.
+* **When:** a second producer with the same `transactional.id` initialises.
+* **Then:** the first one's commit throws `ProducerFencedException`, and so does its next `send`; its
+  open transaction is aborted.
+* **Automated:** `TransactionTest.a_fenced_producer_fails_with_one_kafkakn_exception_on_both_arms`.
+  Watched failing first on both arms with each client's own exception.
+
 ## 4. Quirks
 
 - **The offsets are the oracle, never this library's own consumer.** A producer checked by its own

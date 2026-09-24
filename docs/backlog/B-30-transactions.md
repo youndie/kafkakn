@@ -1,7 +1,7 @@
 ---
 id: B-30
 title: "Transactions: records that become visible together, or not at all"
-status: wip
+status: done
 priority: P2
 size: L
 stage: stage-5-producer-parity
@@ -42,3 +42,24 @@ why this waits for [B-25](B-25-the-arms-disagree-on-idempotence.md).
   person.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.kt`,
   `docs/api/producer-contract.md`, `ci/b-09/run.sh`.
+
+## Findings (2026-09-24)
+
+**Measured, `ci/b-30/run.sh`, both arms.** 50 records committed: all 50 under `read_committed`,
+directly and through `inTransaction`. 50 aborted: none under `read_committed`, **all 50 under
+`read_uncommitted`** — the positive control that the abort happened to records that were written.
+The coordinator's `kafka-transactions.sh describe` reports `CompleteCommit` and `CompleteAbort`.
+
+**Fencing, watched red first.** Before the mapping the JVM arm threw the client's own
+`org.apache.kafka.common.errors.ProducerFencedException` and the native arm
+`_FENCED (-144) … [fatal]`; now both throw `ProducerFencedException`, from the commit and from the
+next `send`, with each client's sentence as the cause — recorded in
+[producer-contract](../api/producer-contract.md). The fenced producer's open transaction is aborted
+by its successor's init: 0 under `read_committed`, 50 under `read_uncommitted`.
+
+**The oracle's limitation is in the contract**, beside the end-offset reconciliation it limits, and
+in [feature-backpressure-and-accounting](../features/feature-backpressure-and-accounting.md).
+
+**On the way.** `kafka-console-consumer --consumer-property` prints its deprecation notice on
+stdout in 4.3.1, as a line of the output: a 200-record topic counted 201. The harness now names the
+isolation level with `--command-property`.

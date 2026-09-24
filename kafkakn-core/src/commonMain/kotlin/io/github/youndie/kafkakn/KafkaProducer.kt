@@ -36,6 +36,28 @@ public interface KafkaProducer {
      */
     public suspend fun partitionsFor(topic: String): List<PartitionInfo>
 
+    /**
+     * Registers this producer's `transactional.id` with the cluster and fences any older producer
+     * holding the same one ([B-30](../../../../../../../docs/backlog/B-30-transactions.md)). Once,
+     * before the first [beginTransaction]. Blocks inside both clients, so it waits off the caller's
+     * dispatcher.
+     *
+     * Transactions are Kafka's, with Kafka's names: records sent between [beginTransaction] and
+     * [commitTransaction] become visible to a `read_committed` reader together, and after
+     * [abortTransaction] none of them do. A producer another one has fenced throws
+     * [ProducerFencedException] from its next transactional call, on both arms, and is finished.
+     */
+    public suspend fun initTransactions()
+
+    /** Starts a transaction. Every [send] until [commitTransaction] or [abortTransaction] belongs to it. */
+    public suspend fun beginTransaction()
+
+    /** Flushes, then commits: every record of the transaction becomes visible to `read_committed` readers. */
+    public suspend fun commitTransaction()
+
+    /** Aborts: none of the transaction's records become visible to `read_committed` readers. */
+    public suspend fun abortTransaction()
+
     /** Returns when every record handed to [send] has been acknowledged or has failed. */
     public suspend fun flush()
 
@@ -64,6 +86,14 @@ internal object UnimplementedProducer : KafkaProducer {
     override suspend fun send(record: ProducerRecord): RecordMetadata = TODO("no producer yet")
 
     override suspend fun partitionsFor(topic: String): List<PartitionInfo> = TODO("no producer yet")
+
+    override suspend fun initTransactions(): Unit = TODO("no producer yet")
+
+    override suspend fun beginTransaction(): Unit = TODO("no producer yet")
+
+    override suspend fun commitTransaction(): Unit = TODO("no producer yet")
+
+    override suspend fun abortTransaction(): Unit = TODO("no producer yet")
 
     override suspend fun flush(): Unit = TODO("no producer yet")
 

@@ -37,7 +37,12 @@ import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN
+import rdkafka.RD_KAFKA_RESP_ERR__FATAL
+import rdkafka.RD_KAFKA_RESP_ERR__FENCED
 import rdkafka.RD_KAFKA_RESP_ERR__QUEUE_FULL
+import rdkafka.rd_kafka_abort_transaction
+import rdkafka.rd_kafka_begin_transaction
+import rdkafka.rd_kafka_commit_transaction
 import rdkafka.rd_kafka_conf
 import rdkafka.rd_kafka_conf_get
 import rdkafka.rd_kafka_conf_new
@@ -48,7 +53,15 @@ import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_code
 import rdkafka.rd_kafka_error_destroy
+import rdkafka.rd_kafka_error_is_fatal
+import rdkafka.rd_kafka_error_is_retriable
+import rdkafka.rd_kafka_error_name
+import rdkafka.rd_kafka_error_string
+import rdkafka.rd_kafka_error_t
+import rdkafka.rd_kafka_error_txn_requires_abort
+import rdkafka.rd_kafka_fatal_error
 import rdkafka.rd_kafka_flush
+import rdkafka.rd_kafka_init_transactions
 import rdkafka.rd_kafka_message_t
 import rdkafka.rd_kafka_message_timestamp
 import rdkafka.rd_kafka_metadata
@@ -412,9 +425,8 @@ internal class NativeKafkaProducer(
             val error = produceOnce(id, record)
             if (error == RD_KAFKA_RESP_ERR_NO_ERROR) return
             if (error != RD_KAFKA_RESP_ERR__QUEUE_FULL) {
-                throw KafkaProduceException(
-                    "${record.topic}: ${rd_kafka_err2str(error)?.toKString()}",
-                )
+                val said = "${record.topic}: ${rd_kafka_err2str(error)?.toKString()}"
+                throw fencedOrNull(error, said) ?: KafkaProduceException(said)
             }
             backpressureWaits.addAndGet(1)
             // The poll is what drains the queue; the delay is what makes this a suspension rather
@@ -580,6 +592,80 @@ internal class NativeKafkaProducer(
                     inSyncReplicas = (0 until partition.isr_cnt).map { partition.isrs!![it] },
                 )
             }.sortedBy { it.partition }
+    }
+
+    // The rd_kafka_*_transaction family. `-1` for every timeout, as librdkafka's header asks: for
+    // init it means twice `transaction.timeout.ms`, for commit and abort the transaction's remaining
+    // time, and the header warns that any other value risks "internal state desynchronization" when
+    // an underlying request fails. Init, commit and abort block for up to that long, so they wait on
+    // `Dispatchers.IO`; begin is local and returns at once.
+    override suspend fun initTransactions() =
+        withContext(Dispatchers.IO) {
+            transactional("initTransactions") { rd_kafka_init_transactions(handle, -1) }
+        }
+
+    override suspend fun beginTransaction() = transactional("beginTransaction") { rd_kafka_begin_transaction(handle) }
+
+    override suspend fun commitTransaction() =
+        withContext(Dispatchers.IO) {
+            transactional("commitTransaction") { rd_kafka_commit_transaction(handle, -1) }
+        }
+
+    override suspend fun abortTransaction() =
+        withContext(Dispatchers.IO) {
+            transactional("abortTransaction") { rd_kafka_abort_transaction(handle, -1) }
+        }
+
+    /**
+     * librdkafka's fencing, as the one exception kafkakn throws for it on both arms (B-30).
+     *
+     * Two roads lead here. A transactional call reports `_FENCED` itself; anything after that meets
+     * the producer's fatal state as `_FATAL`, and which fatal error it was is asked of
+     * `rd_kafka_fatal_error`. librdkafka's own sentence stays in the message.
+     */
+    private fun fencedOrNull(
+        code: rd_kafka_resp_err_t,
+        said: String,
+    ): ProducerFencedException? {
+        val fenced =
+            code == RD_KAFKA_RESP_ERR__FENCED ||
+                (
+                    code == RD_KAFKA_RESP_ERR__FATAL && rd_kafka_fatal_error(
+                        handle,
+                        null,
+                        0u,
+                    ) == RD_KAFKA_RESP_ERR__FENCED
+                )
+        return if (fenced) {
+            ProducerFencedException(
+                "fenced by a newer producer with the same transactional.id: $said",
+            )
+        } else {
+            null
+        }
+    }
+
+    /** Turns a returned `rd_kafka_error_t` into an exception, and frees it. */
+    private fun transactional(
+        what: String,
+        call: () -> CPointer<rd_kafka_error_t>?,
+    ) {
+        val error = call() ?: return
+        try {
+            val code = rd_kafka_error_code(error)
+            val name = rd_kafka_error_name(error)?.toKString()
+            val text = rd_kafka_error_string(error)?.toKString()
+            val flags =
+                listOfNotNull(
+                    "fatal".takeIf { rd_kafka_error_is_fatal(error) != 0 },
+                    "retriable".takeIf { rd_kafka_error_is_retriable(error) != 0 },
+                    "abortable".takeIf { rd_kafka_error_txn_requires_abort(error) != 0 },
+                )
+            val said = "$what: $name ($code): $text${if (flags.isEmpty()) "" else " $flags"}"
+            throw fencedOrNull(code, said) ?: KafkaProduceException(said)
+        } finally {
+            rd_kafka_error_destroy(error)
+        }
     }
 
     override suspend fun flush() {
