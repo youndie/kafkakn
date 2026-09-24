@@ -198,6 +198,15 @@ to search Kafka's documentation for the key they see.
 That list is deliberately shorter than it was: `queue.buffering.max.messages` used to be in it, and
 it is not portable — see below.
 
+**`compression.type`, measured 2026-09-24** ([B-26](../backlog/B-26-compression-was-never-measured.md)).
+It sat in this list for a week with no test behind it. `none`, `gzip`, `snappy`, `lz4` and `zstd`,
+sent from each arm, are stored by the broker with exactly that codec — read out of the log segment by
+`kafka-dump-log.sh`, not inferred from values that arrived, because an uncompressed batch arrives too.
+It is the spelling that travels: librdkafka's own key is `compression.codec` and it accepts
+`compression.type` as an alias. An unknown codec is refused at construction on both arms and the
+message names the key the caller wrote; librdkafka's own sentence names `compression.codec`, so the
+native arm puts the caller's key and value first.
+
 A key neither actual honours is a **failure at construction**, not a silently ignored entry. The
 prior art's sibling lesson applies: an option accepted and dropped looks identical to one that
 worked, right up until it matters.

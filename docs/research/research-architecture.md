@@ -188,7 +188,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 | consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | absent — D2 |
 | consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |
 | administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | absent — D2 |
-| compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | **named portable in the contract, never measured** |
+| compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | named portable in the contract and never measured until [B-26](../backlog/B-26-compression-was-never-measured.md): **all four, both arms, stored as asked** |
 | SASL | `PLAIN`, `SCRAM` and `OAUTHBEARER` compiled in; GSSAPI **not** (`--disable-gssapi`); OIDC **not** (`--disable-curl`) | all of them | absent — D2 |
 | client certificate (mTLS) | `ssl.certificate.location`, `ssl.key.location` | a keystore | absent — B-11 left it out |
 | metrics | `rd_kafka_conf_set_stats_cb` (JSON every `statistics.interval.ms`) | `Producer.metrics()` | absent |
