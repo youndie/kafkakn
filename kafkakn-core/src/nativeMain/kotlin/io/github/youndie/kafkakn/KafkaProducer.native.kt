@@ -15,11 +15,13 @@ import kotlinx.cinterop.cstr
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
+import kotlinx.cinterop.ptr
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toCPointer
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.toLong
+import kotlinx.cinterop.value
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,10 +29,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN
 import rdkafka.RD_KAFKA_RESP_ERR__QUEUE_FULL
+import rdkafka.rd_kafka_conf
+import rdkafka.rd_kafka_conf_get
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_conf_set_dr_msg_cb
@@ -65,6 +70,33 @@ public actual fun kafkaProducer(config: ProducerConfig): KafkaProducer = NativeK
 
 /** The default is murmur2_random; a caller who names a partitioner keeps theirs. */
 private fun partitionerFor(config: ProducerConfig): String = config.properties["partitioner"] ?: "murmur2_random"
+
+/**
+ * The idempotence the Java client would have for the same configuration, or `null` when the caller
+ * named it — **and it is not simply "on"**.
+ *
+ * librdkafka defaults `enable.idempotence` to `false` and `kafka-clients` 4.3.1 to `true`, so a retried
+ * record whose acknowledgement was lost could be written twice by this arm and once by the other
+ * ([B-25](../../../../../../../docs/backlog/B-25-the-arms-disagree-on-idempotence.md)). The fix is to
+ * take the reference arm's default — and its default is conditional, measured against the jar: it
+ * turns itself **off, silently,** when the caller set `acks` to anything but all or `retries` to zero.
+ * A native default that was only "on" would make librdkafka refuse `acks=1`, which the reference
+ * accepts, and that is a configuration that works on the arm a caller runs locally and fails on the
+ * one they ship.
+ *
+ * The third row of the Java client's behaviour — more than five requests in flight is refused even
+ * with idempotence unset — needs nothing here: with the default on, librdkafka refuses it too.
+ */
+private fun idempotenceFor(config: ProducerConfig): String? {
+    val properties = config.properties
+    if ("enable.idempotence" in properties) return null
+    // `request.required.acks` is librdkafka's own name for `acks`; either spelling can carry the value.
+    val acks = properties["acks"] ?: properties["request.required.acks"]
+    if (acks != null && acks != "all" && acks != "-1") return "false"
+    val retries = properties["retries"] ?: properties["message.send.max.retries"]
+    if (retries == "0") return "false"
+    return "true"
+}
 
 // RD_KAFKA_PARTITION_UA and RD_KAFKA_MSG_F_COPY are preprocessor macros, so cinterop does not
 // publish them. Spelled with the names they have in rdkafka.h so a reader can check them.
@@ -233,7 +265,12 @@ internal class NativeKafkaProducer(
             // among them. It was found by a TLS test that hung for a minute where it had asked to fail
             // in twenty seconds, and it had been passing its own `acks=all` assertion all along because
             // librdkafka's default for acks happens to be -1 (research §2.8).
-            (config.properties + ("partitioner" to partitionerFor(config))).forEach { (key, value) ->
+            val defaults =
+                buildMap {
+                    put("partitioner", partitionerFor(config))
+                    idempotenceFor(config)?.let { put("enable.idempotence", it) }
+                }
+            (config.properties + defaults).forEach { (key, value) ->
                 // librdkafka reports an unknown key here, so this arm refuses it at construction too -
                 // the contract says an unusable configuration fails, and the earlier the better.
                 if (rd_kafka_conf_set(conf, key, value, errstr, ERRSTR.convert()) != RD_KAFKA_CONF_OK) {
@@ -254,6 +291,22 @@ internal class NativeKafkaProducer(
         // is not a case this library has, and when it is, that is the shape of the fix.
         lastConnectionError.value = null
     }
+
+    /**
+     * What librdkafka itself settled on for [key], read off the handle rather than out of [config].
+     *
+     * For tests of the platform seam, and the difference matters: kafkakn adds keys the caller never
+     * wrote (the partitioner, the idempotence default), and librdkafka adjusts others when one is set.
+     * A test that read [config] back would be checking kafkakn's intention, not what the client does.
+     */
+    internal fun effectiveConfig(key: String): String? =
+        memScoped {
+            val conf = rd_kafka_conf(handle) ?: return@memScoped null
+            val size = alloc<size_tVar>()
+            size.value = CONFIG_VALUE_MAX.convert()
+            val value = allocArray<ByteVar>(CONFIG_VALUE_MAX)
+            if (rd_kafka_conf_get(conf, key, value, size.ptr) != RD_KAFKA_CONF_OK) null else value.toKString()
+        }
 
     private val pump = CoroutineScope(Dispatchers.Default)
 
@@ -428,6 +481,9 @@ internal class NativeKafkaProducer(
 
     private companion object {
         const val ERRSTR = 512
+
+        /** Longer than any value librdkafka keeps for a single key; a longer one reads as absent. */
+        const val CONFIG_VALUE_MAX = 512
         const val FLUSH_MS = 30_000
         const val POLL_IDLE_MS = 2L
         const val BACKPRESSURE_DELAY_MS = 1L

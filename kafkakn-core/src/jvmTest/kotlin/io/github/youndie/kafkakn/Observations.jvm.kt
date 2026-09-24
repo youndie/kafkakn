@@ -53,3 +53,23 @@ internal actual fun failFastConfig(): Map<String, String> =
         "delivery.timeout.ms" to "25000",
         "retries" to "1",
     )
+
+/**
+ * Builds the real producer first, so every refusal kafkakn or the Java client makes happens exactly as
+ * it would for a caller, then reads the value the Java client itself settled on. `KafkaProducer` does
+ * not expose its configuration; `ProducerConfig` over the same properties is the object its
+ * constructor builds, so this is its answer rather than a re-derivation of it.
+ */
+internal actual fun effectiveIdempotence(config: ProducerConfig): Boolean {
+    val producer = kafkaProducer(config)
+    kotlinx.coroutines.runBlocking { producer.close() }
+    val properties =
+        translateForJava(config.properties) +
+            mapOf(
+                "key.serializer" to "org.apache.kafka.common.serialization.ByteArraySerializer",
+                "value.serializer" to "org.apache.kafka.common.serialization.ByteArraySerializer",
+            )
+    return org.apache.kafka.clients.producer
+        .ProducerConfig(properties)
+        .getBoolean("enable.idempotence")
+}

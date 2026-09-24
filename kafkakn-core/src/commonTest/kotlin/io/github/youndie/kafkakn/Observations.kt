@@ -147,3 +147,11 @@ internal val wrongCaPath: String get() =
  * of them before saying anything.
  */
 internal expect fun failFastConfig(): Map<String, String>
+
+/**
+ * Whether a producer built from [config] is **actually** idempotent, read from the client underneath
+ * rather than from what kafkakn asked it for — the Java client's own post-processed configuration on
+ * one arm, `rd_kafka_conf_get` on a constructed handle on the other. Throws when the producer refuses
+ * to be constructed.
+ */
+internal expect fun effectiveIdempotence(config: ProducerConfig): Boolean

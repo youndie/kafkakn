@@ -57,3 +57,13 @@ internal actual fun failFastConfig(): Map<String, String> =
         "message.timeout.ms" to "20000",
         "socket.timeout.ms" to "5000",
     )
+
+/** librdkafka's own reading of the key, off the handle the producer actually built. */
+internal actual fun effectiveIdempotence(config: ProducerConfig): Boolean {
+    val producer = NativeKafkaProducer(config)
+    try {
+        return producer.effectiveConfig("enable.idempotence") == "true"
+    } finally {
+        kotlinx.coroutines.runBlocking { producer.close() }
+    }
+}
