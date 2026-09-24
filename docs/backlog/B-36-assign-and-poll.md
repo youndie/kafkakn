@@ -1,7 +1,7 @@
 ---
 id: B-36
 title: "A consumer without a group: assign partitions, seek, and read as a Flow"
-status: open
+status: wip
 priority: P2
 size: L
 stage: stage-8-consume
