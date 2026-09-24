@@ -1,0 +1,43 @@
+=== environment ===
+2026-09-25T01:45:08+02:00
+
+=== broker, and the oracle ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+  the distribution's own client reads 20 records from kafkakn-consume
+  kafka-get-offsets.sh: earliest 0, latest 20, at 1700000005500 -> 6
+
+=== both arms, one test task per invocation, rerun every time ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== what each arm read, against the oracle and against each other ===
+  jvm       20 records, byte for byte the oracle's
+  linuxX64  20 records, byte for byte the oracle's
+  jvm and linuxX64 read the same bytes
+  the records the fixture exists for, as both read them:
+    1/1700000001000/~/x7265636f72642031/
+    2/1700000002000/x6b32/~/
+    3/1700000003000/x6b33/xfffe0080c328/
+    4/1700000004000/x6b34/x7265636f72642034/h:x61,h:x62,x:~
+    5/1700000005000/x/x/
+
+=== where each seek landed, against kafka-get-offsets.sh ===
+  jvm       beginning  0
+  jvm       offset     7
+  jvm       timestamp  6
+  jvm       end        read 0 after it (latest is 20)
+  linuxX64  beginning  0
+  linuxX64  offset     7
+  linuxX64  timestamp  6
+  linuxX64  end        read 0 after it (latest is 20)
+
+=== the native arm's private group.id never reached the cluster as a group ===
+  kafka-consumer-groups.sh --list: no kafkakn-assign-* group (1 groups in all)
+
+=== H7, recorded ===
+  jvm       a cancelled poll returned in 20 ms; overlapping callers read 20 records, none twice
+  linuxX64  a cancelled poll returned in 0 ms; overlapping callers read 20 records, none twice
+
+B-36: both arms read the third party's records byte for byte and in order, and seek where the broker says

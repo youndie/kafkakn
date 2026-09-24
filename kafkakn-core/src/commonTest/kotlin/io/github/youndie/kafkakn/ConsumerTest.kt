@@ -120,9 +120,19 @@ class ConsumerTest {
                     }
                 recordArmFact("consume.cancel.ms", waited.inWholeMilliseconds.toString())
                 assertTrue(waited < PROMPT, "a cancelled poll took $waited to return")
-                // Usable afterwards: the next poll neither throws nor returns something stale.
+                // Usable afterwards, and AT ONCE. Returning promptly is not enough on its own: the first
+                // version of this test passed with the JVM arm's `wakeup()` removed, because the caller
+                // was released immediately while the abandoned `poll` kept the consumer busy for its whole
+                // minute - the next call simply queued behind it. What a caller needs is the next call.
+                val recovering = TimeSource.Monotonic.markNow()
                 consumer.seek(partition, SeekTo.Beginning)
                 assertEquals(0L, firstOffset(consumer), "the consumer after a cancelled poll")
+                val recovered = recovering.elapsedNow()
+                recordArmFact("consume.cancel.recovered.ms", recovered.inWholeMilliseconds.toString())
+                assertTrue(
+                    recovered < RECOVER,
+                    "the consumer took $recovered to serve the next call after a cancelled poll",
+                )
             }
         }
 
@@ -194,6 +204,9 @@ class ConsumerTest {
         val WAIT = 3.seconds
         val CANCEL_AFTER = 500.milliseconds
         val PROMPT = 2.seconds
+
+        /** The next call after a cancelled poll: a seek and one record, with room for a fetch. */
+        val RECOVER = 10.seconds
         val TICK = 2.milliseconds
         val TOLERATED_SILENCE = 500.milliseconds
         const val CALLERS = 8
