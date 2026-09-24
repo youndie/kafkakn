@@ -1,7 +1,7 @@
 ---
 id: B-35
 title: "The consumer, designed before it is built: a contract document and the defaults it starts from"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-8-consume
