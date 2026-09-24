@@ -1,7 +1,7 @@
 ---
 id: B-25
 title: "The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other"
-status: wip
+status: done
 priority: P0
 size: M
 stage: stage-5-producer-parity
@@ -39,4 +39,55 @@ surface.
 - AC: the contract's *Configuration* section records the default, the disagreement it replaces, and
   its reason; H6 is settled in the research either way.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
-  `docs/api/producer-contract.md`, `ci/harness/broker.sh`.
+  `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/IdempotenceTest.kt`,
+  `ci/b-25/run.sh`, `docs/api/producer-contract.md`, `ci/harness/broker.sh`.
+
+## What happened
+
+**The decision in this item was half right, and measuring the reference arm before copying it is what
+showed which half.** "The native arm sets `enable.idempotence=true` unless the caller named it" is
+not what the Java client does. Measured against `kafka-clients-4.3.1.jar`, by constructing its own
+`ProducerConfig` and reading the value it settled on:
+
+| the caller set | the Java client |
+|---|---|
+| nothing | on |
+| `acks=1` | **off, silently** |
+| `retries=0` | **off, silently** |
+| `acks=1` and `enable.idempotence=true` | refuses |
+| `max.in.flight.requests.per.connection=10` | **refuses, with idempotence unset** |
+
+A native default that was only "on" would have made librdkafka refuse `acks=1`. The native arm now
+takes the whole rule, and `IdempotenceTest` holds all seven rows against both arms, reading each
+client's own effective value — `ProducerConfig` on one arm, `rd_kafka_conf_get` off the constructed
+handle on the other — rather than what kafkakn asked for.
+
+**Red first, on exactly two rows**: the default, and `max.in.flight=10`, which the native arm accepted
+where the reference refuses. The other five passed before the change only because the native default
+was already off; removing the `acks` condition afterwards fails exactly the `acks` row, which is what
+shows they are guarding the rule rather than passing by default.
+
+**H6, measured** with `ci/b-25/run.sh`: a driver built outside this repository against the branch's
+candidate, fifty concurrent senders, the broker frozen five times for six seconds against a two-second
+request timeout.
+
+| run | records | distinct | written twice |
+|---|---|---|---|
+| native, idempotence off — the control, first | 105 966 | 105 766 | **200** |
+| JVM, idempotence off | 116 300 | 116 050 | **250** |
+| native, default | 107 184 | 107 184 | **0** |
+| JVM, default | 153 874 | 153 874 | **0** |
+
+Nothing was lost or refused in any run. 200 and 250 are multiples of the concurrency, which reads as
+**every record in flight at a freeze written twice** — systematic, not a race the fixture was lucky
+to hit.
+
+**One line decided whether the fixture could see anything.** librdkafka's `request.timeout.ms` *"is
+only enforced by the broker"*, which is frozen; the client's own limit is `socket.timeout.ms`, sixty
+seconds by default. With only the Java client's key set, the native arm would never have retried and
+its zero would have meant nothing. The driver sets each arm's own key.
+
+**And the fault could not live in the suite.** Every item runner runs the whole suite, and a test that
+needs the broker frozen under it would either run unfrozen everywhere else or fail everywhere else.
+It is a driver instead — the same shape as `ci/downstream` — built against a candidate published to a
+repository on disk, so the code measured is this branch's and the path is a stranger's.
