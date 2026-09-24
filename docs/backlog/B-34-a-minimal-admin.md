@@ -1,7 +1,7 @@
 ---
 id: B-34
 title: "A minimal admin client: create, delete and describe topics, describe the cluster"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-7-admin
