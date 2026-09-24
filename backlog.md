@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-31](docs/backlog/B-31-client-certificates.md) `[ ]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
+| [B-31](docs/backlog/B-31-client-certificates.md) `[~]` | Client certificates: a broker that asks who is connecting gets an answer | P1 | M | - |
 | [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[ ]` | SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them | P1 | M | - |
 | [B-29](docs/backlog/B-29-topic-metadata.md) `[ ]` | partitionsFor: what a topic looks like, from the producer that writes to it | P2 | S | - |
 | [B-30](docs/backlog/B-30-transactions.md) `[ ]` | Transactions: records that become visible together, or not at all | P2 | L | B-25 |

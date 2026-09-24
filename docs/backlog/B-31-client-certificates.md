@@ -1,7 +1,7 @@
 ---
 id: B-31
 title: "Client certificates: a broker that asks who is connecting gets an answer"
-status: open
+status: wip
 priority: P1
 size: M
 stage: stage-6-real-deployments
