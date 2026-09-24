@@ -1,7 +1,7 @@
 ---
 id: B-26
 title: "compression.type is named portable in the contract and no test has ever set it"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-5-producer-parity
