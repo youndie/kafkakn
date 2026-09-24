@@ -20,12 +20,15 @@ services:
       - "9094:9094"
       # The listener that asks who is connecting (B-31), published for the same reason.
       - "9095:9095"
+      # SASL (B-32): over plaintext, and over TLS - the second is what hosted Kafka actually asks for.
+      - "9096:9096"
+      - "9097:9097"
     volumes:
       - ${KAFKAKN_TLS_DIR:-${HOME}/.cache/kafkakn/tls}:/etc/kafka/secrets:ro
     environment:
-      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,SSL://:9094,MTLS://:9095"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9094,MTLS://127.0.0.1:9095"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,MTLS:SSL"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,SSL://:9094,MTLS://:9095,SASL_PLAINTEXT://:9096,SASL_SSL://:9097"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9094,MTLS://127.0.0.1:9095,SASL_PLAINTEXT://127.0.0.1:9096,SASL_SSL://127.0.0.1:9097"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,MTLS:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL"
       # PKCS12 on the SERVER side only. PEM was tried and refused: `SSL key store password cannot
       # be specified with PEM format`, and this image always specifies one. Both CLIENTS still read
       # the PEM CA, which is the half the library has to get right.
@@ -55,3 +58,9 @@ services:
       KAFKA_LISTENER_NAME_MTLS_SSL_TRUSTSTORE_LOCATION: "/etc/kafka/secrets/ca.pem"
       # The broker talks to itself over PLAINTEXT (see docker-compose.yml), so it needs no trust
       # store of its own.
+      # SASL (B-32). The users are in a JAAS file beside the certificates (ci/broker/certs.sh), and
+      # KAFKA_OPTS is where it has to be named: the image's configure script `ensure`s KAFKA_OPTS the
+      # moment a SASL listener is advertised (docker/resources/common-scripts/configure, 4.3.1). The
+      # SCRAM credentials are not in the file - `broker.sh up` creates them through the broker's tools.
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/broker-jaas.conf"
+      KAFKA_SASL_ENABLED_MECHANISMS: "PLAIN,SCRAM-SHA-256,SCRAM-SHA-512"

@@ -171,6 +171,19 @@ internal val clientKeyPassword: String get() = testEnv("KAFKAKN_CLIENT_KEY_PASSW
 internal val wrongClientCertPath: String get() = testEnv("KAFKAKN_WRONG_CLIENT_CERT") ?: tlsFile("wrong-client.pem")
 internal val wrongClientKeyPath: String get() = testEnv("KAFKAKN_WRONG_CLIENT_KEY") ?: tlsFile("wrong-client.key")
 
+/** The SASL listeners (B-32): over plaintext, and over TLS — the second is what hosted Kafka is. */
+internal val saslBootstrap: String get() = testEnv("KAFKAKN_SASL_BOOTSTRAP") ?: "127.0.0.1:9096"
+internal val saslSslBootstrap: String get() = testEnv("KAFKAKN_SASL_SSL_BOOTSTRAP") ?: "127.0.0.1:9097"
+
+/**
+ * The fixture's users (`ci/broker/certs.sh`, `broker.sh up`). `alice` exists for PLAIN and for both
+ * SCRAM mechanisms; `quoted` only for PLAIN, and only for the password a JAAS string must escape.
+ */
+internal const val SASL_USER: String = "alice"
+internal const val SASL_PASSWORD: String = "alice-secret"
+internal const val QUOTED_USER: String = "quoted"
+internal const val QUOTED_PASSWORD: String = "kafkakn\"quote\\slash"
+
 /**
  * Timeouts short enough that a connection which will never succeed fails inside a test.
  *

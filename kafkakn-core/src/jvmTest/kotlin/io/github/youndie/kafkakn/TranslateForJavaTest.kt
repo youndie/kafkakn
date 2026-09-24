@@ -1,7 +1,11 @@
 package io.github.youndie.kafkakn
 
+import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.security.JaasContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * The one place the oracle arm is not a plain delegate, asserted directly.
@@ -123,5 +127,91 @@ class TranslateForJavaTest {
         assertEquals("/etc/ca.pem", translated["ssl.truststore.location"])
         assertEquals("", translated[HOSTNAME_VERIFICATION])
         assertEquals(files["/etc/client.key"], translated["ssl.keystore.key"])
+    }
+
+    // B-32. `sasl.username` and `sasl.password` become `sasl.jaas.config`, and the one place that can
+    // go wrong is the quoting inside it. What decides whether it went right is not a string compare
+    // but the Java client's OWN parser - `JaasContext.loadClientContext`, the call the client makes -
+    // reading the password back out.
+    private fun jaasOptions(translated: Map<String, String>): Map<String, *> {
+        val context =
+            JaasContext.loadClientContext(
+                mapOf("sasl.jaas.config" to Password(translated.getValue("sasl.jaas.config"))),
+            )
+        return context.configurationEntries().single().options
+    }
+
+    private fun sasl(
+        mechanism: String,
+        user: String,
+        password: String,
+    ) = translateForJava(
+        mapOf("sasl.mechanism" to mechanism, "sasl.username" to user, "sasl.password" to password),
+    )
+
+    @Test
+    fun `PLAIN credentials become a PlainLoginModule and leave no key kafka-clients does not know`() {
+        val translated = sasl("PLAIN", "alice", "alice-secret")
+
+        assertTrue(
+            translated
+                .getValue(
+                    "sasl.jaas.config",
+                ).startsWith("org.apache.kafka.common.security.plain.PlainLoginModule required "),
+        )
+        assertEquals("alice", jaasOptions(translated)["username"])
+        assertEquals("alice-secret", jaasOptions(translated)["password"])
+        assertEquals(null, translated["sasl.username"])
+        assertEquals(null, translated["sasl.password"])
+        assertEquals("PLAIN", translated["sasl.mechanism"])
+    }
+
+    @Test
+    fun `SCRAM credentials become a ScramLoginModule, for both digests`() {
+        for (mechanism in listOf("SCRAM-SHA-256", "SCRAM-SHA-512")) {
+            val translated = sasl(mechanism, "alice", "alice-secret")
+
+            assertTrue(
+                translated
+                    .getValue(
+                        "sasl.jaas.config",
+                    ).startsWith("org.apache.kafka.common.security.scram.ScramLoginModule required "),
+                mechanism,
+            )
+            assertEquals("alice-secret", jaasOptions(translated)["password"])
+        }
+    }
+
+    @Test
+    fun `a password the JAAS format must escape reads back as itself`() {
+        // A double quote ends the quoted value, a backslash starts an escape, and StreamTokenizer ends
+        // a quoted string at a line break. Each is a password a naive translation hands over altered -
+        // and only on this arm, where nothing else would notice.
+        for (password in listOf("kafkakn\"quote\\slash", "ends-with-backslash\\", "two\nlines\rand\ttab", "'single'")) {
+            assertEquals(password, jaasOptions(sasl("PLAIN", "alice", password))["password"], "password $password")
+        }
+        assertEquals("a\"user", jaasOptions(sasl("PLAIN", "a\"user", "x"))["username"])
+    }
+
+    @Test
+    fun `a caller's own sasl jaas config is left alone`() {
+        val own = "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"u\" password=\"p\";"
+        val translated = translateForJava(mapOf("sasl.mechanism" to "PLAIN", "sasl.jaas.config" to own))
+
+        assertEquals(own, translated["sasl.jaas.config"])
+    }
+
+    @Test
+    fun `a caller's own jaas config beside the pair is refused, not merged`() {
+        val both =
+            mapOf(
+                "sasl.mechanism" to "PLAIN",
+                "sasl.username" to "u",
+                "sasl.password" to "p",
+                "sasl.jaas.config" to "org.apache.kafka.common.security.plain.PlainLoginModule required;",
+            )
+
+        val refused = assertFailsWith<IllegalArgumentException> { translateForJava(both) }
+        assertTrue(refused.message.orEmpty().contains("two spellings"), refused.message)
     }
 }

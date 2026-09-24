@@ -1,6 +1,6 @@
 ---
 id: feature-secure-connection
-title: Connect to a broker over TLS
+title: Connect to a secured broker — TLS, client certificates, SASL
 type: feature
 status: active
 owner: unassigned
@@ -13,7 +13,7 @@ api:
 tags: [producer, security]
 ---
 
-# Connect to a broker over TLS
+# Connect to a secured broker — TLS, client certificates, SASL
 
 ## 1. Overview
 
@@ -39,9 +39,11 @@ that requires one, and both arms answering it.
   `ssl.key.location` and, for an encrypted key, `ssl.key.password` — librdkafka's spelling, as for the
   CA ([B-31](../backlog/B-31-client-certificates.md)). The certificate and its key come together or
   not at all, refused at construction on both arms.
-- SASL is not built yet. Since D2 was amended on 2026-09-24 it is planned — PLAIN and SCRAM in
-  [B-32](../backlog/B-32-sasl-plain-and-scram.md), OAUTHBEARER in
-  [B-33](../backlog/B-33-sasl-oauthbearer.md).
+- SASL `PLAIN`, `SCRAM-SHA-256` and `SCRAM-SHA-512`, over plaintext or TLS: `sasl.mechanism`,
+  `sasl.username`, `sasl.password` ([B-32](../backlog/B-32-sasl-plain-and-scram.md)). The mechanism
+  is required with a SASL protocol, and the username and password come together — both refused at
+  construction on both arms. OAUTHBEARER is [B-33](../backlog/B-33-sasl-oauthbearer.md); GSSAPI is
+  not in the native bundle and is not offered.
 
 ## 3. Scenarios (BDD / test cases)
 
@@ -128,6 +130,45 @@ that requires one, and both arms answering it.
   asserting on the message. Watched failing on native before the rule: librdkafka constructed a
   producer from the certificate alone.
 
+### Scenario: PLAIN and both SCRAM digests connect, over plaintext and over TLS
+* **Given:** the SASL listeners (9096 plaintext, 9097 TLS), which the broker's own tools have just
+  shown refusing a wrong password for PLAIN and for SCRAM (`broker.sh sasl-selftest`).
+* **When:** 100 records are sent with each of `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`, and with
+  `SCRAM-SHA-512` over `SASL_SSL` with `ssl.ca.location`.
+* **Then:** every record is there, **counted over the plaintext listener** by
+  `kafka-console-consumer`.
+* **Automated:** `SaslTest.plain_connects`, `…scram_sha_256_connects`, `…scram_sha_512_connects`,
+  `…scram_sha_512_over_tls_connects`, counted by `ci/b-32/run.sh`. Measured 100/100 each, both arms.
+
+### Scenario: A password the JAAS format must escape connects on both arms
+* **Given:** a broker user whose password holds a double quote and a backslash.
+* **When:** 100 records are sent with it.
+* **Then:** all 100 are there, on both arms.
+* **Automated:** `SaslTest.a_password_with_a_double_quote_and_a_backslash_connects`, counted by
+  `ci/b-32/run.sh`; and `TranslateForJavaTest` reading the password back through the Java client's
+  own `JaasContext`, line breaks included.
+* *The native arm sends the password raw, so its records arriving is what says the broker's own JAAS
+  file was escaped right — the JVM arm getting in then says the translation was.*
+
+### Scenario: The wrong password is refused, and the message names authentication
+* **Given:** a wrong password, for PLAIN and for SCRAM-SHA-256.
+* **When:** a record is sent.
+* **Then:** the call throws, and the failure names authentication.
+* **Automated:** `SaslTest.the_wrong_password_is_refused_and_the_message_names_authentication`.
+  Measured — JVM: *"Authentication failed: Invalid username or password"*; native: *"Local:
+  Authentication failure: … SASL authentication error: Authentication failed: Invalid username or
+  password"*, after `message.timeout.ms`.
+
+### Scenario: An incomplete SASL configuration is refused at construction, and names the key
+* **Given:** a SASL protocol with no `sasl.mechanism`; a username without its password or the
+  reverse; credentials for `GSSAPI` or for no mechanism.
+* **When:** a producer is constructed.
+* **Then:** construction throws, on both arms, and the message names the key.
+* **Automated:** `SaslTest.a_sasl_protocol_without_a_mechanism_is_refused_at_construction_on_both_arms`,
+  `…a_username_without_its_password_is_refused…`, `…credentials_for_a_mechanism_that_takes_none_are_refused…`,
+  each asserting on the message. Watched failing on native first: librdkafka refused the first two in
+  its own words, neither naming the key.
+
 ## 4. Quirks
 
 - **Nothing about TLS is proved by the fact that OpenSSL is linked.** A linked library that was
@@ -178,6 +219,16 @@ that requires one, and both arms answering it.
 - **librdkafka constructs a producer from a certificate with no key.** It checks the pair only when a
   key is set (`check_pkey`). Refused by this library on both arms, measured 2026-09-24.
 
+- **Credentials reach the Java client only inside a JAAS string**, and a JAAS string ends a quoted
+  value at a double quote and at a line break. The JVM arm escapes both, and the backslash. A
+  translation that did not would fail only on the JVM arm — as a parse error, or as a different
+  password the broker then refuses, which reads exactly like a wrong one.
+- **The broker image will not start a SASL listener without `KAFKA_OPTS`**: its configure script
+  `ensure`s it, so the fixture's users are in a JAAS file named there. The SCRAM credentials are not
+  in the file; they live in the metadata log and are created on every `broker.sh up`, one mechanism
+  per call — both in one `--add-config` is refused, *"A user credential cannot be altered twice in the
+  same request"*.
+
 ## 5. Code anchors
 
 | What | Where |
@@ -192,3 +243,6 @@ that requires one, and both arms answering it.
 | the client-certificate scenarios | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/MutualTlsTest.kt` |
 | the listener that requires one, and its self-test | `ci/broker/docker-compose.tls.yml`, `ci/harness/broker.sh` |
 | the run that measured client certificates | `ci/b-31/run.sh` |
+| the SASL rules both arms enforce | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/SaslKeys.kt` |
+| the SASL scenarios | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/SaslTest.kt` |
+| the run that measured SASL | `ci/b-32/run.sh` |

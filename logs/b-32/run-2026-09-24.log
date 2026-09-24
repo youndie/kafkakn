@@ -1,0 +1,36 @@
+=== environment ===
+2026-09-24T23:44:15+02:00
+  topic kafkakn-sasl-1790286255, fresh
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-sasl-1790286255	TopicId: UDPJ88EwRAua9Eafnv_g8g	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== the listeners must be able to say NO, asked with the broker's own tools ===
+  sasl-selftest: wrong passwords refused (PLAIN, SCRAM-SHA-256); PLAIN, SCRAM-SHA-256 and SCRAM-SHA-512 over TLS connect
+
+=== both arms, one test task per invocation, rerun every time ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== records sent over SASL, counted OVER PLAINTEXT ===
+  jvm       plain         100/100
+  jvm       scram256      100/100
+  jvm       scram512      100/100
+  jvm       ssl-scram512  100/100
+  jvm       quoted        100/100
+  linuxX64  plain         100/100
+  linuxX64  scram256      100/100
+  linuxX64  scram512      100/100
+  linuxX64  ssl-scram512  100/100
+  linuxX64  quoted        100/100
+
+=== and what each arm SAID for the wrong password ===
+  jvm       sasl-wrong-plain          SaslAuthenticationException: Authentication failed: Invalid username or password <- SaslAuthenticationException: Authentication failed: Invalid username or password
+  jvm       sasl-wrong-scram-sha-256  SaslAuthenticationException: Authentication failed during authentication due to invalid credentials with SASL mechanism SCRAM-SHA-256 <- SaslAuthenticationException: Authentication failed during authentication due to inv
+  linuxX64  sasl-wrong-plain          KafkaProduceException: kafkakn-sasl-1790286255: Local: Message timed out; last broker error: Local: Authentication failure: sasl_plaintext://127.0.0.1:9096/bootstrap: SASL authentication error: Authentication failed: Inv
+  linuxX64  sasl-wrong-scram-sha-256  KafkaProduceException: kafkakn-sasl-1790286255: Local: Message timed out; last broker error: Local: Authentication failure: sasl_plaintext://127.0.0.1:9096/bootstrap: SASL authentication error: Authentication failed duri
+
+B-32: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 (and over TLS) connect, the quoted password too, the wrong one is refused - on both arms

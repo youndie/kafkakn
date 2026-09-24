@@ -29,7 +29,8 @@ is invisible to it. The cost is that the suite needs Docker; that is accepted.
 | image | `apache/kafka:4.3.1`, pinned — a moving tag would silently re-point the environment between runs |
 | mode | KRaft, single node, controller and broker in one process |
 | topic | 3 partitions, replication factor 1 |
-| listeners | `PLAINTEXT` on 9092, `SSL` on 9094 **and** `MTLS` on 9095 — SSL that requires a client certificate ([B-31](../backlog/B-31-client-certificates.md)) — all always up |
+| listeners | `PLAINTEXT` on 9092, `SSL` on 9094, `MTLS` on 9095 — SSL that requires a client certificate ([B-31](../backlog/B-31-client-certificates.md)) — and `SASL_PLAINTEXT` on 9096, `SASL_SSL` on 9097 ([B-32](../backlog/B-32-sasl-plain-and-scram.md)); all always up |
+| SASL users | `alice` for PLAIN and both SCRAM digests; `quoted` for PLAIN, with a password holding a double quote and a backslash |
 | server keystore | PKCS12; the clients read a PEM CA |
 | auto-create | **off**, so a test against a topic that does not exist fails instead of quietly succeeding |
 
@@ -78,6 +79,11 @@ be wrong in both directions at once.
 - **`broker.sh mtls-selftest` asks the listener to say no first** — no certificate, then a
   certificate from the wrong authority — with the broker's own tools, and only then to say yes. A
   listener that quietly does not ask is as green as one that works for every good certificate.
+- **SASL needs `KAFKA_OPTS`, and SCRAM needs the broker running.** The image's configure script
+  `ensure`s `KAFKA_OPTS` once a SASL listener is advertised, so the PLAIN users are in a JAAS file
+  named there. SCRAM credentials live in the metadata log, which a recreated container does not have,
+  so `broker.sh up` creates them every time — one mechanism per call, because both in one
+  `--add-config` is refused. `broker.sh sasl-selftest` asks for a refusal before an acceptance.
 - **Regenerating the certificates under a running broker breaks it silently.** The broker loads its
   keystore once, at startup; new certificates leave it presenting one no client trusts, and the
   symptom is an SSL handshake failure that looks exactly like a misconfigured client. Measured, and

@@ -189,7 +189,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 | consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |
 | administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | absent — D2 |
 | compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | named portable in the contract and never measured until [B-26](../backlog/B-26-compression-was-never-measured.md): **all four, both arms, stored as asked** |
-| SASL | `PLAIN`, `SCRAM` and `OAUTHBEARER` compiled in; GSSAPI **not** (`--disable-gssapi`); OIDC **not** (`--disable-curl`) | all of them | absent — D2 |
+| SASL | `PLAIN`, `SCRAM` and `OAUTHBEARER` compiled in; GSSAPI **not** (`--disable-gssapi`); OIDC **not** (`--disable-curl`) | all of them | `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512` since [B-32](../backlog/B-32-sasl-plain-and-scram.md) — §2.21; OAUTHBEARER is B-33 |
 | client certificate (mTLS) | `ssl.certificate.location`, `ssl.key.location` | a keystore | since [B-31](../backlog/B-31-client-certificates.md), librdkafka's spelling, read into a PEM key store on the JVM — §2.20 |
 | metrics | `rd_kafka_conf_set_stats_cb` (JSON every `statistics.interval.ms`) | `Producer.metrics()` | absent |
 
@@ -917,6 +917,31 @@ wrong authority's before anything else ran; 200/200 records with an encrypted PK
 counted over plaintext; and **both** arms refused with `certificate_required` for a certificate from
 the wrong authority — the Java client withholds it too, which was measured and not read. What a
 PKCS#1 key does on the JVM arm was read and not measured — [B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md).
+
+### 2.21 Credentials are two keys on one arm and a Java string on the other
+
+[B-32](../backlog/B-32-sasl-plain-and-scram.md). `sasl.mechanism` needed nothing — the Java client's
+key, and an alias librdkafka accepts (§1.8). The credentials did: librdkafka takes `sasl.username` and
+`sasl.password`, the Java client has neither key and takes credentials only inside `sasl.jaas.config`.
+
+| Fact | Where verified |
+|---|---|
+| the JAAS string is parsed by `java.io.StreamTokenizer` — escapes inside quotes, a line break ends a quoted value | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/common/security/JaasConfig.java` |
+| `JaasContext.loadClientContext` is the public door to that parser, and the one the client uses | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/common/security/JaasContext.java` |
+| the image `ensure`s `KAFKA_OPTS` once a SASL listener is advertised | `apache/kafka@4.3.1!/docker/resources/common-scripts/configure` |
+| with no mechanism, librdkafka answers *"No provider for SASL mechanism GSSAPI"*; with half the pair, *"sasl.username and sasl.password must be set"* | measured 2026-09-24, `SaslTest` red on native before the rules |
+| both SCRAM mechanisms in one `kafka-configs --add-config` are refused: *"A user credential cannot be altered twice in the same request"* | measured 2026-09-24 against `apache/kafka:4.3.1` |
+
+**Consequences.** The JVM arm builds the JAAS string and escapes the backslash, the double quote and
+line breaks; the proof is the client's own parser reading the value back, not a string compare. Three
+rules move to common code, because each was answered in different words per arm and none named the
+key: a SASL protocol needs a mechanism, the username and password come together, and credentials
+belong to PLAIN or SCRAM only.
+
+**Measured 2026-09-24**, `ci/b-32/run.sh`: the broker's own tools refused a wrong password for PLAIN
+and SCRAM first; then 100/100 records on each arm for PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 and
+SCRAM-SHA-512 over `SASL_SSL`, counted over plaintext; and 100/100 for a password holding a double
+quote and a backslash — the native arm sending it raw, which is what says the broker holds it.
 
 ## 4. Risks, with the machinery that would catch them
 
