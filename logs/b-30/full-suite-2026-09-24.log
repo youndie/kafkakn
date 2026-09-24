@@ -1,0 +1,40 @@
+=== environment ===
+2026-09-25T00:42:58+02:00
+
+=== broker: one fixture, both listeners ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn	TopicId: y_J7Al_LRJWWTS4kiZzzbg	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+Topic: kafkakn-strict	TopicId: S7XkOI0sTmWfnm6MDkSbGQ	PartitionCount: 1	ReplicationFactor: 1	Configs: min.insync.replicas=2
+
+=== the fixture must be able to say NO, asked with the broker's own tools ===
+  tls-selftest: the right CA connects, the wrong CA does not
+
+=== both arms ===
+BUILD SUCCESSFUL in 6m 9s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
+  jvmTest        tests=81   failures=0
+  linuxX64Test   tests=69   failures=0
+
+=== records sent over TLS, counted OVER PLAINTEXT ===
+  (the path that verifies the claim is deliberately not the path the claim is about)
+  jvm       500/500 over TLS
+  linuxX64  500/500 over TLS
+  end offsets on kafkakn: 32587 -> 46142, read over plaintext
+
+=== and what each arm SAID when it refused ===
+  (the assertion is inside the suite; this prints the sentences a person should read)
+  jvm       wrong-ca         SslAuthenticationException: SSL handshake failed <- SslAuthenticationException: SSL handshake failed <- SSLHandshakeException: (certificate_unknown) P
+  jvm       tls-to-plaintext TimeoutException: Topic kafkakn not present in metadata after 20000 ms. <- TimeoutException: Topic kafkakn not present in metadata after 20000 ms.
+  linuxX64  wrong-ca         KafkaProduceException: kafkakn: Local: Message timed out; last broker error: Local: SSL error: ssl://127.0.0.1:9094/bootstrap: SSL handshake failed: e
+  linuxX64  tls-to-plaintext KafkaProduceException: kafkakn: Local: Message timed out; last broker error: Local: Broker transport failure: ssl://127.0.0.1:9092/bootstrap: SSL hand
+
+=== the arms still agree on what only a client knows ===
+  jvm.txt: 17 observations
+  linuxX64.txt: 17 observations
+  THE ARMS AGREE on every observation
+
+=== verdict ===
+B-11: both arms produce over TLS, refuse an unverifiable peer, and say which it was
