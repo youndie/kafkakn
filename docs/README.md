@@ -37,9 +37,10 @@ Every document on disk, listed once. `[x]` written, `[ ]` planned.
 - [x] [kafkakn-core](services/kafkakn-core.md) — the one published module: targets, the source-set layout, and the quirks that will bite
 - [x] [test-broker](services/test-broker.md) — a real broker rather than a fake, and the third parties every assertion goes through
 
-### API (1)
+### API (2)
 
 - [x] [producer-contract](api/producer-contract.md) — the `expect` surface, what each call promises, and the five things both actuals must agree on
+- [x] [consumer-contract](api/consumer-contract.md) — designed before it is built: the threading each client demands, the shape, twenty defaults read from both artefacts, and what the first consumer will not do; all *target*
 
 ### Features (3)
 

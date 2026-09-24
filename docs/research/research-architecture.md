@@ -336,7 +336,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
 | H5 | `linuxArm64` costs a matrix row and no code (D6) | [B-39](../backlog/B-39-linux-arm64.md) |
 | H6 | ~~Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8)~~ — **settled 2026-09-24: yes, and systematically; see §2.19** | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) `done` |
-| H7 | A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model | [B-35](../backlog/B-35-the-consumer-designed-first.md) |
+| H7 | A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model — **restated 2026-09-24, not settled: see §2.24** | [B-36](../backlog/B-36-assign-and-poll.md) |
 
 ### 2.1 H1, settled: three kinds of assertion, and only one of them needs machinery
 
@@ -989,6 +989,35 @@ records were written — and the coordinator's own `kafka-transactions.sh descri
 **Measured**, `ci/b-30/run.sh`, both arms: committed 50/50 under `read_committed`; aborted 0 under
 `read_committed` and 50 under `read_uncommitted`; `CompleteCommit` and `CompleteAbort` from the
 coordinator; a fenced producer's commit and next `send` both `ProducerFencedException`.
+
+### 2.24 The consumer, read before it is written — and H7 restated
+
+[B-35](../backlog/B-35-the-consumer-designed-first.md) produced
+[consumer-contract](../api/consumer-contract.md) and no code. Three readings decided its shape.
+
+| Fact | Where verified |
+|---|---|
+| the Java consumer's thread check is a lock held **for one call**: `acquire()` takes the caller's thread id, `release()` clears it; overlapping calls throw `ConcurrentModificationException`, sequential calls from different threads do not | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/clients/consumer/internals/ClassicKafkaConsumer.java`, and the same in `…/AsyncKafkaConsumer.java` |
+| `wakeup()` is the one cross-thread call; interrupts are discouraged because they can abort a clean shutdown | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java` |
+| librdkafka is thread-safe throughout; its offset store is filled as each message is handed to the application | `librdkafka-2.13.0.tar.gz!/INTRODUCTION.md` |
+| six more consumer defaults disagree or exist on one side only: `allow.auto.create.topics` (`true`/`false`), `check.crcs` (`true`/`false`), `fetch.max.wait.ms` vs `fetch.wait.max.ms`, `max.poll.records` (JVM only), `enable.auto.offset.store` and `enable.partition.eof` (native only) | `ConsumerConfig.configDef().defaultValues()` run against `kafka-clients-4.3.1.jar`; `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md` |
+
+**Consequences, all *target* until B-36 and B-37 measure them.** The JVM arm confines each consumer to
+a `Dispatchers.IO.limitedParallelism(1)` lane — not one thread, because the check is not per thread —
+and cancels a waiting `poll` with `wakeup()`. The native arm polls with a zero timeout and `delay`, as
+the producer's pump does. `enable.auto.commit` is off on both arms because the same `true` means
+"commit what the previous `poll` returned" on one and "commit what was handed over, processed or
+not" on the other. `isolation.level` becomes `read_committed` on both — the safe default, which this
+time is librdkafka's.
+
+**H7 restated.** The reading says each client's threading model can be absorbed behind one surface:
+the JVM's constraint is "no overlap", which a serial lane gives, and librdkafka has none. What cannot
+be absorbed is `max.poll.interval.ms` — but it is the same rule on both arms, so it belongs to the
+contract rather than leaking from one platform. That is an argument, and H7 is settled only when
+[B-36](../backlog/B-36-assign-and-poll.md) shows three things on both arms: two coroutines calling one
+consumer concurrently never produce a `ConcurrentModificationException`; cancelling a `poll` that is
+waiting returns promptly and leaves the consumer usable; and neither holds the caller's dispatcher,
+held with the mark taken before the call (§2.22).
 
 ## 4. Risks, with the machinery that would catch them
 

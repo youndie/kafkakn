@@ -1,7 +1,7 @@
 ---
 id: B-35
 title: "The consumer, designed before it is built: a contract document and the defaults it starts from"
-status: wip
+status: done
 priority: P2
 size: M
 stage: stage-8-consume
@@ -38,3 +38,25 @@ document, not code — the consumer contract and the research beneath it — and
 - AC: an explicit list of what the first consumer will **not** do.
 - AC: H7 settled in the research, or restated with what would settle it.
 - Anchors: `docs/api/producer-contract.md`, `docs/research/research-architecture.md`.
+
+## Findings (2026-09-24)
+
+**Delivered:** [consumer-contract](../api/consumer-contract.md), and research §2.24. No code, as the
+item says.
+
+- **Threading, read rather than remembered.** The Java consumer's "not thread-safe" is a lock held for
+  one call, not an affinity to one thread. So a serial lane on `Dispatchers.IO` satisfies it and a
+  dedicated thread is not needed. `wakeup()` is the documented way to cancel; interrupts are
+  discouraged by the client's own documentation.
+- **The defaults table has twenty rows.** Research §1.8 had five. The six new disagreements include
+  two where kafkakn picks one value for both arms: `allow.auto.create.topics=false` and
+  `check.crcs=true`.
+- **Two decisions that go against a default.**
+  - `isolation.level=read_committed` on both arms: the safe default, which here is librdkafka's where
+    B-25's was the JVM's.
+  - `enable.auto.commit=false` on both arms: the same `true` commits different things on the two
+    clients.
+- **Shape:** an explicit `poll` first, and a `Flow` later over it. A `Flow` hides
+  `max.poll.interval.ms`, which evicts a slow collector on both arms.
+- **H7** is restated with the three measurements B-36 must make (research §2.24). The hypothesis moved
+  to B-36.

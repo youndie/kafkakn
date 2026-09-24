@@ -97,11 +97,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (10)
+## Open (9)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-35](docs/backlog/B-35-the-consumer-designed-first.md) `[~]` | The consumer, designed before it is built: a contract document and the defaults it starts from | P2 | M | - |
 | [B-36](docs/backlog/B-36-assign-and-poll.md) `[ ]` | A consumer without a group: assign partitions, seek, and read as a Flow | P2 | L | B-35 |
 | [B-37](docs/backlog/B-37-consumer-groups.md) `[ ]` | Consumer groups: subscribe, rebalance, commit — and a group with one consumer from each arm | P2 | XL | B-36 |
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[ ]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
@@ -112,7 +111,7 @@ verdict.
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (33)
+## Closed (34)
 
 **It builds, and a test can fail**
 
@@ -170,6 +169,10 @@ verdict.
 **It can manage what it writes to**
 
 - [B-34](docs/backlog/B-34-a-minimal-admin.md) `[x]` - A minimal admin client: create, delete and describe topics, describe the cluster
+
+**It reads — designed before it is built**
+
+- [B-35](docs/backlog/B-35-the-consumer-designed-first.md) `[x]` - The consumer, designed before it is built: a contract document and the defaults it starts from
 
 <!-- END INDEX -->
 
