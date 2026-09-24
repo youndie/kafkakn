@@ -136,6 +136,13 @@ case "${1:-}" in
         --topic "$2" --from-beginning --timeout-ms "${CONSUME_MS:-15000}" \
         --formatter-property print.value=true 2>/dev/null
     ;;
+  partition-values)
+    # One partition's values, from the beginning, read by the broker's own consumer: the oracle for
+    # "is this record where it says it is" - a client's report of its own partition is not.
+    kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
+        --topic "$2" --partition "$3" --offset earliest --timeout-ms "${CONSUME_MS:-15000}" \
+        --formatter-property print.value=true 2>/dev/null
+    ;;
   produce)
     # Reads stdin. Note kci, not kc.
     kci /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP" \

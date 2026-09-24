@@ -428,7 +428,8 @@ internal class NativeKafkaProducer(
         record: ProducerRecord,
     ): rd_kafka_resp_err_t =
         memScoped {
-            val count = 4 + (if (record.key != null) 1 else 0) + record.headers.size
+            val count =
+                4 + (if (record.key != null) 1 else 0) + (if (record.partition != null) 1 else 0) + record.headers.size
             val vus = allocArray<rd_kafka_vu_t>(count)
             var at = 0
 
@@ -449,6 +450,16 @@ internal class NativeKafkaProducer(
                 vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_KEY
                 vus[at].u.mem.ptr = bytes(key)
                 vus[at].u.mem.size = key.size.convert()
+                at++
+            }
+
+            // Only when the caller named one. Absent, librdkafka leaves the record unassigned and the
+            // partitioner decides, which is `murmur2_random` for a keyed record (research §2.2); present,
+            // the partitioner is not consulted at all - `int32_t`, the `i32` member of the union, which is
+            // the type rdkafka.h declares for this tag.
+            record.partition?.let { partition ->
+                vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_PARTITION
+                vus[at].u.i32 = partition
                 at++
             }
 

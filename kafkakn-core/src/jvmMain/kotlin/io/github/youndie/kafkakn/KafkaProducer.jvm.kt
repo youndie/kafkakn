@@ -126,14 +126,15 @@ internal class JvmKafkaProducer(
     /**
      * The five-argument constructor, because the shorter ones cannot carry headers.
      *
-     * `partition` and `timestamp` are null so the client decides both, which is what the
-     * three-argument form did. The headers are handed over in order and duplicates are kept: the
-     * Java client stores an ordered list too, so nothing has to be reconciled here.
+     * `partition` is the caller's or null, and null lets the client's partitioner decide, which is
+     * what the three-argument form did; `timestamp` is still null. The headers are handed over in
+     * order and duplicates are kept: the Java client stores an ordered list too, so nothing has to be
+     * reconciled here.
      */
     private fun ProducerRecord.toApache(): ApacheRecord<ByteArray, ByteArray> =
         ApacheRecord(
             topic,
-            null,
+            partition,
             null,
             key,
             value,

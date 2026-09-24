@@ -1,0 +1,27 @@
+=== environment ===
+2026-09-24T22:41:57+02:00
+  topic kafkakn-part-1790282517, fresh, 3 partitions
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-part-1790282517	TopicId: vBW34Wy8R_uTcKqKBF5aDA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== the sends, one test task per invocation ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== each partition, read on its own by the broker's consumer ===
+  jvm       named 0 -> p0=50 p1=0 p2=0
+  jvm       named 1 -> p0=0 p1=50 p2=0
+  jvm       named 2 -> p0=0 p1=0 p2=50
+  linuxX64  named 0 -> p0=50 p1=0 p2=0
+  linuxX64  named 1 -> p0=0 p1=50 p2=0
+  linuxX64  named 2 -> p0=0 p1=0 p2=50
+
+=== a partition the topic does not have: what each arm said, and how long it took ===
+  jvm        20004 ms  Partition 99 of topic kafkakn-part-1790282517 with partition count 3 is not present in metadata after 20000 ms
+  linuxX64       4 ms  kafkakn-part-1790282517: Local: Unknown partition
+
+B-27: every record is on the partition it named, on both arms, by the broker's own reading
