@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[ ]` | The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other | P0 | M | - |
+| [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) `[~]` | The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other | P0 | M | - |
 | [B-26](docs/backlog/B-26-compression-was-never-measured.md) `[ ]` | compression.type is named portable in the contract and no test has ever set it | P1 | S | - |
 | [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) `[ ]` | A record can name its partition, as it can in every other client | P1 | S | - |
 | [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[ ]` | A record carries its timestamp, and the metadata says which time the broker kept | P1 | S | - |

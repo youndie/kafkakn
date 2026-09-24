@@ -1,7 +1,7 @@
 ---
 id: B-25
 title: "The arms disagree on idempotence by default — a retried record can be written twice by one and once by the other"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-5-producer-parity
