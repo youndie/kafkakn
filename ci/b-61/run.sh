@@ -55,7 +55,10 @@ for line in open(sys.argv[1]):
     if not m:
         continue
     key, value, sensitive, synonyms = m.groups()
-    first = synonyms.split(":", 1)[0] if synonyms else ""
+    # The tool prints no source of its own, only the synonyms: every level that sets the key, nearest first.
+    # None at all ("synonyms={}", as for retention.ms, whose broker synonym log.retention.ms is unset) means
+    # nobody set it: the default, which is the source both clients report for such a key.
+    first = synonyms.split(":", 1)[0] if synonyms else "DEFAULT_CONFIG"
     tool[key] = ("null" if sensitive == "true" else value) + "/" + SOURCES.get(first, "UNKNOWN")
 said = dict(entry.split("=", 1) for entry in os.environ["SAID"].split(";") if entry)
 differ = sorted(k for k in set(tool) | set(said) if tool.get(k) != said.get(k))
