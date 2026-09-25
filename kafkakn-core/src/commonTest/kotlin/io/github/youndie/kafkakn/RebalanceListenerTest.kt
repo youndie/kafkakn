@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -121,8 +122,13 @@ class RebalanceListenerTest {
                         override fun onAssigned(partitions: List<TopicPartition>) {
                             outcome +=
                                 try {
-                                    runBlocking { consumer.assignment() }
-                                    "answered"
+                                    // Bounded, so an unguarded call fails by name instead of hanging the run:
+                                    // it deadlocks by SUSPENDING (on the JVM's lane, on native's lock), so the
+                                    // timeout can still fire. Without it, a run with the guard removed never
+                                    // finished, measured twice.
+                                    val answer =
+                                        runBlocking { withTimeoutOrNull(REENTRY_WAIT) { consumer.assignment() } }
+                                    if (answer == null) "deadlocked" else "answered"
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (refused: IllegalStateException) {
@@ -183,6 +189,7 @@ class RebalanceListenerTest {
     private companion object {
         val POLL = 200.milliseconds
         val ASSIGNED_WITHIN = 30.seconds
+        val REENTRY_WAIT = 5.seconds
         val STAY_AT_MOST: Duration = 2.minutes
     }
 }
