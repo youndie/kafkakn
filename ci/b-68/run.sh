@@ -22,7 +22,6 @@ FREEZES=${FREEZES:-8}
 EVERY=20
 FREEZE_FOR=15
 STAY=$((20 + FREEZES * (EVERY + FREEZE_FOR)))
-RECORDS=$(((STAY + 10) * 20))
 fail=0
 bad() { echo "    $*" >&2; fail=1; }
 KEXE=./build/bin/linuxX64/debugTest/test.kexe
@@ -51,6 +50,16 @@ echo
 echo "=== the native member frozen $FREEZES times for ${FREEZE_FOR} s, every ${EVERY} s; a JVM member holds the group ==="
 topic=kafkakn-b68-$(date +%s)
 PARTITIONS=$PARTITIONS bash "$H" topic "$topic" > /dev/null
+# As fast as the trickle goes (each send is acknowledged before the next): what piles up on the broker during a
+# freeze is what the member is still collecting when its loss arrives on SIGCONT. At 20 records a second, 8 freezes
+# gave no stray; B-65's single one came from a round with more queued. Sized to the measured rate, so the trickle
+# ends inside the members' stay.
+PARTITIONS=$PARTITIONS bash "$H" topic "$topic-rate" > /dev/null
+t0=$(date +%s%3N)
+bash "$H" records trickle "$topic-rate" "$PARTITIONS" 2000 0 > /dev/null
+rate=$((2000 * 1000 / ($(date +%s%3N) - t0)))
+RECORDS=$(((rate * STAY * 7 / 10) / PARTITIONS * PARTITIONS))
+echo "  trickle rate $rate records/s; $RECORDS records over about $((RECORDS / rate)) s of a ${STAY} s stay"
 rm -rf "$OBS"
 vars="KAFKAKN_SESSION_GROUP=$topic KAFKAKN_SESSION_TOPIC=$topic KAFKAKN_SESSION_END=$((RECORDS / PARTITIONS)) KAFKAKN_SESSION_STAY_S=$STAY"
 # shellcheck disable=SC2086
@@ -60,7 +69,7 @@ gradle=$!
 # shellcheck disable=SC2086
 ( cd kafkakn-core && exec env $vars KAFKAKN_SESSION_NAME=linuxX64 $KEXE --ktest_filter=$FILTER ) > build/b-68-native.out 2>&1 &
 native=$!
-bash "$H" records trickle "$topic" "$PARTITIONS" "$RECORDS" 50 > build/b-68-trickle.out &
+bash "$H" records trickle "$topic" "$PARTITIONS" "$RECORDS" 0 > build/b-68-trickle.out &
 trickle=$!
 sleep 20
 for ((i = 1; i <= FREEZES; i++)); do
