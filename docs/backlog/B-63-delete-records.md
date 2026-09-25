@@ -1,7 +1,7 @@
 ---
 id: B-63
 title: "Delete records before an offset"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-13-admin

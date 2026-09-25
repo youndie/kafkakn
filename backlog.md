@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
+| [B-63](docs/backlog/B-63-delete-records.md) `[~]` | Delete records before an offset | P3 | S | - |
 
 ## Closed (63)
 
