@@ -84,6 +84,21 @@ public interface KafkaConsumer {
      */
     public suspend fun committed(partitions: List<TopicPartition>): Map<TopicPartition, Long?>
 
+    /**
+     * Stops returning records from [partitions] without leaving the group
+     * ([B-52](../../../../../../../docs/backlog/B-52-pause-and-resume.md)): keep calling [poll], which
+     * returns the other partitions' records and keeps this member alive past `max.poll.interval.ms`. The
+     * consumer's backpressure, as a suspending `send` is the producer's. A partition not held is refused
+     * with [IllegalStateException]. A rebalance that takes a partition away also forgets it was paused.
+     */
+    public suspend fun pause(partitions: List<TopicPartition>)
+
+    /** Returns records from [partitions] again, from where they stopped. */
+    public suspend fun resume(partitions: List<TopicPartition>)
+
+    /** The partitions paused now, in topic-then-partition order. */
+    public suspend fun paused(): List<TopicPartition>
+
     /** The partitions this consumer holds now: its [assign]ment, or its share of a group. */
     public suspend fun assignment(): List<TopicPartition>
 

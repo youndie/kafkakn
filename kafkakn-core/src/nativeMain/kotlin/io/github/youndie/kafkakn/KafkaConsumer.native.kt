@@ -66,11 +66,13 @@ import rdkafka.rd_kafka_message_t
 import rdkafka.rd_kafka_message_timestamp
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_offsets_for_times
+import rdkafka.rd_kafka_pause_partitions
 import rdkafka.rd_kafka_poll_set_consumer
 import rdkafka.rd_kafka_position
 import rdkafka.rd_kafka_query_watermark_offsets
 import rdkafka.rd_kafka_rebalance_protocol
 import rdkafka.rd_kafka_resp_err_t
+import rdkafka.rd_kafka_resume_partitions
 import rdkafka.rd_kafka_seek_partitions
 import rdkafka.rd_kafka_subscribe
 import rdkafka.rd_kafka_t
@@ -358,6 +360,10 @@ internal class NativeKafkaConsumer(
                 throw KafkaConsumeException("assign: ${rd_kafka_err2str(err)?.toKString()}")
             }
         }
+        // An assignment starts unpaused in librdkafka, and a seek here re-assigns every partition. So a
+        // pause is put back on what is still held, as the Java client keeps it across a seek (B-52).
+        bridge.paused.retainAll(assigned.toSet())
+        pauseNow(bridge.paused.toList(), pause = true)
     }
 
     override suspend fun position(partition: TopicPartition): Long {
@@ -467,6 +473,65 @@ internal class NativeKafkaConsumer(
                 TopicPartition(entry.topic!!.toKString(), entry.partition) to entry.offset.takeIf { it >= 0 }
             }
         }
+
+    override suspend fun pause(partitions: List<TopicPartition>) {
+        enter("pause")
+        serial.withLock {
+            requireHeld(partitions, "pause")
+            pauseNow(partitions, pause = true)
+            bridge.paused += partitions
+        }
+    }
+
+    override suspend fun resume(partitions: List<TopicPartition>) {
+        enter("resume")
+        serial.withLock {
+            requireHeld(partitions, "resume")
+            pauseNow(partitions, pause = false)
+            bridge.paused -= partitions.toSet()
+        }
+    }
+
+    override suspend fun paused(): List<TopicPartition> {
+        enter("paused")
+        // librdkafka has no call that lists paused partitions, so this side keeps them (B-52), in the
+        // bridge the rebalance callback can reach: a partition that leaves this member is no longer paused.
+        return serial.withLock { bridge.paused.intersect(heldNow().toSet()).sortedWith(PARTITION_ORDER) }
+    }
+
+    private fun requireHeld(
+        partitions: List<TopicPartition>,
+        call: String,
+    ) {
+        val holding = if (subscribed) heldNow() else assigned
+        partitions.forEach { check(it in holding) { "$call: $it is not held by this consumer" } }
+    }
+
+    /** `rd_kafka_pause_partitions` or `_resume_partitions`, with every partition's own error read. */
+    private fun pauseNow(
+        partitions: List<TopicPartition>,
+        pause: Boolean,
+    ) {
+        if (partitions.isEmpty()) return
+        withPartitionList(partitions.map { it to OFFSET_INVALID }) { list ->
+            val err = if (pause) rd_kafka_pause_partitions(handle, list) else rd_kafka_resume_partitions(handle, list)
+            val refused =
+                (0 until list.pointed.cnt).mapNotNull { index ->
+                    val entry = list.pointed.elems!![index]
+                    if (entry.err ==
+                        RD_KAFKA_RESP_ERR_NO_ERROR
+                    ) {
+                        null
+                    } else {
+                        "${entry.topic?.toKString()}-${entry.partition}"
+                    }
+                }
+            if (err != RD_KAFKA_RESP_ERR_NO_ERROR || refused.isNotEmpty()) {
+                val call = if (pause) "pause" else "resume"
+                throw KafkaConsumeException("$call: ${rd_kafka_err2str(err)?.toKString()} $refused")
+            }
+        }
+    }
 
     override suspend fun poll(timeout: Duration): List<ConsumerRecord> {
         enter("poll")
@@ -607,6 +672,9 @@ private class RebalanceBridge(
     /** Where a seek in a group put a partition, until a record from it is read (position, B-51). */
     val groupSeeks = mutableMapOf<TopicPartition, Long>()
 
+    /** What this member paused and has not resumed (B-52): librdkafka has no call that lists them. */
+    val paused = mutableSetOf<TopicPartition>()
+
     /** What the listener threw, kept here because a C callback cannot throw; the call it ran in throws it. */
     var failure: Throwable? = null
 }
@@ -659,6 +727,8 @@ private fun onRebalance(
 
         RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS -> {
             list.forEach { bridge.groupSeeks.remove(it) }
+            // A partition that leaves is no longer paused, as the Java client forgets it on a rebalance.
+            bridge.paused -= list.toSet()
             try {
                 if (listener != null && list.isNotEmpty()) {
                     val lost = rd_kafka_assignment_lost(rk) == 1
