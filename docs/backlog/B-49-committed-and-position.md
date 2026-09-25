@@ -1,7 +1,7 @@
 ---
 id: B-49
 title: "Read back committed offsets and the current position"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-11-everyday-gaps
