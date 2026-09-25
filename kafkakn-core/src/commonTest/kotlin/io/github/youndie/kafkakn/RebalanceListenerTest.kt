@@ -61,8 +61,11 @@ class RebalanceListenerTest {
 
     /**
      * One member of a group with one member on each arm, asked for through the environment and only then,
-     * as B-37's mixed member is. `KAFKAKN_REBALANCE_LEAVE_MS` makes it the member that leaves (cleanly:
-     * `close`, which revokes); otherwise it stays until it holds every partition and has seen their end.
+     * as B-37's mixed member is. `KAFKAKN_REBALANCE_LEAVE_AFTER` makes it the member that leaves (cleanly:
+     * `close`, which revokes) once it has processed that many records; otherwise it stays until it holds
+     * every partition and has seen their end. Both rules are data, not time: a leaver on a fixed fifteen
+     * seconds once held its partitions for too short a moment to process any, and its revocation then
+     * had nothing to commit, which proves nothing about the listener.
      */
     @Test
     fun a_member_that_commits_only_on_revocation_hands_over_without_loss_or_duplicates() =
@@ -73,7 +76,7 @@ class RebalanceListenerTest {
                 return@runTest
             }
             val topic = testEnv("KAFKAKN_REBALANCE_TOPIC") ?: error("KAFKAKN_REBALANCE_TOPIC")
-            val leave = testEnv("KAFKAKN_REBALANCE_LEAVE_MS")?.toLong()?.milliseconds
+            val leave = testEnv("KAFKAKN_REBALANCE_LEAVE_AFTER")?.toInt()
             val partitions = testEnv("KAFKAKN_REBALANCE_PARTITIONS")?.toInt() ?: 1
             val end = testEnv("KAFKAKN_REBALANCE_END")?.toLong() ?: 0L
             val events = Events()
@@ -84,7 +87,7 @@ class RebalanceListenerTest {
                     consumer.subscribe(listOf(topic), events)
                     val started = TimeSource.Monotonic.markNow()
                     while (true) {
-                        if (leave != null && started.elapsedNow() >= leave) break
+                        if (leave != null && seen.size >= leave) break
                         if (leave == null && holdsAllAndSawTheEnd(consumer, partitions, end, seen)) break
                         check(started.elapsedNow() < STAY_AT_MOST) { "gave up after $STAY_AT_MOST: ${events.log}" }
                         for (record in consumer.poll(POLL)) {
