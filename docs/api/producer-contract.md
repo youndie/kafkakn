@@ -516,6 +516,8 @@ interface KafkaAdmin {
     suspend fun describeCluster(): ClusterDescription         // cluster id, controller, nodes
     suspend fun listConsumerGroups(): List<ConsumerGroupListing>                                // B-58
     suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription>  // B-58
+    suspend fun listConsumerGroupOffsets(groupId: String): Map<TopicPartition, Long>                   // B-59
+    suspend fun listOffsets(partitions: List<TopicPartition>, spec: OffsetSpec): Map<TopicPartition, Long?> // B-59
     suspend fun close()
 }
 ```
@@ -556,6 +558,21 @@ member of the controller quorum; on the fixture both arms reported node 1.
   with no member left but with commits is `EMPTY`.
 - *Measured* (`ci/b-58/run.sh`): a member that is not kafkakn, the distribution's console consumer, is
   described by both arms exactly as `kafka-consumer-groups.sh --describe --members --verbose` prints it.
+
+**A group's offsets, and a partition's ([B-59](../backlog/B-59-consumer-group-offsets-and-lag.md)).**
+- `listConsumerGroupOffsets(group)` is what the group committed, per partition: the next offset it reads, in
+  topic-then-partition order, asked from outside the group. A partition never committed is absent, and a
+  group that does not exist answers an empty map on both arms. JVM `listConsumerGroupOffsets(groupId)`,
+  native `rd_kafka_ListConsumerGroupOffsets` with no partitions named.
+- `listOffsets(partitions, spec)` is the broker's offset under `OffsetSpec.Earliest`, `Latest` (the offset
+  after the last record) or `Timestamp(ms)` (the first record at or after it). **Null means no record is that
+  late**, where both clients answer -1 and `kafka-get-offsets.sh` prints nothing for the partition. Read
+  uncommitted, the default of both. The max-timestamp spec is left out: it answers a different question.
+- **Lag is the caller's subtraction**, `listOffsets(…, Latest)` minus the commit. It is not a call of its own:
+  a derived number the library could get subtly wrong, and one line for the caller.
+- *Measured* (`ci/b-59/run.sh`): on each arm's own topic and group, the commits are what
+  `kafka-consumer-groups.sh --describe` prints as CURRENT-OFFSET, and earliest, latest and four timestamps
+  (before every record, exactly on one, between two, after all) are what `kafka-get-offsets.sh --time` prints.
 
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —

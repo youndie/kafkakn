@@ -30,6 +30,8 @@ describes the cluster. On both arms, and checked with the broker's own tools
   broker holds exactly those.
 - Creating a topic that exists fails with one kafkakn exception on both arms, `TopicExistsException`.
 - No call holds the caller's dispatcher while the cluster answers.
+- A group's lag is the caller's subtraction, the partition's latest offset minus the group's commit: the
+  library reads both and computes neither.
 
 ## 3. Code anchors
 
@@ -76,9 +78,18 @@ describes the cluster. On both arms, and checked with the broker's own tools
   assignment are what `kafka-consumer-groups.sh --describe --members --verbose` prints.
 * **Automated:** `AdminGroupsTest` on both arms, held against the broker's tool by `ci/b-58/run.sh`.
 
+### Scenario: A group's commits and a partition's offsets are what the broker's tools print
+* **Given:** a topic of three partitions holding five, three and no records, a second apart, and a group
+  that committed offsets 4 and 3 on the first two without ever joining.
+* **When:** each arm lists the group's offsets, and lists the topic's offsets as earliest, latest and at four
+  timestamps.
+* **Then:** the commits are `0:4 1:3`, as `kafka-consumer-groups.sh --describe` prints them; every offset is
+  what `kafka-get-offsets.sh --time` prints, and a partition with no record that late is null where the tool
+  prints nothing. A group that does not exist has no offsets. Both arms answer alike.
+* **Automated:** `AdminOffsetsTest` on both arms, held against the broker's tools by `ci/b-59/run.sh`.
+
 ## 5. Out of scope
 
-Consumer-group offsets, resetting and deleting groups ([B-59](../backlog/B-59-consumer-group-offsets-and-lag.md),
-[B-60](../backlog/B-60-reset-and-delete-group-offsets.md)), topic configuration on an existing topic, adding partitions and deleting
+Resetting and deleting group offsets ([B-60](../backlog/B-60-reset-and-delete-group-offsets.md)), topic configuration on an existing topic, adding partitions and deleting
 records are stage 13 ([B-58](../backlog/B-58-list-and-describe-consumer-groups.md) to
 [B-63](../backlog/B-63-delete-records.md)). ACLs are not planned.
