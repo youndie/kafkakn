@@ -1,7 +1,7 @@
 ---
 id: B-41
 title: "Metrics an operator can read — without the library counting its own successes"
-status: open
+status: wip
 priority: P3
 size: M
 stage: stage-6-real-deployments
