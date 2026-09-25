@@ -119,20 +119,28 @@ internal class JvmKafkaConsumer(
      * to `onPartitionsRevoked` as its default would. Empty lists are not passed on (§2a).
      */
     private fun bridge(listener: RebalanceListener): ConsumerRebalanceListener {
-        val scope =
+        fun scope(assigning: Boolean) =
             object : RebalanceScope {
                 override fun commit(offsets: Map<TopicPartition, Long>) {
                     requireCommittable(offsets)
                     if (offsets.isEmpty()) return
                     delegate.commitSync(offsets.entries.associate { it.key.apache() to OffsetAndMetadata(it.value) })
                 }
+
+                override fun seek(
+                    partition: TopicPartition,
+                    to: SeekTo,
+                ) {
+                    check(assigning) { "seek from onRevoked: $partition is leaving this member" }
+                    seekNow(partition, to)
+                }
             }
         return object : ConsumerRebalanceListener {
             override fun onPartitionsRevoked(partitions: Collection<ApachePartition>) =
-                inside(partitions) { listener.onRevoked(it, scope) }
+                inside(partitions) { listener.onRevoked(it, scope(assigning = false)) }
 
             override fun onPartitionsAssigned(partitions: Collection<ApachePartition>) =
-                inside(partitions, listener::onAssigned)
+                inside(partitions) { listener.onAssigned(it, scope(assigning = true)) }
 
             override fun onPartitionsLost(partitions: Collection<ApachePartition>) =
                 inside(partitions, listener::onLost)
@@ -203,27 +211,37 @@ internal class JvmKafkaConsumer(
         to: SeekTo,
     ) {
         enter("seek")
-        check(!subscribed) { "seek is refused under a subscription, on both arms: the group decides positions" }
-        withContext(lane) {
-            val apache = partition.apache()
-            when (to) {
-                SeekTo.Beginning -> {
-                    delegate.seekToBeginning(listOf(apache))
-                }
+        withContext(lane) { seekNow(partition, to) }
+    }
 
-                SeekTo.End -> {
-                    delegate.seekToEnd(listOf(apache))
-                }
+    /**
+     * The seek itself, for a caller already on the lane: [seek], and the scope inside `onAssigned`, which
+     * runs on the lane's thread inside `poll` (B-51). A partition not held is refused here, in the
+     * contract's words, rather than left to the Java client's own message.
+     */
+    private fun seekNow(
+        partition: TopicPartition,
+        to: SeekTo,
+    ) {
+        val apache = partition.apache()
+        check(apache in delegate.assignment()) { "seek: $partition is not held by this consumer" }
+        when (to) {
+            SeekTo.Beginning -> {
+                delegate.seekToBeginning(listOf(apache))
+            }
 
-                is SeekTo.Offset -> {
-                    delegate.seek(apache, to.offset)
-                }
+            SeekTo.End -> {
+                delegate.seekToEnd(listOf(apache))
+            }
 
-                is SeekTo.Timestamp -> {
-                    val found: OffsetAndTimestamp? = delegate.offsetsForTimes(mapOf(apache to to.timestamp))[apache]
-                    // No record at or after that time: the end, as the contract says.
-                    if (found == null) delegate.seekToEnd(listOf(apache)) else delegate.seek(apache, found.offset())
-                }
+            is SeekTo.Offset -> {
+                delegate.seek(apache, to.offset)
+            }
+
+            is SeekTo.Timestamp -> {
+                val found: OffsetAndTimestamp? = delegate.offsetsForTimes(mapOf(apache to to.timestamp))[apache]
+                // No record at or after that time: the end, as the contract says.
+                if (found == null) delegate.seekToEnd(listOf(apache)) else delegate.seek(apache, found.offset())
             }
         }
     }

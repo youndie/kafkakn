@@ -71,6 +71,7 @@ import rdkafka.rd_kafka_position
 import rdkafka.rd_kafka_query_watermark_offsets
 import rdkafka.rd_kafka_rebalance_protocol
 import rdkafka.rd_kafka_resp_err_t
+import rdkafka.rd_kafka_seek_partitions
 import rdkafka.rd_kafka_subscribe
 import rdkafka.rd_kafka_t
 import rdkafka.rd_kafka_topic_name
@@ -138,7 +139,7 @@ internal class NativeKafkaConsumer(
         }
 
     /** What the rebalance callback needs, reached through librdkafka's opaque. Disposed after destroy. */
-    private val bridge = RebalanceBridge()
+    private val bridge = RebalanceBridge(requestTimeoutMsFor(properties))
     private val bridgeRef = StableRef.create(bridge)
 
     private val handle: CPointer<rd_kafka_t> =
@@ -333,22 +334,20 @@ internal class NativeKafkaConsumer(
         to: SeekTo,
     ) {
         enter("seek")
-        check(!subscribed) { "seek is refused under a subscription, on both arms: the group decides positions" }
         serial.withLock {
-            require(partition in assigned) { "seek: $partition is not assigned (assigned: $assigned)" }
-            val offset =
-                when (to) {
-                    SeekTo.Beginning -> OFFSET_BEGINNING
-
-                    SeekTo.End -> OFFSET_END
-
-                    is SeekTo.Offset -> to.offset
-
-                    // A blocking call to the broker, on a thread that exists for it.
-                    is SeekTo.Timestamp -> withContext(Dispatchers.IO) { offsetForTime(partition, to.timestamp) }
-                }
-            positions[partition] = offset
-            reassign()
+            val held = if (subscribed) heldNow() else assigned
+            check(partition in held) { "seek: $partition is not held by this consumer" }
+            // A timestamp is a blocking call to the broker, on a thread that exists for it.
+            val offset = withContext(Dispatchers.IO) { seekTarget(handle, partition, to, requestTimeoutMs) }
+            if (subscribed) {
+                // In a group the assignment is the group's, so this seeks rather than re-assigns (B-51), and
+                // remembers where, so that position() answers it until a record is read.
+                seekPartitionsNow(handle, partition, offset, requestTimeoutMs)
+                bridge.groupSeeks[partition] = offset
+            } else {
+                positions[partition] = offset
+                reassign()
+            }
         }
     }
 
@@ -360,23 +359,6 @@ internal class NativeKafkaConsumer(
             }
         }
     }
-
-    /** `rd_kafka_offsets_for_times`: the offset of the first record at or after [timestamp], or the end. */
-    private fun offsetForTime(
-        partition: TopicPartition,
-        timestamp: Long,
-    ): Long =
-        withPartitionList(listOf(partition to timestamp)) { list ->
-            val err = rd_kafka_offsets_for_times(handle, list, requestTimeoutMs)
-            if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-                throw KafkaConsumeException(
-                    "offsets for time $timestamp on $partition: ${rd_kafka_err2str(err)?.toKString()}",
-                )
-            }
-            val found = list.pointed.elems!![0].offset
-            // -1 is librdkafka's "no record at or after that time" — the end, as the contract says.
-            if (found < 0) OFFSET_END else found
-        }
 
     override suspend fun position(partition: TopicPartition): Long {
         enter("position")
@@ -408,6 +390,14 @@ internal class NativeKafkaConsumer(
                 }
             }
         } else {
+            // A seek in the group, not yet overtaken by a record: where it put the partition.
+            bridge.groupSeeks[partition]?.let { sought ->
+                return when (sought) {
+                    OFFSET_BEGINNING -> watermarks(partition).first
+                    OFFSET_END -> watermarks(partition).second
+                    else -> sought
+                }
+            }
             consumedPosition(partition)?.let { return it }
         }
         committedNow(listOf(partition))[partition]?.let { return it }
@@ -496,7 +486,9 @@ internal class NativeKafkaConsumer(
                 try {
                     read(message)?.let { record ->
                         records += record
-                        positions[TopicPartition(record.topic, record.partition)] = record.offset + 1
+                        val from = TopicPartition(record.topic, record.partition)
+                        positions[from] = record.offset + 1
+                        bridge.groupSeeks.remove(from)
                     }
                 } finally {
                     rd_kafka_message_destroy(message)
@@ -606,8 +598,14 @@ internal class NativeGroupMetadata(
 ) : ConsumerGroupMetadata()
 
 /** What the rebalance callback needs from the consumer that installed it (consumer-contract §2a). */
-private class RebalanceBridge {
+private class RebalanceBridge(
+    /** librdkafka's bound for the one blocking call a callback may make, offsets for a time. */
+    val requestTimeoutMs: Int,
+) {
     var listener: RebalanceListener? = null
+
+    /** Where a seek in a group put a partition, until a record from it is read (position, B-51). */
+    val groupSeeks = mutableMapOf<TopicPartition, Long>()
 
     /** What the listener threw, kept here because a C callback cannot throw; the call it ran in throws it. */
     var failure: Throwable? = null
@@ -638,6 +636,18 @@ private fun onRebalance(
     val cooperative = rd_kafka_rebalance_protocol(rk)?.toKString() == "COOPERATIVE"
     when (err) {
         RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS -> {
+            // The listener first, then the assignment: librdkafka refuses a seek right after an assign
+            // ("Erroneous state", B-36), so a seek from onAssigned becomes the partition's starting offset in
+            // the list assigned. No record can be fetched in between, which is what the contract promises.
+            if (listener != null && list.isNotEmpty() && partitions != null) {
+                val scope = AssignScope(rk!!, list, bridge.requestTimeoutMs)
+                inside(bridge) { listener.onAssigned(list, scope) }
+                for (index in 0 until partitions.pointed.cnt) {
+                    val entry = partitions.pointed.elems!![index]
+                    scope.sought[TopicPartition(entry.topic!!.toKString(), entry.partition)]?.let { entry.offset = it }
+                }
+                bridge.groupSeeks.putAll(scope.sought)
+            }
             if (cooperative) {
                 rd_kafka_incremental_assign(rk, partitions)?.let {
                     rd_kafka_error_destroy(it)
@@ -645,10 +655,10 @@ private fun onRebalance(
             } else {
                 rd_kafka_assign(rk, partitions)
             }
-            if (listener != null && list.isNotEmpty()) inside(bridge) { listener.onAssigned(list) }
         }
 
         RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS -> {
+            list.forEach { bridge.groupSeeks.remove(it) }
             try {
                 if (listener != null && list.isNotEmpty()) {
                     val lost = rd_kafka_assignment_lost(rk) == 1
@@ -689,14 +699,104 @@ private inline fun inside(
     }
 }
 
-private class NativeRebalanceScope(
-    private val rk: CPointer<rd_kafka_t>,
+private open class NativeRebalanceScope(
+    protected val rk: CPointer<rd_kafka_t>,
 ) : RebalanceScope {
     override fun commit(offsets: Map<TopicPartition, Long>) {
         requireCommittable(offsets)
         if (offsets.isNotEmpty()) commitNow(rk, offsets)
     }
+
+    override fun seek(
+        partition: TopicPartition,
+        to: SeekTo,
+    ): Unit = throw IllegalStateException("seek from onRevoked: $partition is leaving this member")
 }
+
+/** The scope inside onAssigned: a seek is kept and becomes the partition's starting offset (B-51). */
+private class AssignScope(
+    rk: CPointer<rd_kafka_t>,
+    private val arriving: List<TopicPartition>,
+    private val requestTimeoutMs: Int,
+) : NativeRebalanceScope(rk) {
+    val sought = mutableMapOf<TopicPartition, Long>()
+
+    override fun seek(
+        partition: TopicPartition,
+        to: SeekTo,
+    ) {
+        check(partition in arriving) { "seek: $partition is not among the partitions arriving" }
+        sought[partition] = seekTarget(rk, partition, to, requestTimeoutMs)
+    }
+}
+
+private fun requestTimeoutMsFor(properties: Map<String, String>): Int =
+    properties["socket.timeout.ms"]?.toIntOrNull() ?: 60_000
+
+/** Where a [SeekTo] points, as librdkafka takes it: an offset, or the logical beginning or end. */
+private fun seekTarget(
+    rk: CPointer<rd_kafka_t>,
+    partition: TopicPartition,
+    to: SeekTo,
+    requestTimeoutMs: Int,
+): Long =
+    when (to) {
+        SeekTo.Beginning -> LOGICAL_BEGINNING
+        SeekTo.End -> LOGICAL_END
+        is SeekTo.Offset -> to.offset
+        is SeekTo.Timestamp -> offsetForTime(rk, partition, to.timestamp, requestTimeoutMs)
+    }
+
+/** `rd_kafka_offsets_for_times`: the offset of the first record at or after [timestamp], or the end. */
+private fun offsetForTime(
+    rk: CPointer<rd_kafka_t>,
+    partition: TopicPartition,
+    timestamp: Long,
+    requestTimeoutMs: Int,
+): Long {
+    val list = rd_kafka_topic_partition_list_new(1) ?: error("rd_kafka_topic_partition_list_new returned null")
+    try {
+        rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)!!.pointed.offset = timestamp
+        val err = rd_kafka_offsets_for_times(rk, list, requestTimeoutMs)
+        if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+            throw KafkaConsumeException(
+                "offsets for time $timestamp on $partition: ${rd_kafka_err2str(err)?.toKString()}",
+            )
+        }
+        val found = list.pointed.elems!![0].offset
+        // -1 is librdkafka's "no record at or after that time": the end, as the contract says.
+        return if (found < 0) LOGICAL_END else found
+    } finally {
+        rd_kafka_topic_partition_list_destroy(list)
+    }
+}
+
+/** `rd_kafka_seek_partitions` of one partition in a group: the call's error and the partition's own are read. */
+private fun seekPartitionsNow(
+    rk: CPointer<rd_kafka_t>,
+    partition: TopicPartition,
+    offset: Long,
+    requestTimeoutMs: Int,
+) {
+    val list = rd_kafka_topic_partition_list_new(1) ?: error("rd_kafka_topic_partition_list_new returned null")
+    try {
+        rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)!!.pointed.offset = offset
+        rd_kafka_seek_partitions(rk, list, requestTimeoutMs)?.let { failure ->
+            val why = rd_kafka_error_string(failure)?.toKString()
+            rd_kafka_error_destroy(failure)
+            throw KafkaConsumeException("seek $partition: $why")
+        }
+        val entry = list.pointed.elems!![0]
+        if (entry.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+            throw KafkaConsumeException("seek $partition: ${rd_kafka_err2str(entry.err)?.toKString()}")
+        }
+    } finally {
+        rd_kafka_topic_partition_list_destroy(list)
+    }
+}
+
+private const val LOGICAL_BEGINNING = -2L
+private const val LOGICAL_END = -1L
 
 private fun toPartitions(list: CPointer<rd_kafka_topic_partition_list_t>): List<TopicPartition> =
     (0 until list.pointed.cnt)
