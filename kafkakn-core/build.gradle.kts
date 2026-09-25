@@ -1,4 +1,5 @@
-// The one published module. Nothing is implemented; this declares the shape.
+// The one published module: the producer, the consumer and the admin client, each an `expect` surface
+// with two actuals.
 //
 // Both targets from the first commit, not linuxX64 with the JVM "later": the JVM arm is the oracle
 // (research §1.1), and an oracle added after the implementation is an oracle shaped by it.

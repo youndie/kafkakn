@@ -1,7 +1,7 @@
 ---
 id: B-45
 title: "Three places in the tree still say nothing is built, and one of them is code"
-status: open
+status: done
 priority: P1
 size: S
 stage: stage-10-housekeeping
@@ -33,3 +33,27 @@ state line in `CLAUDE.md` was corrected for the same fault; these three were mis
 - AC: `ktlintCheck` and `make check` pass, and both arms' suites still compile.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.kt`,
   `kafkakn-core/build.gradle.kts`, `docs/features/feature-produce-a-record.md`.
+
+## Findings (2026-09-25)
+
+- **Five places, not three.** The stub, `build.gradle.kts` and the feature document were the three the
+  item named. The acceptance grep found a fourth and a fifth:
+  - the `Makefile`'s `report` comment: *"nothing is implemented … expected to be long until stage 0
+    closes"*;
+  - the KDoc of `DifferentialHarnessTest`: *"There is no producer yet"*. It also promised that its
+    observations *"are replaced by the partitioner's answers"* once producers existed. That never
+    happened: those answers went into `PartitionerAgreementTest`. And it spelled the skew switch
+    `-Dkafkakn.skewArm`, when it is the environment variable `KAFKAKN_SKEW_ARM`.
+
+  All five now say what is true.
+- **The guard was cheap, so it is in the gate.** `scripts/no_todo_in_main.py` fails on `TODO(` in
+  code under `*/src/*Main`, with comments stripped, so KDoc can still mention it. Test sources are not
+  scanned. Controls:
+  - its self-test flags a stub and passes a comment that mentions one;
+  - run against `main`'s old `KafkaProducer.kt`, it flags all ten `TODO(` lines of the stub, and
+    exits 1.
+
+  The document half of the guard was not built: a pattern for "nothing is built" would also match the
+  backlog's history, which the item said not to flag.
+- **AC.** The grep finds nothing. `ktlintCheck`, and the jvm and linuxX64 test compilations, pass on the
+  Linux box. `make check` passes and runs the new guard.
