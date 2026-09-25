@@ -54,9 +54,11 @@ public class ProducerRecord(
         require(timestamp == null || timestamp >= 0) { "timestamp must not be negative, was $timestamp" }
     }
 
-    override fun toString(): String =
-        "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=${value?.let { "${it.size} bytes" } ?: "null"}, " +
+    override fun toString(): String {
+        val valueSize = value?.size?.let { "$it bytes" } ?: "null"
+        return "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=$valueSize, " +
             "headers=${headers.size}, partition=${partition ?: "any"}, timestamp=${timestamp ?: "now"})"
+    }
 }
 
 /**

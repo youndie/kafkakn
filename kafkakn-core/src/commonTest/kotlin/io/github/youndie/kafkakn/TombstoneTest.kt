@@ -28,9 +28,10 @@ class TombstoneTest {
                 val stamp = "tomb-$armName-${randomSuffix()}"
                 val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"))
                 try {
-                    for ((key, last) in listOf("$stamp-gone" to null, "$stamp-kept" to ByteArray(0))) {
-                        producer.send(ProducerRecord(compactTopic, BEFORE.encodeToByteArray(), key = key.encodeToByteArray()))
-                        val landed = producer.send(ProducerRecord(compactTopic, last, key = key.encodeToByteArray()))
+                    for ((name, last) in listOf("$stamp-gone" to null, "$stamp-kept" to ByteArray(0))) {
+                        val key = name.encodeToByteArray()
+                        producer.send(ProducerRecord(compactTopic, BEFORE.encodeToByteArray(), key = key))
+                        val landed = producer.send(ProducerRecord(compactTopic, last, key = key))
                         assertEquals(0, landed.partition, "the compacted fixture has one partition")
                     }
                 } finally {
