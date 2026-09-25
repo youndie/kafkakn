@@ -1,7 +1,7 @@
 ---
 id: B-43
 title: "The native flush calls a blocking rd_kafka_flush on the caller's thread"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-5-producer-parity

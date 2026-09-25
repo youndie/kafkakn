@@ -102,7 +102,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[?]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
-| [B-43](docs/backlog/B-43-native-flush-may-hold-the-callers-thread.md) `[ ]` | The native flush calls a blocking rd_kafka_flush on the caller's thread | P2 | S | - |
+| [B-43](docs/backlog/B-43-native-flush-may-hold-the-callers-thread.md) `[~]` | The native flush calls a blocking rd_kafka_flush on the caller's thread | P2 | S | - |
 | [B-33](docs/backlog/B-33-sasl-oauthbearer.md) `[ ]` | SASL OAUTHBEARER with a token the caller supplies | P3 | M | B-32 |
 | [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[ ]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
