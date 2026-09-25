@@ -36,6 +36,27 @@ public interface KafkaAdmin {
     /** Each group named: its state, its assignor, and its members with what each is assigned. */
     public suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription>
 
+    /**
+     * What group [groupId] has committed, per partition: the next offset it will read
+     * ([B-59](../../../../../../../docs/backlog/B-59-consumer-group-offsets-and-lag.md)), in topic-then-partition
+     * order. Asked from outside the group, so no member is needed and none is disturbed. A partition the group
+     * never committed is absent, and a group that does not exist answers an empty map.
+     *
+     * A group's lag is the caller's subtraction: [listOffsets] with [OffsetSpec.Latest], minus this.
+     */
+    public suspend fun listConsumerGroupOffsets(groupId: String): Map<TopicPartition, Long>
+
+    /**
+     * The broker's offset for each of [partitions] under [spec], the answer `kafka-get-offsets.sh` prints:
+     * where the partition starts, the offset after its last record, or the first offset at or after a
+     * timestamp. Null only for [OffsetSpec.Timestamp] when no record is that late. Read uncommitted, as both
+     * clients default to: the end counts records of a transaction still open.
+     */
+    public suspend fun listOffsets(
+        partitions: List<TopicPartition>,
+        spec: OffsetSpec,
+    ): Map<TopicPartition, Long?>
+
     /** Releases the client. */
     public suspend fun close()
 }
@@ -83,6 +104,29 @@ public enum class GroupState {
         fun named(name: String?): GroupState {
             val normalised = name.orEmpty().replace(Regex("([a-z])([A-Z])"), "$1_$2").uppercase()
             return entries.firstOrNull { it.name == normalised } ?: UNKNOWN
+        }
+    }
+}
+
+/**
+ * Which offset [KafkaAdmin.listOffsets] asks for: both clients' `OffsetSpec` and `rd_kafka_OffsetSpec_t`,
+ * without the max-timestamp variant, which answers a different question.
+ */
+public sealed interface OffsetSpec {
+    /** The earliest offset the broker still has. */
+    public data object Earliest : OffsetSpec
+
+    /** The offset after the last record: the partition's end. */
+    public data object Latest : OffsetSpec
+
+    /** The first offset whose record's timestamp is at or after [timestamp], in milliseconds since the epoch. */
+    public data class Timestamp(
+        public val timestamp: Long,
+    ) : OffsetSpec {
+        init {
+            // librdkafka reads a negative value as one of its specs (-1 latest, -2 earliest): a mistaken
+            // timestamp would silently become a different question.
+            require(timestamp >= 0) { "timestamp must not be negative, was $timestamp" }
         }
     }
 }

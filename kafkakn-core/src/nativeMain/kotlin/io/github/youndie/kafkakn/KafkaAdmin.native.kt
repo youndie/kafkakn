@@ -27,9 +27,13 @@ import rdkafka.RD_KAFKA_ADMIN_OP_DELETETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECLUSTER
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECONSUMERGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBETOPICS
+import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPOFFSETS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPS
+import rdkafka.RD_KAFKA_ADMIN_OP_LISTOFFSETS
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
+import rdkafka.RD_KAFKA_OFFSET_SPEC_EARLIEST
+import rdkafka.RD_KAFKA_OFFSET_SPEC_LATEST
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
 import rdkafka.rd_kafka_AdminOptions_destroy
@@ -58,8 +62,16 @@ import rdkafka.rd_kafka_DescribeConsumerGroups
 import rdkafka.rd_kafka_DescribeConsumerGroups_result_groups
 import rdkafka.rd_kafka_DescribeTopics
 import rdkafka.rd_kafka_DescribeTopics_result_topics
+import rdkafka.rd_kafka_ListConsumerGroupOffsets
+import rdkafka.rd_kafka_ListConsumerGroupOffsets_destroy
+import rdkafka.rd_kafka_ListConsumerGroupOffsets_new
+import rdkafka.rd_kafka_ListConsumerGroupOffsets_result_groups
+import rdkafka.rd_kafka_ListConsumerGroupOffsets_t
 import rdkafka.rd_kafka_ListConsumerGroups
 import rdkafka.rd_kafka_ListConsumerGroups_result_valid
+import rdkafka.rd_kafka_ListOffsets
+import rdkafka.rd_kafka_ListOffsetsResultInfo_topic_partition
+import rdkafka.rd_kafka_ListOffsets_result_infos
 import rdkafka.rd_kafka_MemberAssignment_partitions
 import rdkafka.rd_kafka_MemberDescription_assignment
 import rdkafka.rd_kafka_MemberDescription_client_id
@@ -96,17 +108,24 @@ import rdkafka.rd_kafka_event_DeleteTopics_result
 import rdkafka.rd_kafka_event_DescribeCluster_result
 import rdkafka.rd_kafka_event_DescribeConsumerGroups_result
 import rdkafka.rd_kafka_event_DescribeTopics_result
+import rdkafka.rd_kafka_event_ListConsumerGroupOffsets_result
 import rdkafka.rd_kafka_event_ListConsumerGroups_result
+import rdkafka.rd_kafka_event_ListOffsets_result
 import rdkafka.rd_kafka_event_destroy
 import rdkafka.rd_kafka_event_error
 import rdkafka.rd_kafka_event_error_string
 import rdkafka.rd_kafka_event_t
+import rdkafka.rd_kafka_group_result_error
+import rdkafka.rd_kafka_group_result_partitions
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_queue_destroy
 import rdkafka.rd_kafka_queue_new
 import rdkafka.rd_kafka_queue_poll
 import rdkafka.rd_kafka_queue_t
 import rdkafka.rd_kafka_t
+import rdkafka.rd_kafka_topic_partition_list_add
+import rdkafka.rd_kafka_topic_partition_list_destroy
+import rdkafka.rd_kafka_topic_partition_list_new
 import rdkafka.rd_kafka_topic_result_error
 import rdkafka.rd_kafka_topic_result_error_string
 import rdkafka.rd_kafka_topic_result_name
@@ -426,6 +445,117 @@ internal class NativeKafkaAdmin(
     /** librdkafka's state, by its name (`Stable`, `PreparingRebalance`), into the one both arms report. */
     private fun stateOf(state: rd_kafka_consumer_group_state_t): GroupState =
         GroupState.named(rd_kafka_consumer_group_state_name(state)?.toKString())
+
+    /**
+     * `rd_kafka_ListConsumerGroupOffsets` with no partitions named: every partition the group committed. An
+     * entry without a commit carries a negative (logical) offset, and is dropped as the JVM arm drops its null.
+     */
+    override suspend fun listConsumerGroupOffsets(groupId: String): Map<TopicPartition, Long> =
+        request(
+            RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPOFFSETS,
+            "listConsumerGroupOffsets",
+            submit = { options, queue ->
+                memScoped {
+                    val asked =
+                        rd_kafka_ListConsumerGroupOffsets_new(groupId, null)
+                            ?: error("rd_kafka_ListConsumerGroupOffsets_new returned null")
+                    val array = allocArray<CPointerVar<rd_kafka_ListConsumerGroupOffsets_t>>(1)
+                    array[0] = asked
+                    try {
+                        rd_kafka_ListConsumerGroupOffsets(handle, array, 1.convert(), options, queue)
+                    } finally {
+                        rd_kafka_ListConsumerGroupOffsets_destroy(asked)
+                    }
+                }
+            },
+            read = { event ->
+                val result =
+                    rd_kafka_event_ListConsumerGroupOffsets_result(event)
+                        ?: error("not a ListConsumerGroupOffsets result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    val group = rd_kafka_ListConsumerGroupOffsets_result_groups(result, count.ptr)!![0]!!
+                    rd_kafka_group_result_error(group)?.let { error ->
+                        throw KafkaAdminException(
+                            "listConsumerGroupOffsets: $groupId: ${rd_kafka_error_string(
+                                error,
+                            )?.toKString()} (${rd_kafka_error_code(error)})",
+                        )
+                    }
+                    val list = rd_kafka_group_result_partitions(group)
+                    (0 until (list?.pointed?.cnt ?: 0))
+                        .mapNotNull { index ->
+                            val entry = list!!.pointed.elems!![index]
+                            val partition = TopicPartition(entry.topic!!.toKString(), entry.partition)
+                            if (entry.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                                throw KafkaAdminException(
+                                    "listConsumerGroupOffsets: $groupId: $partition: ${rd_kafka_err2str(
+                                        entry.err,
+                                    )?.toKString()}",
+                                )
+                            }
+                            entry.offset.takeIf { it >= 0 }?.let { partition to it }
+                        }.sortedWith(compareBy(PARTITION_ORDER) { it.first })
+                        .toMap()
+                }
+            },
+        )
+
+    /**
+     * `rd_kafka_ListOffsets`: each partition's offset field carries the question, a `rd_kafka_OffsetSpec_t` or
+     * a timestamp. The answer is -1 when no record is as late as a timestamp: null here, as on the JVM.
+     */
+    override suspend fun listOffsets(
+        partitions: List<TopicPartition>,
+        spec: OffsetSpec,
+    ): Map<TopicPartition, Long?> {
+        val asked =
+            when (spec) {
+                OffsetSpec.Earliest -> RD_KAFKA_OFFSET_SPEC_EARLIEST.toLong()
+                OffsetSpec.Latest -> RD_KAFKA_OFFSET_SPEC_LATEST.toLong()
+                is OffsetSpec.Timestamp -> spec.timestamp
+            }
+        val answered =
+            request(
+                RD_KAFKA_ADMIN_OP_LISTOFFSETS,
+                "listOffsets",
+                submit = { options, queue ->
+                    val list =
+                        rd_kafka_topic_partition_list_new(partitions.size)
+                            ?: error("rd_kafka_topic_partition_list_new returned null")
+                    try {
+                        partitions.forEach { partition ->
+                            rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)!!
+                                .pointed.offset = asked
+                        }
+                        rd_kafka_ListOffsets(handle, list, options, queue)
+                    } finally {
+                        rd_kafka_topic_partition_list_destroy(list)
+                    }
+                },
+                read = { event ->
+                    val result = rd_kafka_event_ListOffsets_result(event) ?: error("not a ListOffsets result")
+                    memScoped {
+                        val count = alloc<size_tVar>()
+                        val infos = rd_kafka_ListOffsets_result_infos(result, count.ptr)
+                        (0 until count.value.toInt()).associate { index ->
+                            val entry = rd_kafka_ListOffsetsResultInfo_topic_partition(infos!![index]!!)!!.pointed
+                            val partition = TopicPartition(entry.topic!!.toKString(), entry.partition)
+                            if (entry.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                                throw KafkaAdminException(
+                                    "listOffsets: $partition: ${rd_kafka_err2str(entry.err)?.toKString()}",
+                                )
+                            }
+                            partition to entry.offset
+                        }
+                    }
+                },
+            )
+        return partitions.sortedWith(PARTITION_ORDER).associateWith { partition ->
+            val offset = answered[partition] ?: throw KafkaAdminException("listOffsets: no answer for $partition")
+            offset.takeIf { it >= 0 }
+        }
+    }
 
     override suspend fun close() {
         // rd_kafka_destroy joins librdkafka's threads, briefly; on a thread that exists for waiting.
