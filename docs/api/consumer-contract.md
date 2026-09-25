@@ -79,6 +79,9 @@ interface KafkaConsumer {                                   // B-36, B-37
     suspend fun assignment(): List<TopicPartition>          // B-37
     suspend fun position(partition: TopicPartition): Long   // B-49: the next offset poll returns
     suspend fun committed(partitions: List<TopicPartition>): Map<TopicPartition, Long?>   // B-49
+    suspend fun pause(partitions: List<TopicPartition>)     // B-52
+    suspend fun resume(partitions: List<TopicPartition>)    // B-52
+    suspend fun paused(): List<TopicPartition>              // B-52
     suspend fun groupMetadata(): ConsumerGroupMetadata      // B-38
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
     suspend fun poll(timeout: Duration): List<ConsumerRecord>
@@ -139,6 +142,20 @@ class ConsumerRecord(                                       // B-36
   end and offset 7 they read 0, 20 and 7. After reading everything, 20; after seeking back, 7. A fresh
   member of a group that committed 7 reads 7, and a new group with `earliest` reads 0. A partition not
   assigned is refused with `IllegalStateException` on both arms.
+- **`pause` is the consumer's backpressure** ([B-52](../backlog/B-52-pause-and-resume.md)): keep calling
+  `poll`, which returns the other partitions' records and keeps the member in its group, while a paused
+  partition returns nothing. The item's trap was records a client had already fetched for a partition
+  when it was paused. **Neither arm returns them.** *Measured* (`ci/b-52/run.sh`), on a topic of the
+  test's own:
+  - partition 0 paused with more than one batch of it still to come, and polled past a 6 s
+    `max.poll.interval.ms`: 0 records from it, records from partition 1, and the member still holds both
+    and can commit;
+  - after `resume`, all 2000 of partition 0's records exactly once, the number the broker holds.
+
+  The native arm keeps the paused set itself, because librdkafka has no call that lists it. A rebalance
+  that takes a partition away forgets its pause, as the Java client does. A seek keeps it, as the Java
+  client does, although the native arm's `assign`-mode seek re-assigns and librdkafka starts an
+  assignment unpaused. Measured: `PauseTest.a_seek_does_not_undo_a_pause`.
 - **`committed` returns null where nothing is committed**, never −1: both clients use −1 internally, and a
   caller could read it as an offset. What each arm returns is what `kafka-consumer-groups.sh` shows.
 - **`subscribe` and `commit` need a `group.id` the caller named**, on both arms. The native arm's
@@ -360,7 +377,8 @@ client's own semantics, and the contract says which.
   in since [B-38](../backlog/B-38-exactly-once-read-process-write.md); the read-process-write loop
   around them is the caller's.
 - **Deserializers.** Bytes in, bytes out, as for the producer.
-- **Pause and resume, per-partition flow control, incremental fetch tuning.**
+- **Pause and resume, per-partition flow control, incremental fetch tuning.** Pause and resume have since
+  been built: B-52. Fetch tuning has not.
 - **Metrics** — [B-41](../backlog/B-41-metrics-an-operator-can-read.md), for both clients at once.
 - **More than one call in flight on one consumer.** Calls are serialised by the lane (§1); a caller
   who wants parallelism runs more consumers.

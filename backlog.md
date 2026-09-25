@@ -113,11 +113,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (12)
+## Open (11)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-52](docs/backlog/B-52-pause-and-resume.md) `[~]` | Pause and resume partitions without leaving the group | P2 | M | - |
 | [B-53](docs/backlog/B-53-consumer-lag-in-metrics.md) `[ ]` | Consumer metrics, lag first | P2 | M | - |
 | [B-54](docs/backlog/B-54-a-flow-over-poll.md) `[ ]` | A Flow of records, built on poll | P2 | S | - |
 | [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[ ]` | Cooperative rebalancing: partitions move without stopping the whole group | P2 | L | B-50 |
@@ -130,7 +129,7 @@ verdict.
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (51)
+## Closed (52)
 
 **It builds, and a test can fail**
 
@@ -218,6 +217,7 @@ verdict.
 - [B-49](docs/backlog/B-49-committed-and-position.md) `[x]` - Read back committed offsets and the current position
 - [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[x]` - A rebalance listener: say which partitions arrive and which leave
 - [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[x]` - Seek under a subscription, within the partitions the group gave
+- [B-52](docs/backlog/B-52-pause-and-resume.md) `[x]` - Pause and resume partitions without leaving the group
 
 <!-- END INDEX -->
 
