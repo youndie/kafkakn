@@ -4,7 +4,8 @@
 # Each arm's StaticMembershipTest has a member read and commit 4, a second member take its group.instance.id and
 # commit 6, and the first then commit 9, then its positions. Both commits must be refused alike on both arms,
 # which is compared across them. The group's offsets are then read with kafka-consumer-groups.sh --describe:
-# the second member's 6, untouched by the fenced member's attempts.
+# the second member's 6, untouched by the fenced member's attempts. A partition shown with "-" has no commit: the
+# static member that closed has not left the group (it does not, by design), so the tool still lists what it held.
 #
 #   ci/b-66/run.sh
 set -uo pipefail
@@ -43,7 +44,7 @@ for arm in jvm linuxX64; do
     group=$(sed -n 's/^static\.fenced\.commit\.group=//p' "$OBS/$arm-local.txt" | tail -1)
     [ -n "$group" ] || { bad "$arm recorded no group"; continue; }
     offsets=$(kc /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --describe --group "$group" 2>/dev/null \
-        | awk -v g="$group" '$1 == g { print $3 ":" $4 }' | sort -n | paste -sd' ')
+        | awk -v g="$group" '$1 == g && $4 != "-" { print $3 ":" $4 }' | sort -n | paste -sd' ')
     printf '  %-9s kafka-consumer-groups --describe: %s\n' "$arm" "$offsets"
     [ "$offsets" = "0:6" ] || bad "$arm: the group's offsets are '$offsets', not the second member's 0:6"
 done
