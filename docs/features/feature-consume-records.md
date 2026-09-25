@@ -179,8 +179,10 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Given:** a member with a `group.instance.id`.
 * **When:** a second member joins with the same id.
 * **Then:** the second holds the partitions, and the first's next `poll` throws `ConsumerFencedException`,
-  on both arms.
-* **Automated:** `StaticMembershipTest.a_second_member_with_the_same_instance_id_fences_the_first`.
+  on both arms. So do its commits, explicit and positional, and the group keeps the second member's offsets,
+  as `kafka-consumer-groups.sh --describe` reads them.
+* **Automated:** `StaticMembershipTest.a_second_member_with_the_same_instance_id_fences_the_first`, and
+  `StaticMembershipTest.a_fenced_members_commit_is_refused_and_changes_nothing`, read by `ci/b-66/run.sh`.
 
 ### Scenario: A mixed group under the KIP-848 protocol reads every record once
 * **Given:** members with `group.protocol=consumer`: a JVM member, a native member, and a native third

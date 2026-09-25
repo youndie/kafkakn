@@ -377,7 +377,16 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
   - librdkafka hands `poll` a fatal error, `_FATAL`, whose reason `rd_kafka_fatal_error` gives as
     `FENCED_INSTANCE_ID`. It used to surface as *"Local: Fatal error"*, which named nothing. The native arm
     now asks for the reason and keeps librdkafka's sentence in the message.
-  - Measured for `poll` only. A commit made by a fenced member is not.
+  - **A fenced member's `commit` throws `ConsumerFencedException` too, on both arms, in both forms**
+    (explicit offsets, and positions), and the broker keeps what the new member committed
+    ([B-66](../backlog/B-66-a-fenced-static-members-commit.md)). Measured before the fenced member's `poll`
+    has said anything: its first commit after the fencing is refused.
+    - The Java client throws `FencedInstanceIdException`, kept as the cause.
+    - librdkafka refuses the first commit with `FENCED_INSTANCE_ID`, and every later one with `_FATAL`, whose
+      reason `rd_kafka_fatal_error` gives. Both are recognised, and a mutant that knew only the first road
+      let the second through as a bare *"Local: Fatal error"*.
+    - `kafka-consumer-groups.sh --describe` shows the new member's offset, untouched by the fenced member's
+      attempts.
 - **The generation is read from the broker's log, not its tool.** `kafka-consumer-groups.sh --describe`
   prints `GROUP-EPOCH` as `-` for a classic group, so it cannot show a generation that did or did not change.
   The broker's "Stabilized group G generation N" lines can.
