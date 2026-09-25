@@ -9,6 +9,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.ConfigEntry
 import org.apache.kafka.clients.admin.ListGroupsOptions
 import org.apache.kafka.clients.admin.NewPartitions
+import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.ConfigResource
@@ -17,6 +18,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.errors.InvalidPartitionsException
+import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.errors.UnknownMemberIdException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
@@ -255,6 +257,25 @@ internal class JvmKafkaAdmin(
         } catch (refused: InvalidPartitionsException) {
             // The broker's INVALID_PARTITIONS, a count that does not grow the topic: one type on both arms (B-62).
             throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
+        }
+    }
+
+    override suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
+        requireCommittable(beforeOffsets)
+        val watermarks =
+            delegate
+                .deleteRecords(
+                    beforeOffsets.entries.associate { (partition, offset) ->
+                        partition.java() to RecordsToDelete.beforeOffset(offset)
+                    },
+                ).lowWatermarks()
+        return beforeOffsets.keys.sortedWith(PARTITION_ORDER).associateWith { partition ->
+            try {
+                answer("deleteRecords") { watermarks.getValue(partition.java()) }.lowWatermark()
+            } catch (refused: OffsetOutOfRangeException) {
+                // OFFSET_OUT_OF_RANGE: an offset past the end, the caller's argument; one type on both arms (B-63).
+                throw IllegalArgumentException("deleteRecords: $partition: ${refused.message}", refused)
+            }
         }
     }
 

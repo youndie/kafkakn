@@ -27,6 +27,7 @@ import rdkafka.RD_KAFKA_ADMIN_OP_CREATEPARTITIONS
 import rdkafka.RD_KAFKA_ADMIN_OP_CREATETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETECONSUMERGROUPOFFSETS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETEGROUPS
+import rdkafka.RD_KAFKA_ADMIN_OP_DELETERECORDS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECLUSTER
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECONFIGS
@@ -54,6 +55,7 @@ import rdkafka.RD_KAFKA_RESP_ERR_INVALID_CONFIG
 import rdkafka.RD_KAFKA_RESP_ERR_INVALID_PARTITIONS
 import rdkafka.RD_KAFKA_RESP_ERR_NON_EMPTY_GROUP
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
+import rdkafka.RD_KAFKA_RESP_ERR_OFFSET_OUT_OF_RANGE
 import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
 import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
 import rdkafka.rd_kafka_AdminOptions_destroy
@@ -99,6 +101,11 @@ import rdkafka.rd_kafka_DeleteGroup_new
 import rdkafka.rd_kafka_DeleteGroup_t
 import rdkafka.rd_kafka_DeleteGroups
 import rdkafka.rd_kafka_DeleteGroups_result_groups
+import rdkafka.rd_kafka_DeleteRecords
+import rdkafka.rd_kafka_DeleteRecords_destroy
+import rdkafka.rd_kafka_DeleteRecords_new
+import rdkafka.rd_kafka_DeleteRecords_result_offsets
+import rdkafka.rd_kafka_DeleteRecords_t
 import rdkafka.rd_kafka_DeleteTopic_destroy_array
 import rdkafka.rd_kafka_DeleteTopic_new
 import rdkafka.rd_kafka_DeleteTopic_t
@@ -166,6 +173,7 @@ import rdkafka.rd_kafka_event_CreatePartitions_result
 import rdkafka.rd_kafka_event_CreateTopics_result
 import rdkafka.rd_kafka_event_DeleteConsumerGroupOffsets_result
 import rdkafka.rd_kafka_event_DeleteGroups_result
+import rdkafka.rd_kafka_event_DeleteRecords_result
 import rdkafka.rd_kafka_event_DeleteTopics_result
 import rdkafka.rd_kafka_event_DescribeCluster_result
 import rdkafka.rd_kafka_event_DescribeConfigs_result
@@ -643,6 +651,50 @@ internal class NativeKafkaAdmin(
                 }
             },
         )
+    }
+
+    override suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
+        requireCommittable(beforeOffsets)
+        val watermarks =
+            request(
+                RD_KAFKA_ADMIN_OP_DELETERECORDS,
+                "deleteRecords",
+                submit = { options, queue ->
+                    withPartitionList(beforeOffsets.keys.toList(), beforeOffsets::getValue) { list ->
+                        memScoped {
+                            val asked =
+                                rd_kafka_DeleteRecords_new(list) ?: error("rd_kafka_DeleteRecords_new returned null")
+                            val array = allocArray<CPointerVar<rd_kafka_DeleteRecords_t>>(1)
+                            array[0] = asked
+                            try {
+                                rd_kafka_DeleteRecords(handle, array, 1.convert(), options, queue)
+                            } finally {
+                                rd_kafka_DeleteRecords_destroy(asked)
+                            }
+                        }
+                    }
+                },
+                read = { event ->
+                    val result = rd_kafka_event_DeleteRecords_result(event) ?: error("not a DeleteRecords result")
+                    val list = rd_kafka_DeleteRecords_result_offsets(result) ?: error("no DeleteRecords offsets")
+                    (0 until list.pointed.cnt).associate { index ->
+                        val entry = list.pointed.elems!![index]
+                        val partition = TopicPartition(entry.topic!!.toKString(), entry.partition)
+                        if (entry.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                            val said = "deleteRecords: $partition: ${rd_kafka_err2str(
+                                entry.err,
+                            )?.toKString()} (${entry.err})"
+                            // OFFSET_OUT_OF_RANGE: an offset past the end, the caller's argument (B-63).
+                            if (entry.err == RD_KAFKA_RESP_ERR_OFFSET_OUT_OF_RANGE) throw IllegalArgumentException(said)
+                            throw KafkaAdminException(said)
+                        }
+                        partition to entry.offset
+                    }
+                },
+            )
+        return beforeOffsets.keys.sortedWith(PARTITION_ORDER).associateWith { partition ->
+            watermarks[partition] ?: throw KafkaAdminException("deleteRecords: no answer for $partition")
+        }
     }
 
     override suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> =
