@@ -1,15 +1,20 @@
 # CLAUDE.md — kafkakn
 
-A Kafka client for Kotlin Multiplatform — a **producer** today: one `expect` surface, two actuals —
-librdkafka through cinterop on Kotlin/Native, `org.apache.kafka:kafka-clients` on the JVM. Targets
-`jvm` and `linuxX64` are mandatory; `linuxArm64` is designed for and not built.
+A Kafka client for Kotlin Multiplatform — a producer, a consumer and a minimal admin client: one
+`expect` surface each, two actuals — librdkafka through cinterop on Kotlin/Native,
+`org.apache.kafka:kafka-clients` on the JVM. Targets `jvm` and `linuxX64` are mandatory; `macosArm64`
+exists for contributors on a Mac and is not published; `linuxArm64` is designed for and not built.
 
-**State: the producer is built, measured and published as snapshots** — stages 0 to 4 are closed.
-Stages 5 to 9 (opened 2026-09-24) bring it toward what the clients underneath already do: producer
-parity, SASL and client certificates, a minimal admin, and a consumer that comes last and is designed
-first. This line used to say *nothing is implemented*, and said it for twenty-four closed items after
-it stopped being true. Read before writing code — the obvious design is wrong in four documented
-ways.
+**State (2026-09-25): stages 0 to 9 are closed but one item.** The producer has parity with the clients
+underneath — explicit partition, timestamp, metadata, idempotence by default, compression, transactions,
+TLS with client certificates, SASL PLAIN/SCRAM/OAUTHBEARER, metrics; the consumer assigns, seeks, joins
+groups and commits, with exactly-once read-process-write; the admin client creates, deletes and
+describes topics. Everything is measured against the broker's own tools, and the contracts in
+`docs/api/` say where the two arms differ. **B-39 (`linuxArm64`) is a `question` waiting for a person**:
+running an arm64 binary needs emulation registered on the build box or an arm64 host. This line used to
+say *nothing is implemented*, and said it for twenty-four closed items after it stopped being true; it
+is dated now so that its age is visible. Read before writing code — the obvious design is wrong in four
+documented ways.
 
 ## Where to start a session
 
