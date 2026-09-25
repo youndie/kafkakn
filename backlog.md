@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-45](docs/backlog/B-45-the-tree-still-says-nothing-is-built.md) `[ ]` | Three places in the tree still say nothing is built, and one of them is code | P1 | S | - |
+| [B-45](docs/backlog/B-45-the-tree-still-says-nothing-is-built.md) `[~]` | Three places in the tree still say nothing is built, and one of them is code | P1 | S | - |
 | [B-47](docs/backlog/B-47-a-producer-can-write-a-tombstone.md) `[ ]` | A producer can write a tombstone: a record whose value is null | P1 | S | - |
 | [B-48](docs/backlog/B-48-commit-explicit-offsets.md) `[ ]` | Commit named offsets, not only everything poll returned | P1 | S | - |
 | [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[ ]` | A rebalance listener: say which partitions arrive and which leave | P1 | L | B-48 |

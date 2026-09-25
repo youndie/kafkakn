@@ -1,7 +1,7 @@
 ---
 id: B-45
 title: "Three places in the tree still say nothing is built, and one of them is code"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-10-housekeeping
