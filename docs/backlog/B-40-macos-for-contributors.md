@@ -1,7 +1,7 @@
 ---
 id: B-40
 title: "macOS, so a contributor can run the native arm without the Linux box"
-status: open
+status: done
 priority: P3
 size: M
 stage: stage-9-targets
@@ -26,3 +26,23 @@ uses has been restarted twice in a day.
   differential that runs on Linux.
 - AC: the README's out-of-scope row changes to say what is and is not supported, measured.
 - Anchors: `ci/librdkafka/build.sh`, `kafkakn-core/build.gradle.kts`.
+
+## Findings (2026-09-25)
+
+**Measured, `ci/b-40/run.sh`, on an arm64 Mac (macOS 27.0).** The broker ran on the Linux box and was
+reached through an SSH tunnel on the listeners' own ports, because they advertise 127.0.0.1.
+- `macosArm64Test`: 92 tests, 0 failures, TLS, mTLS and SASL included, with the fixture's
+  certificates copied over.
+- The JVM arm ran on the Linux box against the same broker, and `compare-arms.sh` found the two arms
+  agreeing on all 17 observations.
+
+**The bundle.** `ci/librdkafka/build-macos.sh` builds it on the Mac from the same four source tarballs
+as the Linux bundle, copied from the Linux box's cache with matching checksums. OpenSSL is
+`darwin64-arm64-cc`, `configure` selects SSL, zlib, zstd and SCRAM, and the output lives in its own
+path, `librdkafka-<v>-macosArm64`. The glibc patch is not applied: macOS has `sys/random.h`.
+`otool -L` shows no librdkafka or OpenSSL library in the test binary.
+
+**Not published, by construction.** The target is declared only when Gradle runs on a Mac, and
+publishing happens on the Linux box, so no macOS publication can be produced there.
+
+**The cost** is in research §2.27: no production code changed; the build and the test source sets did.

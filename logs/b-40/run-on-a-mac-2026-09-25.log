@@ -1,0 +1,31 @@
+exit=0
+=== environment ===
+2026-09-25T05:07:11+0200
+  macOS 27.0, arm64; bundle: /Users/youndie/.cache/kafkakn/librdkafka-2.13.0-macosArm64
+
+=== the broker, on the Linux box ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+  topics ready
+
+=== the fixture's certificates, copied - the TLS scenarios read them from $HOME/.cache/kafkakn/tls ===
+  30 files
+
+=== a tunnel to the listeners ===
+  ports 9092 9094 9095 9096 9097 forwarded (ssh pid 66691)
+
+=== the native suite, on the Mac ===
+  macosArm64Test exit=0 tests=92 failures=0
+
+=== the JVM arm, on the Linux box, against the same broker ===
+  jvmTest exit=0
+
+=== the arms still agree on what only a client knows ===
+  b-40-jvm.txt: 17 observations
+  macosArm64.txt: 17 observations
+  THE ARMS AGREE on every observation
+
+B-40: the native suite passes on a Mac against the broker, and agrees with the JVM arm
+
+[exited with code 0]
