@@ -229,6 +229,23 @@ internal class JvmKafkaConsumer(
         }
     }
 
+    /** `currentLag`: the end the last fetch saw, minus the position; empty until the partition's first fetch. */
+    override suspend fun metrics(): ConsumerMetrics {
+        enter("metrics")
+        return withContext(lane) {
+            ConsumerMetrics(
+                delegate
+                    .assignment()
+                    .map { TopicPartition(it.topic(), it.partition()) }
+                    .sortedWith(PARTITION_ORDER)
+                    .associateWith { partition ->
+                        val lag = delegate.currentLag(partition.apache())
+                        if (lag.isPresent) lag.asLong else null
+                    },
+            )
+        }
+    }
+
     override suspend fun assignment(): List<TopicPartition> {
         enter("assignment")
         return withContext(lane) {

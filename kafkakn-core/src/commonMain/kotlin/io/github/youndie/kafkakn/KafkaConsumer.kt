@@ -99,6 +99,9 @@ public interface KafkaConsumer {
     /** The partitions paused now, in topic-then-partition order. */
     public suspend fun paused(): List<TopicPartition>
 
+    /** What this consumer's client reports about itself ([B-53](../../../../../../../docs/backlog/B-53-consumer-lag-in-metrics.md)). */
+    public suspend fun metrics(): ConsumerMetrics
+
     /** The partitions this consumer holds now: its [assign]ment, or its share of a group. */
     public suspend fun assignment(): List<TopicPartition>
 
@@ -190,6 +193,22 @@ internal fun refuseReentry(call: String): Nothing =
         "$call was called from inside a rebalance callback, which runs inside poll or close: it would wait " +
             "for the call that is waiting for it. Use the RebalanceScope the callback was given.",
     )
+
+/**
+ * The consumer's machinery, as [ProducerMetrics] is the producer's: nothing here counts records handled.
+ *
+ * [lag] is, per held partition, the end of the log minus this consumer's position: how many records it
+ * has not read yet. The end is the last stable offset under `read_committed`, which is the contract's
+ * default. Null where the client does not know it yet, before its first fetch of the partition. The two
+ * arms measure at different moments: the Java client on each fetch, the native arm once per statistics
+ * interval (a second, delivered inside `poll`). So two readings taken while records are still arriving
+ * can differ by what arrived in between, and a lag that is not moving reads the same on both.
+ */
+public class ConsumerMetrics(
+    public val lag: Map<TopicPartition, Long?>,
+) {
+    override fun toString(): String = "ConsumerMetrics(lag=$lag)"
+}
 
 /** Creates a consumer. The implementation is the platform's, as for [kafkaProducer]. */
 public expect fun kafkaConsumer(config: ConsumerConfig): KafkaConsumer

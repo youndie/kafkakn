@@ -82,6 +82,7 @@ interface KafkaConsumer {                                   // B-36, B-37
     suspend fun pause(partitions: List<TopicPartition>)     // B-52
     suspend fun resume(partitions: List<TopicPartition>)    // B-52
     suspend fun paused(): List<TopicPartition>              // B-52
+    suspend fun metrics(): ConsumerMetrics                  // B-53: lag per held partition
     suspend fun groupMetadata(): ConsumerGroupMetadata      // B-38
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
     suspend fun poll(timeout: Duration): List<ConsumerRecord>
@@ -156,6 +157,23 @@ class ConsumerRecord(                                       // B-36
   that takes a partition away forgets its pause, as the Java client does. A seek keeps it, as the Java
   client does, although the native arm's `assign`-mode seek re-assigns and librdkafka starts an
   assignment unpaused. Measured: `PauseTest.a_seek_does_not_undo_a_pause`.
+- **Lag is the end of the log minus the position** ([B-53](../backlog/B-53-consumer-lag-in-metrics.md)): what
+  this consumer has not read yet, per held partition, null until the client knows it.
+  - JVM: `currentLag`.
+  - Native: `consumer_lag_stored` from librdkafka's statistics, which kafkakn turns on once a second. Not
+    `consumer_lag`, which `STATISTICS.md` measures from the *committed* offset: a different quantity
+    from the Java client's.
+  - `kafka-consumer-groups.sh` measures from the commit, so the three agree once the position is
+    committed.
+
+  The arms sample at different moments: on each fetch, and once per statistics interval, delivered
+  inside `poll`. So the contract promises agreement for a lag that is not moving. *Measured*
+  (`ci/b-53/run.sh`):
+  - a 2000-record partition, read to 500 and paused: 1500 on both arms before the commit and after it,
+    the broker's LAG 1500 too;
+  - after reading everything: 0 on both arms.
+
+  No success count is exposed, and `scripts/no_delivery_counters.py` still passes with its self-test.
 - **`committed` returns null where nothing is committed**, never −1: both clients use −1 internally, and a
   caller could read it as an offset. What each arm returns is what `kafka-consumer-groups.sh` shows.
 - **`subscribe` and `commit` need a `group.id` the caller named**, on both arms. The native arm's
@@ -379,7 +397,8 @@ client's own semantics, and the contract says which.
 - **Deserializers.** Bytes in, bytes out, as for the producer.
 - **Pause and resume, per-partition flow control, incremental fetch tuning.** Pause and resume have since
   been built: B-52. Fetch tuning has not.
-- **Metrics** — [B-41](../backlog/B-41-metrics-an-operator-can-read.md), for both clients at once.
+- **Metrics** — [B-41](../backlog/B-41-metrics-an-operator-can-read.md), for both clients at once. The
+  consumer's lag has since been built: B-53.
 - **More than one call in flight on one consumer.** Calls are serialised by the lane (§1); a caller
   who wants parallelism runs more consumers.
 

@@ -126,6 +126,13 @@ The contract is [consumer-contract](../api/consumer-contract.md).
   undo a pause.
 * **Automated:** `PauseTest` on both arms, counted against the broker by `ci/b-52/run.sh`.
 
+### Scenario: A consumer reports how far behind it is
+* **Given:** a partition of 2000 records.
+* **When:** a consumer reads to 500 and pauses it, before and after committing, and then reads everything.
+* **Then:** its lag is 1500 on both arms, as `kafka-consumer-groups.sh` computes it, and 0 once
+  everything is read.
+* **Automated:** `ConsumerLagTest` on both arms, against the broker's tool in `ci/b-53/run.sh`.
+
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.
 * **When:** one member processes 50 records and leaves, in both directions.
@@ -142,5 +149,5 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 
 ## 5. Out of scope
 
-Consumer lag, a `Flow` over `poll`, cooperative rebalancing, static membership and
+A `Flow` over `poll`, cooperative rebalancing, static membership and
 KIP-848: each is its own item in stages 11 and 12. `onLost` is mapped on both arms but not exercised.
