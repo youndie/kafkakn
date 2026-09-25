@@ -338,6 +338,32 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
   here arranges yet. The mapping (`onPartitionsLost` overridden; `rd_kafka_assignment_lost` inside
   `REVOKE`) is read from each client, not observed.
 
+### Static membership ([B-56](../backlog/B-56-static-membership.md))
+
+`group.instance.id` travels to both clients unchanged, and what it promises is now measured.
+- **A static member closed and reopened within `session.timeout.ms` gets its partitions back, and the group
+  does not rebalance.** The broker hands the returning instance its old assignment under a new member id.
+  The other member's listener hears nothing in the window, and neither does the broker's log: no
+  "Preparing to rebalance", and no new generation. The restarted member's listener is told `onAssigned` with
+  the same partitions. This was measured on each arm and in a mixed group both ways, with a JVM stayer and
+  a native restarter and the reverse. The positive control is the same restart without the key, which the
+  other member hears as a leave and a join.
+- **The trap: `close` on a static member does not leave the group.** That is by design, in both clients. Its
+  partitions stay with the absent instance until it returns or `session.timeout.ms` passes. Nobody reads
+  them in between. The member's own listener still hears `onRevoked` for what it held when it closes, on
+  both arms, even though the group heard nothing.
+- **A second member with the same `group.instance.id` fences the first.** The broker keeps the newer member,
+  and the older one's next `poll` throws **`ConsumerFencedException`, on both arms**. Nothing is left to do
+  with it but `close`, which both arms then complete without an error.
+  - The Java client throws `FencedInstanceIdException`, kept as the cause.
+  - librdkafka hands `poll` a fatal error, `_FATAL`, whose reason `rd_kafka_fatal_error` gives as
+    `FENCED_INSTANCE_ID`. It used to surface as *"Local: Fatal error"*, which named nothing. The native arm
+    now asks for the reason and keeps librdkafka's sentence in the message.
+  - Measured for `poll` only. A commit made by a fenced member is not.
+- **The generation is read from the broker's log, not its tool.** `kafka-consumer-groups.sh --describe`
+  prints `GROUP-EPOCH` as `-` for a classic group, so it cannot show a generation that did or did not change.
+  The broker's "Stabilized group G generation N" lines can.
+
 **Rejected alternatives.**
 - *Suspending callbacks.* See above: a blocking wait wearing a `suspend` signature, and a deadlock the
   moment the listener calls the consumer.
@@ -361,7 +387,7 @@ on 2026-09-24, and `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`. Five of these r
 | `partition.assignment.strategy` | `RangeAssignor`, `CooperativeStickyAssignor` | `range,roundrobin` | unset: each arm's own; set: **portable since [B-55](../backlog/B-55-cooperative-rebalancing.md)** | librdkafka's words, `range`, `roundrobin` and `cooperative-sticky`, which the JVM arm translates into class names. A Java class name, `sticky`, or cooperative next to an eager assignor is refused at construction on both arms. Unset, the two defaults share `range`, which is what a mixed group settles on ([B-37](../backlog/B-37-consumer-groups.md)) |
 | `group.protocol` | `classic` | `classic` | `classic`, travels | `consumer` (KIP-848) was out of scope; planned since 2026-09-25 as [B-57](../backlog/B-57-the-kip-848-consumer-protocol.md) |
 | `group.id` | none | none | travels; required by `subscribe` and `commit` | |
-| `group.instance.id` | none | none | travels | static membership is not in the first consumer; [B-56](../backlog/B-56-static-membership.md) measures it |
+| `group.instance.id` | none | none | travels | static membership, measured in [B-56](../backlog/B-56-static-membership.md): see §2a |
 | `max.poll.interval.ms` | 300 000 | 300 000 | travels | §1 |
 | `session.timeout.ms` | 45 000 | 45 000 | travels | |
 | `heartbeat.interval.ms` | 3 000 | 3 000 | travels | |
@@ -418,7 +444,8 @@ client's own semantics, and the contract says which.
 - **A `Flow` as the primary shape** (§2).
 - **The `consumer` group protocol** (KIP-848), static membership, cooperative rebalancing chosen on
   the caller's behalf. Cooperative rebalancing is now the caller's choice (B-55); it is still not
-  chosen for them.
+  chosen for them. Static membership has since been measured (B-56); it works through the key the caller
+  sets.
 - **Exactly-once as a built-in loop.** `groupMetadata()` and the producer's `sendOffsetsToTransaction` are
   in since [B-38](../backlog/B-38-exactly-once-read-process-write.md); the read-process-write loop
   around them is the caller's.

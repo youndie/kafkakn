@@ -165,7 +165,23 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Then:** the call throws `IllegalStateException`, on both arms.
 * **Automated:** `RebalanceListenerTest.calling_the_consumer_from_inside_a_callback_throws_instead_of_deadlocking`.
 
+### Scenario: A static member restarts without a rebalance
+* **Given:** a group of two members on a two-partition topic, each with a `group.instance.id`.
+* **When:** one member is closed and reopened within `session.timeout.ms`, on each arm and in a mixed group
+  both ways.
+* **Then:** it holds the same partition as before. The other member's listener hears nothing while it is
+  away and back, and the broker's log shows no rebalance in that window. Without the key, the same restart
+  is a rebalance the other member hears (the control).
+* **Automated:** `StaticMembershipTest` on both arms; the broker's log and the mixed group are read by
+  `ci/b-56/run.sh`.
+
+### Scenario: A second member with the same instance id fences the first
+* **Given:** a member with a `group.instance.id`.
+* **When:** a second member joins with the same id.
+* **Then:** the second holds the partitions, and the first's next `poll` throws `ConsumerFencedException`,
+  on both arms.
+* **Automated:** `StaticMembershipTest.a_second_member_with_the_same_instance_id_fences_the_first`.
+
 ## 5. Out of scope
 
-Static membership and
-KIP-848: each is its own item in stages 11 and 12. `onLost` is mapped on both arms but not exercised.
+KIP-848 is its own item in stage 12. `onLost` is mapped on both arms but not exercised.
