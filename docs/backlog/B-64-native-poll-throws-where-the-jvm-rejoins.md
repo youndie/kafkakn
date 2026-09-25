@@ -1,7 +1,7 @@
 ---
 id: B-64
 title: "After an eviction, the native poll throws where the JVM's rejoins"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-11-everyday-gaps

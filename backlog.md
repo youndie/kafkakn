@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-64](docs/backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md) `[ ]` | After an eviction, the native poll throws where the JVM's rejoins | P1 | S | - |
+| [B-64](docs/backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md) `[~]` | After an eviction, the native poll throws where the JVM's rejoins | P1 | S | - |
 | [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[ ]` | Cooperative rebalancing: partitions move without stopping the whole group | P2 | L | B-50 |
 | [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[ ]` | List and describe consumer groups | P2 | M | - |
 | [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[ ]` | A consumer group's committed offsets and its lag, read by the admin client | P2 | M | B-58 |
