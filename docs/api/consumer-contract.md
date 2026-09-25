@@ -352,9 +352,13 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
     native.
   - The time from `onLost` to `onAssigned` varied from 40 ms to 3 s on the JVM, and was about 100 ms on
     native. Nothing here depends on it.
-  - **Not yet held:** a record collected earlier in the same native `poll` can reach the caller after
-    `onLost` or `onRevoked` for its partition (1 in 5 frozen rounds). The Java client never returns one.
-    [B-68](../backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) is the fix.
+  - **Once, unexplained:** a native member resuming from a lost session was handed one record of a partition
+    it had just lost (B-65: 1 in about 26 native freezes). The JVM had none. The mechanism suspected in
+    [B-68](../backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) was instrumented and never
+    occurred: records collected in a `poll` before a callback in that same `poll` took their partition.
+    The count was 0 over 16 freezes and an ordinary rebalance, and a positive control showed that the counter
+    moves. It was not fixed, since nothing measured says what to fix. `ci/b-68/run.sh` and `ci/b-65/run.sh`
+    still record native strays, with the counter beside them, should one appear again.
 
 ### Static membership ([B-56](../backlog/B-56-static-membership.md))
 

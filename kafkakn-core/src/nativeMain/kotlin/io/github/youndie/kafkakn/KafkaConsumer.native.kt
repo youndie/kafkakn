@@ -88,6 +88,7 @@ import rdkafka.rd_kafka_topic_partition_list_destroy
 import rdkafka.rd_kafka_topic_partition_list_new
 import rdkafka.rd_kafka_topic_partition_list_t
 import rdkafka.rd_kafka_type_t
+import kotlin.concurrent.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource
 
@@ -571,11 +572,23 @@ internal class NativeKafkaConsumer(
     private suspend fun drain(timeout: Duration): List<ConsumerRecord> {
         val started = TimeSource.Monotonic.markNow()
         val records = mutableListOf<ConsumerRecord>()
+        bridge.givenUp.clear()
         while (true) {
             while (records.size < MAX_RECORDS) {
                 val message = rd_kafka_consumer_poll(handle, 0)
                 // A rebalance callback runs inside that call; what its listener threw surfaces here.
                 rethrowFromCallback()
+                if (bridge.givenUp.isNotEmpty()) {
+                    // B-68: a callback took partitions inside this call. What was collected before it is already in
+                    // `records`, and would reach the caller after the listener gave its partitions up.
+                    if (records.isNotEmpty()) {
+                        rebalancesMidDrain.addAndGet(1)
+                        recordsGivenUpMidDrain.addAndGet(
+                            records.count { TopicPartition(it.topic, it.partition) in bridge.givenUp }.toLong(),
+                        )
+                    }
+                    bridge.givenUp.clear()
+                }
                 if (message == null) break
                 try {
                     read(message)?.let { record ->
@@ -732,7 +745,19 @@ private class RebalanceBridge(
 
     /** What the listener threw, kept here because a C callback cannot throw; the call it ran in throws it. */
     var failure: Throwable? = null
+
+    /** The partitions a revocation or a loss took since the drain last looked (B-68's instrument). */
+    val givenUp = mutableSetOf<TopicPartition>()
 }
+
+/**
+ * B-68's instrument, read only by the tests: how often a rebalance callback took partitions away inside a `poll`
+ * after that `poll` had already collected records, and how many of those collected records belonged to the
+ * partitions taken. The second number is what a caller would be handed for partitions it no longer holds. Kept
+ * process-wide like the producer's `backpressureWaits`: a test binary runs one member at a time.
+ */
+internal val rebalancesMidDrain = AtomicLong(0)
+internal val recordsGivenUpMidDrain = AtomicLong(0)
 
 /** Set while a rebalance callback runs on this thread: a call to the consumer from there is refused. */
 @kotlin.native.concurrent.ThreadLocal
@@ -781,6 +806,7 @@ private fun onRebalance(
         }
 
         RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS -> {
+            bridge.givenUp += list
             list.forEach { bridge.groupSeeks.remove(it) }
             // A partition that leaves is no longer paused, as the Java client forgets it on a rebalance.
             bridge.paused -= list.toSet()

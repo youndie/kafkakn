@@ -123,6 +123,7 @@ class SessionExpiryTest {
             recordArmFact("session.$name.seen", seen.joinToString(";"))
             recordArmFact("session.$name.strays", strays.size.toString())
             recordArmFact("session.$name.stray.records", strays.joinToString(" "))
+            recordArmFact("session.$name.mid.drain", givenUpMidDrain())
             recordArmFact("session.$name.firsts", firsts.joinToString(" "))
             recordArmFact("session.$name.committed", committed.joinToString(" "))
         }

@@ -1,7 +1,7 @@
 ---
 id: B-68
 title: "The native poll can return records of a partition revoked or lost during that same poll"
-status: question
+status: dropped
 priority: P1
 size: S
 stage: stage-14-unmeasured-promises
@@ -81,3 +81,30 @@ test here. The owner decides between:
    record of a partition it had just lost (1 in about 26), and keep the runner recording strays. Cost XS.
 
 My recommendation is 2 then 1: it is the only path where the change is measured rather than believed.
+
+**The owner's answer (2026-09-26): 2, then by the result.** Instrument the native drain, run the freezes
+again, and choose between 1 and 3 by what the counter shows.
+
+## Iteration 2 (2026-09-26): instrumented, and the mechanism did not occur
+
+- **The instrument.** The native `drain` counts two things (`rebalancesMidDrain`,
+  `recordsGivenUpMidDrain`): each rebalance callback that took partitions inside a `poll` after that `poll`
+  had already collected records, and how many of those records belonged to the partitions taken. Tests read
+  them through `givenUpMidDrain()`, which is `-` on the JVM, whose client has no such counter. The runners
+  print them beside the strays.
+- **The result: 0/0.** Over 16 native freezes (16 `onLost`) and one ordinary eager rebalance, no stray
+  either.
+- **Positive control: the counter moves.** With the condition "records already collected" removed, it
+  counted 5 callbacks over 4 freezes, and 1 in the ordinary rebalance. The zero is the condition never being
+  met, not a counter that cannot count.
+- **Resolved by the owner's rule, "2, then by the result": option 3.**
+  - The suspected mechanism does not occur where it was looked for, so there is nothing measured to fix.
+    A fix by reasoning would change `drain` against a defect that has not been shown.
+  - The one stray B-65 saw stays unexplained, and the consumer contract §2a records it as an observation.
+  - The counter stays in the product: it costs a set cleared per `poll`. If a stray is seen again, it will
+    say at once whether this mechanism was the cause. Removing it is a two-line change.
+- **Found on the way, in the environment:** the first two instrumented runs hung for 30 minutes. The
+  Gradle client had attached to a daemon another session started inside a `systemd-run` scope with
+  `pids.max=256`. The test worker inherited the limit, `PollAfterRebalanceTest`'s parallel fill hit
+  `pthread_create` EAGAIN, and `runTest` could not cancel. Runs made with `GRADLE_OPTS=-Dorg.gradle.daemon=false`
+  get a daemon of their own.
