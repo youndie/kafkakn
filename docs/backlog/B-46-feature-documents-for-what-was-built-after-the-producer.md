@@ -1,7 +1,7 @@
 ---
 id: B-46
 title: "Feature documents for consuming, exactly-once and administration"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-10-housekeeping
