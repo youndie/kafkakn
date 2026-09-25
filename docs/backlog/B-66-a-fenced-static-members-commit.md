@@ -1,7 +1,7 @@
 ---
 id: B-66
 title: "What a fenced static member's commit does, on both arms"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-14-unmeasured-promises

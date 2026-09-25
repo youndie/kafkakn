@@ -130,7 +130,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-68](docs/backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) `[?]` | The native poll can return records of a partition revoked or lost during that same poll | P1 | S | B-65 |
-| [B-66](docs/backlog/B-66-a-fenced-static-members-commit.md) `[ ]` | What a fenced static member's commit does, on both arms | P2 | S | - |
+| [B-66](docs/backlog/B-66-a-fenced-static-members-commit.md) `[~]` | What a fenced static member's commit does, on both arms | P2 | S | - |
 | [B-67](docs/backlog/B-67-group-remote-assignor.md) `[ ]` | group.remote.assignor under the KIP-848 protocol, measured | P3 | S | B-57 |
 
 ## Closed (65)
