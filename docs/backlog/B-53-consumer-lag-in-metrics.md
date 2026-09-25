@@ -1,7 +1,7 @@
 ---
 id: B-53
 title: "Consumer metrics, lag first"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-11-everyday-gaps
