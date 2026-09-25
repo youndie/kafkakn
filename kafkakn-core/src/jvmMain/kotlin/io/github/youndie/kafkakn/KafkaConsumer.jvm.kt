@@ -177,6 +177,20 @@ internal class JvmKafkaConsumer(
         return JvmGroupMetadata(withContext(lane) { delegate.groupMetadata() })
     }
 
+    // position and committed may each wait for the broker, as the Java client allows (up to
+    // default.api.timeout.ms), and they do it on the lane, where no other call is running.
+    override suspend fun position(partition: TopicPartition): Long {
+        enter("position")
+        return withContext(lane) { delegate.position(partition.apache()) }
+    }
+
+    override suspend fun committed(partitions: List<TopicPartition>): Map<TopicPartition, Long?> {
+        enter("committed")
+        requireGroup(namesAGroup, "committed")
+        val answer = withContext(lane) { delegate.committed(partitions.map { it.apache() }.toSet()) }
+        return partitions.associateWith { answer[it.apache()]?.offset() }
+    }
+
     override suspend fun assignment(): List<TopicPartition> {
         enter("assignment")
         return withContext(lane) {

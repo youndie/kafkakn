@@ -69,6 +69,21 @@ public interface KafkaConsumer {
      */
     public suspend fun groupMetadata(): ConsumerGroupMetadata
 
+    /**
+     * The offset of the next record [poll] will return for [partition]
+     * ([B-49](../../../../../../../docs/backlog/B-49-committed-and-position.md)). Before any record has been
+     * read it is still a number, the same on both arms: where the last seek put it, or else what the
+     * group committed, or else where `auto.offset.reset` says. Answering may ask the broker. A partition
+     * this consumer is not assigned is refused with [IllegalStateException].
+     */
+    public suspend fun position(partition: TopicPartition): Long
+
+    /**
+     * What this consumer's group has committed for each of [partitions]: the next offset to read, or
+     * null where nothing is committed. Asks the group's coordinator. Needs a `group.id` the caller named.
+     */
+    public suspend fun committed(partitions: List<TopicPartition>): Map<TopicPartition, Long?>
+
     /** The partitions this consumer holds now: its [assign]ment, or its share of a group. */
     public suspend fun assignment(): List<TopicPartition>
 
