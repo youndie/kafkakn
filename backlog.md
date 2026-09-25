@@ -113,13 +113,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-63](docs/backlog/B-63-delete-records.md) `[~]` | Delete records before an offset | P3 | S | - |
+No open tasks.
 
-## Closed (63)
+## Closed (64)
 
 **It builds, and a test can fail**
 
@@ -225,6 +223,7 @@ verdict.
 - [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[x]` - Reset a group's offsets, delete them, and delete a group
 - [B-61](docs/backlog/B-61-topic-configs.md) `[x]` - Describe a topic's configuration and change it incrementally
 - [B-62](docs/backlog/B-62-create-partitions.md) `[x]` - Add partitions to an existing topic
+- [B-63](docs/backlog/B-63-delete-records.md) `[x]` - Delete records before an offset
 
 <!-- END INDEX -->
 

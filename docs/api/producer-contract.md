@@ -524,6 +524,7 @@ interface KafkaAdmin {
     suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> // B-61
     suspend fun alterTopicConfigs(name: String, set: Map<String, String>, delete: List<String>)      // B-61
     suspend fun createPartitions(topic: String, totalCount: Int)                                     // B-62
+    suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long>  // B-63
     suspend fun close()
 }
 ```
@@ -644,6 +645,18 @@ member of the controller quorum; on the fixture both arms reported node 1.
   - `kafka-topics.sh --describe` reports `PartitionCount: 4`;
   - `kafka-get-offsets.sh` counts `0:11 1:2 2:1 3:2`, exactly where the arm said its records went.
 
+**Deleting records ([B-63](../backlog/B-63-delete-records.md)).**
+- `deleteRecords(beforeOffsets)` deletes every record before each partition's offset. It **returns the low
+  watermark the broker reports**, in partition order: what happened, not what was asked for. Asked to
+  delete before 2 on a partition that already starts at 4, both arms return 4. Asked for the end, the
+  partition is emptied and starts where it ends.
+- An offset past the end is refused by the broker (`OFFSET_OUT_OF_RANGE`, 1) with
+  **`IllegalArgumentException` on both arms**, and nothing is deleted. On the JVM, the cause is the Java
+  client's `OffsetOutOfRangeException`. A negative offset is refused before any request, as for a commit.
+  Both clients read -1 as "the high watermark", which is not offered.
+- *Measured* (`ci/b-63/run.sh`): each arm's returned watermarks are what `kafka-get-offsets.sh --time -2`
+  reports.
+
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
 the same rule that keeps a producer from being checked by its own consumer.
@@ -662,6 +675,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | an admin client alters or deletes the offsets of a group with an active member, or deletes the group | `GroupNotEmptyException`, on both arms |
 | an admin client sets a topic configuration key the broker does not know, or a value it cannot read | `IllegalArgumentException`, on both arms, and nothing is changed |
 | an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |
+| an admin client deletes records before an offset past the partition's end | `IllegalArgumentException`, on both arms, and nothing is deleted |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | producer closed | `send` throws `IllegalStateException` |
 
