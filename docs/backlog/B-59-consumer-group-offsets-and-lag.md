@@ -1,7 +1,7 @@
 ---
 id: B-59
 title: "A consumer group's committed offsets and its lag, read by the admin client"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-13-admin
