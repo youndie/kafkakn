@@ -918,7 +918,9 @@ global demand for client certificates.
 wrong authority's before anything else ran; 200/200 records with an encrypted PKCS#8 key on each arm,
 counted over plaintext; and **both** arms refused with `certificate_required` for a certificate from
 the wrong authority — the Java client withholds it too, which was measured and not read. What a
-PKCS#1 key does on the JVM arm was read and not measured — [B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md).
+PKCS#1 key does was read here and measured by [B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md)
+on 2026-09-25: native constructed and sent with it, plain and encrypted; the JVM refused both at
+construction. Both arms now refuse it, with the conversion in the message.
 
 ### 2.21 Credentials are two keys on one arm and a Java string on the other
 

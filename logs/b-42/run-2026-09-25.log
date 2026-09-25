@@ -1,0 +1,23 @@
+=== environment ===
+2026-09-25T03:15:32+02:00
+
+=== broker, and the keys ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+  mtls-selftest: no certificate refused, the wrong authority's refused, the right one connects
+  client.key                   -----BEGIN ENCRYPTED PRIVATE KEY-----
+  client-pkcs1.key             -----BEGIN RSA PRIVATE KEY-----
+  client-pkcs1-encrypted.key   -----BEGIN RSA PRIVATE KEY-----
+
+=== both arms ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== what each arm said ===
+  jvm       plain     ssl.key.location '/home/youndie/.cache/kafkakn/tls/client-pkcs1.key' holds -----BEGIN RSA PRIVATE KEY-----, and both arms need a PKCS#8 key (BEGIN PRIVATE KEY or BEGIN ENCRYPTED PRIVATE KEY). Convert 
+  jvm       encrypted ssl.key.location '/home/youndie/.cache/kafkakn/tls/client-pkcs1-encrypted.key' holds -----BEGIN RSA PRIVATE KEY-----, and both arms need a PKCS#8 key (BEGIN PRIVATE KEY or BEGIN ENCRYPTED PRIVATE KEY)
+  linuxX64  plain     ssl.key.location '/home/youndie/.cache/kafkakn/tls/client-pkcs1.key' holds -----BEGIN RSA PRIVATE KEY-----, and both arms need a PKCS#8 key (BEGIN PRIVATE KEY or BEGIN ENCRYPTED PRIVATE KEY). Convert 
+  linuxX64  encrypted ssl.key.location '/home/youndie/.cache/kafkakn/tls/client-pkcs1-encrypted.key' holds -----BEGIN RSA PRIVATE KEY-----, and both arms need a PKCS#8 key (BEGIN PRIVATE KEY or BEGIN ENCRYPTED PRIVATE KEY)
+
+B-42: one key file, one answer on both arms - refused, with the conversion - and PKCS#8 still connects

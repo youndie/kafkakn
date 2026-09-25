@@ -1,0 +1,4 @@
+jvm       pkcs1.plain=refused at construction: KafkaException: Failed to construct kafka producer <- KafkaException: Failed to create new NetworkClient <- InvalidConfigurationException: Invalid PEM keystore configs <- IOException: overrun, bytes = 924
+jvm       pkcs1.encrypted=refused at construction: KafkaException: Failed to construct kafka producer <- KafkaException: Failed to create new NetworkClient <- InvalidConfigurationException: Invalid PEM keystore configs <- IOException: extra data at the end
+linuxX64  pkcs1.plain=constructed and sent
+linuxX64  pkcs1.encrypted=constructed and sent

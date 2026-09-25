@@ -54,6 +54,7 @@ internal fun ProducerConfig.checkTlsKeys() {
         "$CLIENT_CERTIFICATE and $CLIENT_KEY come together: a client certificate is presented with " +
             "its key or not at all, and only ${if (CLIENT_CERTIFICATE in properties) CLIENT_CERTIFICATE else CLIENT_KEY} is set"
     }
+    properties[CLIENT_KEY]?.let { requirePkcs8(CLIENT_KEY, it) }
     val hostname = properties[HOSTNAME_VERIFICATION] ?: return
     require(hostname in HOSTNAME_VERIFICATION_VALUES) {
         "$HOSTNAME_VERIFICATION must be ${HOSTNAME_VERIFICATION_VALUES.sorted().joinToString(" or ")}, " +
