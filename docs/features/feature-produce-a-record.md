@@ -69,6 +69,16 @@ harness script that check it; one without is checked by hand.
 * **When:** it is sent and read back by an independent consumer.
 * **Then:** the bytes read are identical to the bytes sent.
 
+### Scenario: A null value is a tombstone, and an empty value is not
+* **Given:** a compacted topic, and two keys: one sent a value and then a null value, the other a value
+  and then an empty value.
+* **When:** both are sent by each arm, and the broker's cleaner has compacted the topic.
+* **Then:** the broker's own reader sees a null as the first key's last record and zero bytes as the
+  second's. After compaction the first key holds only its tombstone, and the second keeps its empty
+  value.
+* **Automated:** `TombstoneTest.a_null_value_is_a_tombstone_and_an_empty_value_is_not` on both arms,
+  read back and compacted by `ci/b-47/run.sh`.
+
 ### Scenario: Headers reach the broker with their bytes intact
 * **Given:** a record carrying `trace=1`, `schema=kafkakn.v1`, `trace=2` — a duplicate name, in that
   order.

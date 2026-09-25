@@ -7,13 +7,18 @@ package io.github.youndie.kafkakn
  * `String` API imposes UTF-8 on it, and the first payload that is not valid UTF-8 is the one that
  * finds out. Callers that want text encode it themselves, where they can see the decision.
  *
+ * A null [value] is a **tombstone**, and an empty one is not ([B-47](../../../../../../../docs/backlog/B-47-a-producer-can-write-a-tombstone.md)).
+ * Kafka's protocol carries the difference, and a topic with `cleanup.policy=compact` reads a null value
+ * as "this key is deleted": compaction removes the key's earlier values and, after the topic's
+ * `delete.retention.ms`, the tombstone itself. An empty value is a value, and compaction keeps it.
+ *
  * Deliberately not a `data class`: the generated `equals` would compare the two `ByteArray`s by
  * identity, so two records with the same bytes would be unequal and nobody would notice until a
  * test compared them.
  */
 public class ProducerRecord(
     public val topic: String,
-    public val value: ByteArray,
+    public val value: ByteArray?,
     public val key: ByteArray? = null,
     public val headers: List<RecordHeader> = emptyList(),
     /**
@@ -50,7 +55,7 @@ public class ProducerRecord(
     }
 
     override fun toString(): String =
-        "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=${value.size} bytes, " +
+        "ProducerRecord(topic=$topic, key=${key?.size ?: 0} bytes, value=${value?.let { "${it.size} bytes" } ?: "null"}, " +
             "headers=${headers.size}, partition=${partition ?: "any"}, timestamp=${timestamp ?: "now"})"
 }
 

@@ -97,8 +97,9 @@ class ConsumerRecord(                                       // B-36
   JVM bounds a batch by `max.poll.records` (500); librdkafka returns one message per call, so the
   native arm drains up to the same 500 per `poll`. `max.poll.records` itself is a JVM key, refused on
   native by the configuration rule.
-- **`value` is nullable** where `ProducerRecord.value` is not: this library cannot write a
-  tombstone yet, but a consumer reads whatever anyone wrote.
+- **`value` is nullable**: a null value is a tombstone, whoever wrote it. `ProducerRecord.value` has
+  been nullable too since [B-47](../backlog/B-47-a-producer-can-write-a-tombstone.md); until then this
+  library could read a tombstone and not write one.
 - **The `Flow` comes later, as an extension over `poll`, not instead of it.** A cold `Flow` makes the
   collector's pace the poll's pace, and a collector slower than `max.poll.interval.ms` is evicted from
   its group — on both arms, with nothing in the `Flow`'s signature to say so. With an explicit

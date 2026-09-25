@@ -506,9 +506,12 @@ internal class NativeKafkaProducer(
             vus[at].u.i = RD_KAFKA_MSG_F_COPY
             at++
 
+            // A null pointer is a null value, a tombstone (B-47); an empty array still gets an address, so
+            // that librdkafka keeps it an empty value. The broker's own reader tells the two apart in
+            // ci/b-47/run.sh.
             vus[at].vtype = rd_kafka_vtype_t.RD_KAFKA_VTYPE_VALUE
-            vus[at].u.mem.ptr = bytes(record.value)
-            vus[at].u.mem.size = record.value.size.convert()
+            vus[at].u.mem.ptr = record.value?.let { bytes(it) }
+            vus[at].u.mem.size = (record.value?.size ?: 0).convert()
             at++
 
             record.key?.let { key ->
