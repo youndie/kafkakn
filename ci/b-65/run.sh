@@ -83,13 +83,15 @@ round() { # <frozen-arm> <taker-arm>
     theard=$(fact "$taker" "$taker" heard)
     printf '  %-9s (frozen) heard: %s\n' "$frozen" "$fheard"
     printf '  %-9s (taker)  heard: %s\n' "$taker" "$theard"
-    # The frozen member's events after it resumed, without their times: the shape compared across the rounds.
+    # The frozen member's first two events after it resumed, without their times: the shape compared across the
+    # rounds. Only two: what follows is the end of the run (the other member leaving first hands it everything),
+    # which differs by which member finishes first, not by arm.
     local after
     after=$(python3 -c '
 import re, sys
 resumed = int(sys.argv[2])
 events = re.findall(r"([-+!])(\[[^\]]*\])@(\d+)", sys.argv[1])
-print(" ".join(k + ("" if k == "!" else "") for k, _, t in events if int(t) >= resumed))' "$fheard" "$resumed")
+print(" ".join([k for k, _, t in events if int(t) >= resumed][:2]))' "$fheard" "$resumed")
     echo "$after" > "build/b-65-$frozen-shape.txt"
     printf '  the frozen member after it resumed: %s\n' "$after"
     case "$after" in "! +"*) ;; *) bad "$frozen: after resuming it did not hear onLost and then onAssigned: '$after'" ;; esac
@@ -130,6 +132,9 @@ PY
 )
     printf '  the frozen member came back reading from / the group had committed: %s\n' "$resumed_from"
     echo "$resumed_from" > "build/b-65-$frozen-resumed-from.txt"
+    [ -n "$resumed_from" ] || bad "$frozen: no record read after it came back"
+    tr ' ' '\n' <<< "$resumed_from" | awk -F'[:/]' 'NF && $2 != $3 { exit 1 }' \
+        || bad "$frozen came back reading somewhere other than the group's commit: $resumed_from"
 
     local strays_jvm strays_native
     strays_jvm=$(fact jvm jvm strays)
@@ -145,6 +150,7 @@ PY
     lost=$(comm -23 "build/b-65-$frozen-expected.txt" <(sort -u "build/b-65-$frozen-seen.txt") | wc -l)
     twice=$(uniq -d "build/b-65-$frozen-seen.txt" | wc -l)
     printf '  %s records on the broker; %s lost, %s processed twice (the lost member could not commit them)\n' "$expected" "$lost" "$twice"
+    echo "$twice" > "build/b-65-$frozen-twice.txt"
     [ "$expected" -eq "$RECORDS" ] || bad "the broker holds $expected, not $RECORDS"
     [ "$lost" -eq 0 ] || bad "LOST $lost records"
     local commits
