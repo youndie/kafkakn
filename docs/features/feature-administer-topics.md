@@ -30,6 +30,8 @@ describes the cluster. On both arms, and checked with the broker's own tools
   broker holds exactly those.
 - Creating a topic that exists fails with one kafkakn exception on both arms, `TopicExistsException`.
 - No call holds the caller's dispatcher while the cluster answers.
+- A group with an active member is never moved or deleted: the broker refuses, and both arms throw
+  `GroupNotEmptyException`.
 - A group's lag is the caller's subtraction, the partition's latest offset minus the group's commit: the
   library reads both and computes neither.
 
@@ -88,8 +90,30 @@ describes the cluster. On both arms, and checked with the broker's own tools
   prints nothing. A group that does not exist has no offsets. Both arms answer alike.
 * **Automated:** `AdminOffsetsTest` on both arms, held against the broker's tools by `ci/b-59/run.sh`.
 
+### Scenario: An empty group's offsets are moved, and a member that joins reads from there
+* **Given:** a group that committed offset 2 of partition 0 and has no member left.
+* **When:** its offsets are moved to 7, and a member joins afterwards.
+* **Then:** the group's commit is 7, as `kafka-consumer-groups.sh --describe` prints it. The first record the
+  member reads is offset 7, both for a kafkakn member and for the distribution's console consumer.
+* **Automated:** `AdminGroupOffsetsTest.an_empty_groups_offsets_are_moved_and_a_member_that_joins_reads_from_there`,
+  and `ci/b-60/run.sh`.
+
+### Scenario: A group with an active member is refused
+* **Given:** a group with one assigned member.
+* **When:** its offsets are altered or deleted, or the group is deleted.
+* **Then:** each call throws `GroupNotEmptyException` on both arms, and the member's commit is untouched.
+* **Automated:** `AdminGroupOffsetsTest.a_group_with_an_active_member_is_refused_with_one_exception_on_both_arms`.
+
+### Scenario: An empty group's offsets, and then the group, are deleted
+* **Given:** an empty group with commits on two partitions.
+* **When:** the commit of one partition is deleted, and then the group is deleted.
+* **Then:** only the other partition's commit is left. Once the group is deleted it is neither listed nor
+  has any offsets, and `kafka-consumer-groups.sh --list` does not show it.
+* **Automated:** `AdminGroupOffsetsTest.an_empty_groups_offsets_and_then_the_group_are_deleted`, and
+  `ci/b-60/run.sh`.
+
 ## 5. Out of scope
 
-Resetting and deleting group offsets ([B-60](../backlog/B-60-reset-and-delete-group-offsets.md)), topic configuration on an existing topic, adding partitions and deleting
-records are stage 13 ([B-58](../backlog/B-58-list-and-describe-consumer-groups.md) to
-[B-63](../backlog/B-63-delete-records.md)). ACLs are not planned.
+Topic configuration on an existing topic ([B-61](../backlog/B-61-topic-configs.md)), adding partitions
+([B-62](../backlog/B-62-create-partitions.md)) and deleting records ([B-63](../backlog/B-63-delete-records.md))
+are the rest of stage 13. ACLs are not planned.

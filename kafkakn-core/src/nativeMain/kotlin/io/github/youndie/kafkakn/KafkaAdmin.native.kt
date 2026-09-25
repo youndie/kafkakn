@@ -22,7 +22,10 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import platform.posix.size_tVar
+import rdkafka.RD_KAFKA_ADMIN_OP_ALTERCONSUMERGROUPOFFSETS
 import rdkafka.RD_KAFKA_ADMIN_OP_CREATETOPICS
+import rdkafka.RD_KAFKA_ADMIN_OP_DELETECONSUMERGROUPOFFSETS
+import rdkafka.RD_KAFKA_ADMIN_OP_DELETEGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECLUSTER
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECONSUMERGROUPS
@@ -32,13 +35,22 @@ import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTOFFSETS
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
+import rdkafka.RD_KAFKA_OFFSET_INVALID
 import rdkafka.RD_KAFKA_OFFSET_SPEC_EARLIEST
 import rdkafka.RD_KAFKA_OFFSET_SPEC_LATEST
+import rdkafka.RD_KAFKA_RESP_ERR_GROUP_SUBSCRIBED_TO_TOPIC
+import rdkafka.RD_KAFKA_RESP_ERR_NON_EMPTY_GROUP
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
+import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
 import rdkafka.rd_kafka_AdminOptions_destroy
 import rdkafka.rd_kafka_AdminOptions_new
 import rdkafka.rd_kafka_AdminOptions_t
+import rdkafka.rd_kafka_AlterConsumerGroupOffsets
+import rdkafka.rd_kafka_AlterConsumerGroupOffsets_destroy
+import rdkafka.rd_kafka_AlterConsumerGroupOffsets_new
+import rdkafka.rd_kafka_AlterConsumerGroupOffsets_result_groups
+import rdkafka.rd_kafka_AlterConsumerGroupOffsets_t
 import rdkafka.rd_kafka_ConsumerGroupDescription_error
 import rdkafka.rd_kafka_ConsumerGroupDescription_group_id
 import rdkafka.rd_kafka_ConsumerGroupDescription_member
@@ -49,6 +61,16 @@ import rdkafka.rd_kafka_ConsumerGroupListing_group_id
 import rdkafka.rd_kafka_ConsumerGroupListing_state
 import rdkafka.rd_kafka_CreateTopics
 import rdkafka.rd_kafka_CreateTopics_result_topics
+import rdkafka.rd_kafka_DeleteConsumerGroupOffsets
+import rdkafka.rd_kafka_DeleteConsumerGroupOffsets_destroy
+import rdkafka.rd_kafka_DeleteConsumerGroupOffsets_new
+import rdkafka.rd_kafka_DeleteConsumerGroupOffsets_result_groups
+import rdkafka.rd_kafka_DeleteConsumerGroupOffsets_t
+import rdkafka.rd_kafka_DeleteGroup_destroy_array
+import rdkafka.rd_kafka_DeleteGroup_new
+import rdkafka.rd_kafka_DeleteGroup_t
+import rdkafka.rd_kafka_DeleteGroups
+import rdkafka.rd_kafka_DeleteGroups_result_groups
 import rdkafka.rd_kafka_DeleteTopic_destroy_array
 import rdkafka.rd_kafka_DeleteTopic_new
 import rdkafka.rd_kafka_DeleteTopic_t
@@ -103,7 +125,10 @@ import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_code
 import rdkafka.rd_kafka_error_string
+import rdkafka.rd_kafka_event_AlterConsumerGroupOffsets_result
 import rdkafka.rd_kafka_event_CreateTopics_result
+import rdkafka.rd_kafka_event_DeleteConsumerGroupOffsets_result
+import rdkafka.rd_kafka_event_DeleteGroups_result
 import rdkafka.rd_kafka_event_DeleteTopics_result
 import rdkafka.rd_kafka_event_DescribeCluster_result
 import rdkafka.rd_kafka_event_DescribeConsumerGroups_result
@@ -116,16 +141,20 @@ import rdkafka.rd_kafka_event_error
 import rdkafka.rd_kafka_event_error_string
 import rdkafka.rd_kafka_event_t
 import rdkafka.rd_kafka_group_result_error
+import rdkafka.rd_kafka_group_result_name
 import rdkafka.rd_kafka_group_result_partitions
+import rdkafka.rd_kafka_group_result_t
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_queue_destroy
 import rdkafka.rd_kafka_queue_new
 import rdkafka.rd_kafka_queue_poll
 import rdkafka.rd_kafka_queue_t
+import rdkafka.rd_kafka_resp_err_t
 import rdkafka.rd_kafka_t
 import rdkafka.rd_kafka_topic_partition_list_add
 import rdkafka.rd_kafka_topic_partition_list_destroy
 import rdkafka.rd_kafka_topic_partition_list_new
+import rdkafka.rd_kafka_topic_partition_list_t
 import rdkafka.rd_kafka_topic_result_error
 import rdkafka.rd_kafka_topic_result_error_string
 import rdkafka.rd_kafka_topic_result_name
@@ -430,6 +459,184 @@ internal class NativeKafkaAdmin(
                 }
             },
         )
+
+    override suspend fun alterConsumerGroupOffsets(
+        groupId: String,
+        offsets: Map<TopicPartition, Long>,
+    ) {
+        requireCommittable(offsets)
+        request(
+            RD_KAFKA_ADMIN_OP_ALTERCONSUMERGROUPOFFSETS,
+            "alterConsumerGroupOffsets",
+            submit = { options, queue ->
+                withPartitionList(offsets.keys.toList(), offsets::getValue) { list ->
+                    memScoped {
+                        val asked =
+                            rd_kafka_AlterConsumerGroupOffsets_new(groupId, list)
+                                ?: error("rd_kafka_AlterConsumerGroupOffsets_new returned null")
+                        val array = allocArray<CPointerVar<rd_kafka_AlterConsumerGroupOffsets_t>>(1)
+                        array[0] = asked
+                        try {
+                            rd_kafka_AlterConsumerGroupOffsets(handle, array, 1.convert(), options, queue)
+                        } finally {
+                            rd_kafka_AlterConsumerGroupOffsets_destroy(asked)
+                        }
+                    }
+                }
+            },
+            read = { event ->
+                val result =
+                    rd_kafka_event_AlterConsumerGroupOffsets_result(event)
+                        ?: error("not an AlterConsumerGroupOffsets result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    checkGroupResults(
+                        "alterConsumerGroupOffsets",
+                        rd_kafka_AlterConsumerGroupOffsets_result_groups(result, count.ptr),
+                        count.value.toInt(),
+                    )
+                }
+            },
+        )
+    }
+
+    override suspend fun deleteConsumerGroupOffsets(
+        groupId: String,
+        partitions: List<TopicPartition>,
+    ) {
+        request(
+            RD_KAFKA_ADMIN_OP_DELETECONSUMERGROUPOFFSETS,
+            "deleteConsumerGroupOffsets",
+            submit = { options, queue ->
+                withPartitionList(partitions, { RD_KAFKA_OFFSET_INVALID.toLong() }) { list ->
+                    memScoped {
+                        val asked =
+                            rd_kafka_DeleteConsumerGroupOffsets_new(groupId, list)
+                                ?: error("rd_kafka_DeleteConsumerGroupOffsets_new returned null")
+                        val array = allocArray<CPointerVar<rd_kafka_DeleteConsumerGroupOffsets_t>>(1)
+                        array[0] = asked
+                        try {
+                            rd_kafka_DeleteConsumerGroupOffsets(handle, array, 1.convert(), options, queue)
+                        } finally {
+                            rd_kafka_DeleteConsumerGroupOffsets_destroy(asked)
+                        }
+                    }
+                }
+            },
+            read = { event ->
+                val result =
+                    rd_kafka_event_DeleteConsumerGroupOffsets_result(event)
+                        ?: error("not a DeleteConsumerGroupOffsets result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    checkGroupResults(
+                        "deleteConsumerGroupOffsets",
+                        rd_kafka_DeleteConsumerGroupOffsets_result_groups(result, count.ptr),
+                        count.value.toInt(),
+                    )
+                }
+            },
+        )
+    }
+
+    override suspend fun deleteConsumerGroups(groupIds: List<String>) {
+        request(
+            RD_KAFKA_ADMIN_OP_DELETEGROUPS,
+            "deleteConsumerGroups",
+            submit = { options, queue ->
+                memScoped {
+                    val array = allocArray<CPointerVar<rd_kafka_DeleteGroup_t>>(groupIds.size)
+                    groupIds.forEachIndexed { index, id -> array[index] = rd_kafka_DeleteGroup_new(id) }
+                    try {
+                        rd_kafka_DeleteGroups(handle, array, groupIds.size.convert(), options, queue)
+                    } finally {
+                        rd_kafka_DeleteGroup_destroy_array(array, groupIds.size.convert())
+                    }
+                }
+            },
+            read = { event ->
+                val result = rd_kafka_event_DeleteGroups_result(event) ?: error("not a DeleteGroups result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    checkGroupResults(
+                        "deleteConsumerGroups",
+                        rd_kafka_DeleteGroups_result_groups(result, count.ptr),
+                        count.value.toInt(),
+                    )
+                }
+            },
+        )
+    }
+
+    /** A partition list of [partitions], each carrying [offset] of itself, freed after [use]. */
+    private fun <T> withPartitionList(
+        partitions: List<TopicPartition>,
+        offset: (TopicPartition) -> Long,
+        use: (CPointer<rd_kafka_topic_partition_list_t>) -> T,
+    ): T {
+        val list =
+            rd_kafka_topic_partition_list_new(partitions.size)
+                ?: error("rd_kafka_topic_partition_list_new returned null")
+        try {
+            partitions.forEach { partition ->
+                rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)!!.pointed.offset =
+                    offset(partition)
+            }
+            return use(list)
+        } finally {
+            rd_kafka_topic_partition_list_destroy(list)
+        }
+    }
+
+    /**
+     * Per-group outcomes, and per-partition ones inside each: a request that succeeded as a whole can still
+     * carry a refusal for one group, or for one partition of it.
+     */
+    private fun checkGroupResults(
+        what: String,
+        groups: CPointer<CPointerVar<rd_kafka_group_result_t>>?,
+        count: Int,
+    ) {
+        for (index in 0 until count) {
+            val group = groups!![index]!!
+            val name = rd_kafka_group_result_name(group)?.toKString()
+            rd_kafka_group_result_error(group)?.let { error ->
+                throw refusal(
+                    rd_kafka_error_code(error),
+                    "$what: $name: ${rd_kafka_error_string(error)?.toKString()} (${rd_kafka_error_code(error)})",
+                )
+            }
+            val list = rd_kafka_group_result_partitions(group) ?: continue
+            for (at in 0 until list.pointed.cnt) {
+                val entry = list.pointed.elems!![at]
+                if (entry.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    throw refusal(
+                        entry.err,
+                        "$what: $name: ${entry.topic?.toKString()}-${entry.partition}: " +
+                            "${rd_kafka_err2str(entry.err)?.toKString()} (${entry.err})",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * The broker's refusal to touch a group with an active member, in the one type both arms throw (B-60):
+     * `UNKNOWN_MEMBER_ID` to an altered offset (the admin commits as no member), `GROUP_SUBSCRIBED_TO_TOPIC`
+     * to a deleted one, `NON_EMPTY_GROUP` to a deleted group. Anything else stays librdkafka's.
+     */
+    private fun refusal(
+        code: rd_kafka_resp_err_t,
+        message: String,
+    ): Exception =
+        when (code) {
+            RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID,
+            RD_KAFKA_RESP_ERR_GROUP_SUBSCRIBED_TO_TOPIC,
+            RD_KAFKA_RESP_ERR_NON_EMPTY_GROUP,
+            -> GroupNotEmptyException(message)
+
+            else -> KafkaAdminException(message)
+        }
 
     /** The member's assigned partitions, in topic-then-partition order. */
     private fun assignmentOf(member: CPointer<rdkafka.rd_kafka_MemberDescription_t>): List<TopicPartition> {

@@ -57,6 +57,29 @@ public interface KafkaAdmin {
         spec: OffsetSpec,
     ): Map<TopicPartition, Long?>
 
+    /**
+     * Moves group [groupId]'s committed offsets to [offsets], the next offset each partition's reader will
+     * read ([B-60](../../../../../../../docs/backlog/B-60-reset-and-delete-group-offsets.md)). A group with an
+     * active member is refused by the broker with [GroupNotEmptyException], and the refusal is the safety:
+     * a live member would overwrite the move with its next commit.
+     */
+    public suspend fun alterConsumerGroupOffsets(
+        groupId: String,
+        offsets: Map<TopicPartition, Long>,
+    )
+
+    /**
+     * Deletes group [groupId]'s commits for [partitions], so that a reader starts from `auto.offset.reset`.
+     * Refused with [GroupNotEmptyException] while a member is subscribed to the partitions' topic.
+     */
+    public suspend fun deleteConsumerGroupOffsets(
+        groupId: String,
+        partitions: List<TopicPartition>,
+    )
+
+    /** Deletes the groups named, commits included. A group with members is refused with [GroupNotEmptyException]. */
+    public suspend fun deleteConsumerGroups(groupIds: List<String>)
+
     /** Releases the client. */
     public suspend fun close()
 }
@@ -181,6 +204,16 @@ public data class ClusterDescription(
     public val controller: Int?,
     public val nodes: List<BrokerNode>,
 )
+
+/**
+ * The broker refused to change a group's offsets, or to delete the group, because the group has an active
+ * member ([B-60](../../../../../../../docs/backlog/B-60-reset-and-delete-group-offsets.md)). One type on both
+ * arms; the client's own error, when it has one, is the [cause].
+ */
+public class GroupNotEmptyException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
 
 /** A topic that was asked to be created already exists. One type on both arms; each client's own error is the [cause]. */
 public class TopicExistsException(

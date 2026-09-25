@@ -518,6 +518,9 @@ interface KafkaAdmin {
     suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription>  // B-58
     suspend fun listConsumerGroupOffsets(groupId: String): Map<TopicPartition, Long>                   // B-59
     suspend fun listOffsets(partitions: List<TopicPartition>, spec: OffsetSpec): Map<TopicPartition, Long?> // B-59
+    suspend fun alterConsumerGroupOffsets(groupId: String, offsets: Map<TopicPartition, Long>)          // B-60
+    suspend fun deleteConsumerGroupOffsets(groupId: String, partitions: List<TopicPartition>)          // B-60
+    suspend fun deleteConsumerGroups(groupIds: List<String>)                                          // B-60
     suspend fun close()
 }
 ```
@@ -574,6 +577,32 @@ member of the controller quorum; on the fixture both arms reported node 1.
   `kafka-consumer-groups.sh --describe` prints as CURRENT-OFFSET, and earliest, latest and four timestamps
   (before every record, exactly on one, between two, after all) are what `kafka-get-offsets.sh --time` prints.
 
+**Moving and deleting a group's offsets, and deleting a group ([B-60](../backlog/B-60-reset-and-delete-group-offsets.md)).**
+- `alterConsumerGroupOffsets(group, offsets)` moves an empty group's commits: what
+  `kafka-consumer-groups --reset-offsets` does. A time-based reset is B-59's `listOffsets` with a
+  `Timestamp`, fed to this call in the caller's code.
+- `deleteConsumerGroupOffsets(group, partitions)` deletes the commits for those partitions, and
+  `deleteConsumerGroups(ids)` deletes the groups and their commits.
+- **A group with an active member is refused, and the refusal is the safety.** A live member would overwrite
+  a moved offset with its next commit. The broker refuses three ways, and both arms throw one
+  `GroupNotEmptyException` for all three, with the client's own error as the cause on the JVM:
+
+  | Call | The broker's code | The Java client's type |
+  |---|---|---|
+  | alter | `UNKNOWN_MEMBER_ID` (25): the admin commits as no member | `UnknownMemberIdException` |
+  | delete offsets | `GROUP_SUBSCRIBED_TO_TOPIC` (86) | `GroupSubscribedToTopicException` |
+  | delete the group | `NON_EMPTY_GROUP` (68) | its own `GroupNotEmptyException`, a different class of the same name |
+
+  A caller catches kafkakn's type. The Java client's is not kafkakn's type, and the JVM arm never lets it
+  escape.
+- Deleting a group that does not exist is refused on both arms, but each in its client's own type:
+  `GroupIdNotFoundException` on the JVM, `KafkaAdminException` with `GROUP_ID_NOT_FOUND` (69) on native.
+  This is recorded, not promised.
+- *Measured* (`ci/b-60/run.sh`), on each arm's own group:
+  - a moved group's commit is what `kafka-consumer-groups.sh --describe` prints;
+  - the distribution's console consumer, joining the moved group, starts exactly at the moved offset;
+  - a deleted group is absent from `--list`, next to a control group that is listed.
+
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
 the same rule that keeps a producer from being checked by its own consumer.
@@ -589,6 +618,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | TLS peer not verifiable | `send` throws and the message names certificate verification — but **not promptly on native**, see below |
 | SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
 | an admin client creates a topic that exists | `TopicExistsException`, on both arms |
+| an admin client alters or deletes the offsets of a group with an active member, or deletes the group | `GroupNotEmptyException`, on both arms |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | producer closed | `send` throws `IllegalStateException` |
 

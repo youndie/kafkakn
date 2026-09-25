@@ -113,18 +113,17 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (6)
+## Open (5)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[ ]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
 | [B-56](docs/backlog/B-56-static-membership.md) `[ ]` | Static membership: a member that restarts keeps its partitions | P3 | M | - |
 | [B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md) `[ ]` | The KIP-848 consumer protocol, on both arms and in a mixed group | P3 | L | B-50, B-55 |
 | [B-61](docs/backlog/B-61-topic-configs.md) `[ ]` | Describe a topic's configuration and change it incrementally | P3 | M | - |
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (58)
+## Closed (59)
 
 **It builds, and a test can fail**
 
@@ -225,6 +224,7 @@ verdict.
 
 - [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[x]` - List and describe consumer groups
 - [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[x]` - A consumer group's committed offsets and its lag, read by the admin client
+- [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[x]` - Reset a group's offsets, delete them, and delete a group
 
 <!-- END INDEX -->
 
