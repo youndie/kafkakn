@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-52](docs/backlog/B-52-pause-and-resume.md) `[ ]` | Pause and resume partitions without leaving the group | P2 | M | - |
+| [B-52](docs/backlog/B-52-pause-and-resume.md) `[~]` | Pause and resume partitions without leaving the group | P2 | M | - |
 | [B-53](docs/backlog/B-53-consumer-lag-in-metrics.md) `[ ]` | Consumer metrics, lag first | P2 | M | - |
 | [B-54](docs/backlog/B-54-a-flow-over-poll.md) `[ ]` | A Flow of records, built on poll | P2 | S | - |
 | [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[ ]` | Cooperative rebalancing: partitions move without stopping the whole group | P2 | L | B-50 |

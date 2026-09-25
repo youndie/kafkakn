@@ -1,7 +1,7 @@
 ---
 id: B-52
 title: "Pause and resume partitions without leaving the group"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-11-everyday-gaps
