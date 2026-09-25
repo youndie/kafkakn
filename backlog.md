@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md) `[ ]` | The KIP-848 consumer protocol, on both arms and in a mixed group | P3 | L | B-50, B-55 |
+| [B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md) `[~]` | The KIP-848 consumer protocol, on both arms and in a mixed group | P3 | L | B-50, B-55 |
 | [B-61](docs/backlog/B-61-topic-configs.md) `[ ]` | Describe a topic's configuration and change it incrementally | P3 | M | - |
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |

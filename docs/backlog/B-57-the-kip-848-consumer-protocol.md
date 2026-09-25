@@ -1,7 +1,7 @@
 ---
 id: B-57
 title: "The KIP-848 consumer protocol, on both arms and in a mixed group"
-status: open
+status: wip
 priority: P3
 size: L
 stage: stage-12-group-protocols
