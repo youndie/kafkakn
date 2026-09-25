@@ -1,7 +1,7 @@
 ---
 id: B-60
 title: "Reset a group's offsets, delete them, and delete a group"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-13-admin

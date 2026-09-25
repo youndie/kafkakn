@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[ ]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
+| [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[~]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
 | [B-56](docs/backlog/B-56-static-membership.md) `[ ]` | Static membership: a member that restarts keeps its partitions | P3 | M | - |
 | [B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md) `[ ]` | The KIP-848 consumer protocol, on both arms and in a mixed group | P3 | L | B-50, B-55 |
 | [B-61](docs/backlog/B-61-topic-configs.md) `[ ]` | Describe a topic's configuration and change it incrementally | P3 | M | - |
