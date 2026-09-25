@@ -109,6 +109,65 @@ class ConsumerProtocolTest {
             }
         }
 
+    /**
+     * [B-67](../../../../../../../docs/backlog/B-67-group-remote-assignor.md): `group.remote.assignor`, the key
+     * the refusal of `partition.assignment.strategy` points a caller at. The fixture broker offers `uniform` and
+     * `range` (`group.consumer.assignors`), and settles on `uniform` unless asked.
+     */
+    @Test
+    fun a_named_remote_assignor_is_the_one_the_group_runs() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val group = "kafkakn-848-assignor-$armName-${randomSuffix()}"
+                val consumer = kafkaConsumer(config(group, "group.remote.assignor" to "range"))
+                try {
+                    consumer.subscribe(listOf(consumeTopic))
+                    val until = TimeSource.Monotonic.markNow() + READ_WITHIN
+                    while (consumer.assignment().isEmpty() && until.hasNotPassedNow()) consumer.poll(POLL)
+                    check(consumer.assignment().isNotEmpty()) { "never assigned" }
+                    val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to bootstrap))
+                    val assignor =
+                        try {
+                            admin.describeConsumerGroups(listOf(group)).getValue(group).partitionAssignor
+                        } finally {
+                            admin.close()
+                        }
+                    recordArmFact("848.assignor.group", group)
+                    recordObservation("848.assignor.named", assignor)
+                    assertEquals("range", assignor, "the assignor the group settled on")
+                } finally {
+                    consumer.close()
+                }
+            }
+        }
+
+    @Test
+    fun an_assignor_the_broker_does_not_know_is_refused_alike() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val group = "kafkakn-848-no-assignor-$armName-${randomSuffix()}"
+                val said =
+                    outcome {
+                        val consumer =
+                            kafkaConsumer(config(group, "group.remote.assignor" to "kafkakn-no-such-assignor"))
+                        try {
+                            consumer.subscribe(listOf(consumeTopic))
+                            val until = TimeSource.Monotonic.markNow() + REFUSED_WITHIN
+                            while (until.hasNotPassedNow()) consumer.poll(POLL)
+                        } finally {
+                            consumer.close()
+                        }
+                    }
+                recordArmFact("848.assignor.unknown.said", said)
+                recordObservation("848.assignor.unknown", said.substringBefore(":"))
+                assertEquals(
+                    "threw IllegalArgumentException",
+                    said.substringBefore(":"),
+                    "an assignor the broker does not offer",
+                )
+            }
+        }
+
     private fun config(
         group: String,
         vararg extra: Pair<String, String>,
@@ -137,5 +196,6 @@ class ConsumerProtocolTest {
         const val REVOKED_AT = 17L
         val POLL = 200.milliseconds
         val READ_WITHIN = 30.seconds
+        val REFUSED_WITHIN = 20.seconds
     }
 }

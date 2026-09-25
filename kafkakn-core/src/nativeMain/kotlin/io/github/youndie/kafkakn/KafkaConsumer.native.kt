@@ -33,6 +33,7 @@ import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_FENCED_INSTANCE_ID
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
+import rdkafka.RD_KAFKA_RESP_ERR_UNSUPPORTED_ASSIGNOR
 import rdkafka.RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS
 import rdkafka.RD_KAFKA_RESP_ERR__FATAL
 import rdkafka.RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED
@@ -610,6 +611,11 @@ internal class NativeKafkaConsumer(
                     throw ConsumerFencedException(
                         "poll: fenced by a member with the same group.instance.id: ${reason.toKString()}",
                     )
+                }
+                // An assignor the broker does not offer (B-67): the caller's group.remote.assignor refused, in the
+                // type both arms throw for it.
+                if (code == RD_KAFKA_RESP_ERR_UNSUPPORTED_ASSIGNOR) {
+                    throw IllegalArgumentException("poll: group.remote.assignor: ${reason.toKString()}")
                 }
                 throw KafkaConsumeException("poll: fatal: ${reason.toKString()} ($code)")
             }

@@ -15,6 +15,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.errors.FencedInstanceIdException
+import org.apache.kafka.common.errors.UnsupportedAssignorException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import java.util.Properties
@@ -351,6 +352,9 @@ internal class JvmKafkaConsumer(
                 currentCoroutineContext().ensureActive()
             } catch (fenced: FencedInstanceIdException) {
                 throw ConsumerFencedException("poll: fenced by a member with the same group.instance.id", fenced)
+            } catch (refused: UnsupportedAssignorException) {
+                // An assignor the broker does not offer (B-67): the caller's argument, one type on both arms.
+                throw IllegalArgumentException("poll: group.remote.assignor: ${refused.message}", refused)
             }
         }
     }
