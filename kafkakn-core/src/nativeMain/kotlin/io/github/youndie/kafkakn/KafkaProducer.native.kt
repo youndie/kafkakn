@@ -672,7 +672,14 @@ internal class NativeKafkaProducer(
         // rd_kafka_flush returns an ERROR CODE, not a count. Reading it as "how many are left" is
         // how a sibling measurement printed -185, which is a timeout wearing a quantity's clothes.
         // The count is rd_kafka_outq_len, and that is what completion means here.
-        rd_kafka_flush(handle, FLUSH_MS)
+        //
+        // On Dispatchers.IO (B-43). rd_kafka_flush waits for as long as records are outstanding, up to
+        // its timeout, on whatever thread calls it: measured, 5.5 s of a held single-lane dispatcher
+        // while records waited on a broker that was not there - research §2.13 had said this arm never
+        // blocks. It is not dropped in favour of the loop below: for the length of the call it makes
+        // `linger.ms` count as zero (rk_flushing in rdkafka.c), which is what "flush" means to a caller
+        // with a long linger, and polling alone would not do it.
+        withContext(Dispatchers.IO) { rd_kafka_flush(handle, FLUSH_MS) }
         while (rd_kafka_outq_len(handle) > 0) {
             rd_kafka_poll(handle, 0)
             delay(POLL_IDLE_MS)
