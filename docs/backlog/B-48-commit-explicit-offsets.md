@@ -1,7 +1,7 @@
 ---
 id: B-48
 title: "Commit named offsets, not only everything poll returned"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-11-everyday-gaps
