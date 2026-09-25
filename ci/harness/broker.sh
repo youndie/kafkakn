@@ -237,7 +237,9 @@ case "${1:-}" in
     CLIENTS=$(find "$HOME/.gradle/caches/modules-2" -name 'kafka-clients-4.3.1.jar' | head -1)
     SLF4J=$(find "$HOME/.gradle/caches/modules-2" -name 'slf4j-api-*.jar' | sort | tail -1)
     [ -n "$CLIENTS" ] && [ -n "$SLF4J" ] || { echo "records: kafka-clients or slf4j-api is not in the Gradle cache" >&2; exit 1; }
-    java -cp "$CLIENTS:$SLF4J" "$HERE/Records.java" "$2" "$BOOTSTRAP" "$3" 2>/dev/null
+    mode=$2
+    shift 2
+    java -cp "$CLIENTS:$SLF4J" "$HERE/Records.java" "$mode" "$BOOTSTRAP" "$@" 2>/dev/null
     ;;
   txn-state)
     # How the broker says a transactional id's last transaction ended - CompleteCommit, CompleteAbort
