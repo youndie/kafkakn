@@ -182,6 +182,17 @@ The contract is [consumer-contract](../api/consumer-contract.md).
   on both arms.
 * **Automated:** `StaticMembershipTest.a_second_member_with_the_same_instance_id_fences_the_first`.
 
+### Scenario: A mixed group under the KIP-848 protocol reads every record once
+* **Given:** members with `group.protocol=consumer`: a JVM member, a native member, and a native third
+  joining mid-stream, each committing only on revocation, while records are being written.
+* **When:** each member arrives, and each leaves.
+* **Then:** nothing is lost or processed twice against the broker, commits reach every end, and nobody gives
+  up everything mid-stream. The broker lists the group as a consumer-protocol group. A lone member on each
+  arm reads every record once, its listener hears `+[0] -[0]`, and explicit commits read back. The classic
+  protocol's own keys are refused at construction with `IllegalArgumentException`.
+* **Automated:** `ConsumerProtocolTest` on both arms, and `CooperativeTest`'s member under the new protocol;
+  run and counted by `ci/b-57/run.sh`.
+
 ## 5. Out of scope
 
-KIP-848 is its own item in stage 12. `onLost` is mapped on both arms but not exercised.
+Making the `consumer` protocol the default: it stays the clients' own `classic`. `onLost` is mapped on both arms but not exercised.
