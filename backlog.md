@@ -70,6 +70,17 @@ the "nothing is built" sentences are read by every session that starts here.
 
 Two of the stages reverse earlier scope: see the decisions below.
 
+### Stage 14: promises the contracts make and no run has measured
+
+**Opened 2026-09-25 at the owner's request**, when stages 0 to 13 had closed. Nothing new is built. Each
+item is a sentence in a contract that says *not measured*, or a key the library points a caller at
+without ever having set it. They are measured the way everything else here is: on both arms, against the
+broker's own tools. §2a's "`onLost` is not measured" is partly stale: B-64 measured the eviction road, and
+B-65 measures the other.
+
+Left out on purpose, by the owner: the admin client's remaining options (see the decisions), and any
+release beyond the reposilite snapshots.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -106,6 +117,7 @@ verdict.
 | `stage-11-everyday-gaps` | What a caller reaches for next | Tombstones; explicit commits and reading positions back; a rebalance listener, seek in a group, pause and resume; consumer lag; a `Flow` over `poll`. |
 | `stage-12-group-protocols` | Groups as they are run now | Cooperative rebalancing, static membership, and the KIP-848 consumer protocol. |
 | `stage-13-admin` | Administering what it reads and writes | Consumer groups (describe, offsets, reset, delete), topic configuration, adding partitions, deleting records. |
+| `stage-14-unmeasured-promises` | What the contracts promise and no run measured | `onLost` on session expiry, a fenced static member's commit, and `group.remote.assignor`. |
 
 ## Marks
 
@@ -113,9 +125,13 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (3)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-65](docs/backlog/B-65-onlost-when-the-session-expires.md) `[ ]` | onLost when a member's session expires, measured on both arms | P2 | S | - |
+| [B-66](docs/backlog/B-66-a-fenced-static-members-commit.md) `[ ]` | What a fenced static member's commit does, on both arms | P2 | S | - |
+| [B-67](docs/backlog/B-67-group-remote-assignor.md) `[ ]` | group.remote.assignor under the KIP-848 protocol, measured | P3 | S | B-57 |
 
 ## Closed (64)
 
@@ -277,3 +293,18 @@ had been *not planned*. The KIP-848 protocol, static membership and cooperative 
 protocols after the rebalance listener ([B-50](docs/backlog/B-50-a-rebalance-listener.md)), which they
 change, and administration after the consumer features it describes. **ACLs, OIDC token fetching,
 Schema Registry and Streams stay out.**
+
+**Reposilite snapshots are enough; no release work is planned** (the owner, 2026-09-25). The question of
+a numbered release or Maven Central was put again once the backlog closed, and answered: no. The
+decision above stands as it was, and nobody needs to ask again.
+
+**The admin client's remaining options wait for a caller who needs them** (the owner, 2026-09-25):
+- `OffsetSpec` max-timestamp;
+- an isolation level for `listOffsets`;
+- `APPEND` and `SUBTRACT` for topic configuration;
+- a replica assignment for new partitions;
+- deleting all records with the high-watermark marker.
+
+Each was left out of its item (B-59, B-61, B-62, B-63) because no test here needs it. None becomes an item
+until a consumer of this library asks for it.
+
