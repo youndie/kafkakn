@@ -64,20 +64,33 @@ class TimestampTest {
             withContext(Dispatchers.Default) {
                 val stamp = "logappend-$armName-${randomSuffix()}"
                 val producer = producer()
-                val before = hostNow()
-                val where =
+                // Bracketed by the broker's OWN clock: a record just before and one just after, each stamped
+                // by the broker as it appends. This used to be the test's clock, on the reasoning that the
+                // broker shares its machine. B-39 ran the test on an arm64 Mac against the broker on the
+                // Linux box, and that box's clock moved by two seconds within one run, which no measured
+                // offset survived. The broker's clock needs no second machine, and a 2020 timestamp is
+                // outside any bracket it draws. The broker's own tools check the stored type and value in
+                // ci/b-28/run.sh.
+                val (before, where, after) =
                     try {
-                        producer.send(ProducerRecord(logAppendTopic, stamp.encodeToByteArray(), timestamp = CHOSEN))
+                        Triple(
+                            producer.send(ProducerRecord(logAppendTopic, "$stamp-before".encodeToByteArray())),
+                            producer.send(
+                                ProducerRecord(logAppendTopic, stamp.encodeToByteArray(), timestamp = CHOSEN),
+                            ),
+                            producer.send(ProducerRecord(logAppendTopic, "$stamp-after".encodeToByteArray())),
+                        )
                     } finally {
                         producer.close()
                     }
-                val after = hostNow()
-                // The broker and this test share a machine, so its clock and ours agree to within the
-                // time the call took - which is the bound, and a 2020 timestamp is far outside it.
                 assertNotEquals(CHOSEN, where.timestamp, "a LogAppendTime topic kept the record's own time")
+                // The bracket has to be a clock first. Three records all reported as "no timestamp" (-1)
+                // would bracket each other perfectly.
+                assertTrue(before.timestamp > CHOSEN, "the broker's clock read ${before.timestamp}, before 2020")
                 assertTrue(
-                    where.timestamp in before..after,
-                    "expected the broker's clock, $before..$after; the metadata says ${where.timestamp}",
+                    where.timestamp in before.timestamp..after.timestamp,
+                    "expected the broker's clock, ${before.timestamp}..${after.timestamp}; " +
+                        "the metadata says ${where.timestamp}",
                 )
                 recordArmFact("timestamp.logappend.stamp", stamp)
             }

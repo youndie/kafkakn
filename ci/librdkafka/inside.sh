@@ -7,8 +7,14 @@ SRC=/src
 OUT=/out
 PATCHES=/patches
 JOBS=$(nproc)
-export CFLAGS="-fPIC -O2"
-export CXXFLAGS="-fPIC -O2"
+FLAGS="-fPIC -O2"
+# aarch64 (B-39): this image's gcc 10 compiles every atomic as a call to a helper in ITS libgcc
+# (`__aarch64_ldadd4_acq_rel` and the rest, the "outline atomics"), and Kotlin/Native's aarch64
+# toolchain links an older libgcc that has none of them. The first link failed on exactly those
+# symbols. Inline LSE-less atomics are what every aarch64 CPU runs, so nothing is given up.
+[ "$(uname -m)" = aarch64 ] && FLAGS="$FLAGS -mno-outline-atomics"
+export CFLAGS="$FLAGS"
+export CXXFLAGS="$FLAGS"
 
 echo "  host: $(ldd --version | head -1), $(gcc --version | head -1)"
 
@@ -30,7 +36,7 @@ build_openssl() {
     cd /tmp/ssl
     # no-zlib: OpenSSL's optional zlib link would add a second opinion about which zlib is in the
     # binary, and librdkafka links zlib itself.
-    ./Configure linux-x86_64 no-shared no-zlib no-tests --prefix="$OUT" --openssldir=/etc/ssl >/dev/null
+    ./Configure "${OPENSSL_TARGET:-linux-x86_64}" no-shared no-zlib no-tests --prefix="$OUT" --openssldir=/etc/ssl >/dev/null
     make -j"$JOBS" >/dev/null && make install_sw >/dev/null
 }
 
@@ -85,3 +91,15 @@ for a in "$OUT/lib/librdkafka-static.a" "$LIB64/libssl.a" "$LIB64/libcrypto.a" "
 done
 [ "$fail" -eq 0 ] || { echo "  a post-2.19 symbol is still expected from libc - the route does not hold" >&2; exit 1; }
 echo "  no archive expects a post-2.19 symbol from libc"
+
+echo
+echo "=== does any archive expect a helper only this image's libgcc has? ==="
+# The same question for the compiler's runtime rather than libc: whatever an archive leaves undefined
+# for libgcc must be in the libgcc Kotlin/Native links, which is older. Outline atomics are the known
+# case; the check is for the family, so a flag that stops working shows here, not at a stranger's link.
+for a in "$OUT/lib/librdkafka-static.a" "$LIB64/libssl.a" "$LIB64/libcrypto.a" "$OUT/lib/libz.a" "$OUT/lib/libzstd.a"; do
+    n=$(nm -u "$a" 2>/dev/null | grep -c "U __aarch64_" || true)
+    [ "$n" -eq 0 ] || { printf '  %-22s %s references to __aarch64_* helpers\n' "$(basename "$a")" "$n"; fail=1; }
+done
+[ "$fail" -eq 0 ] || { echo "  an archive calls a libgcc helper Kotlin/Native does not link" >&2; exit 1; }
+echo "  none: nothing is left for a libgcc newer than Kotlin/Native's"

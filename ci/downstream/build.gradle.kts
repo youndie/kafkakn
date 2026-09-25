@@ -18,6 +18,15 @@ kotlin {
         binaries.executable { entryPoint = "main" }
     }
 
+    // B-39: linuxArm64, on request only, as in kafkakn itself. Only the target is declared here. There are
+    // no linker options and no paths, so the C must arrive inside the published klib, exactly as for
+    // linuxX64.
+    if (providers.gradleProperty("kafkakn.linuxArm64").isPresent) {
+        linuxArm64 {
+            binaries.executable { entryPoint = "main" }
+        }
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation("io.github.youndie.kafkakn:kafkakn-core:${providers.gradleProperty("kafkakn.version").get()}")
