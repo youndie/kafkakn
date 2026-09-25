@@ -100,6 +100,14 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Automated:** `CommitOffsetsTest.a_named_offset_is_what_the_group_resumes_from`, read back by
   `ci/b-48/run.sh`.
 
+### Scenario: A consumer knows where it is, before it has read anything too
+* **Given:** the consumer fixture, twenty records from offset 0.
+* **When:** each arm seeks to the beginning, the end and offset 7, reads everything, and seeks back.
+  Then a new member of a group that committed 7, and a new group, each ask before their first poll.
+* **Then:** the positions are 0, 20, 7, 20 and 7, then 7 for the member and 0 for the new group. The two
+  arms agree on every one, and `committed` is what `kafka-consumer-groups.sh` shows.
+* **Automated:** `PositionTest` on both arms, compared by `ci/b-49/run.sh`.
+
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.
 * **When:** one member processes 50 records and leaves, in both directions.

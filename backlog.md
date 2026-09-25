@@ -113,11 +113,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (14)
+## Open (13)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-49](docs/backlog/B-49-committed-and-position.md) `[~]` | Read back committed offsets and the current position | P2 | S | B-48 |
 | [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[ ]` | Seek under a subscription, within the partitions the group gave | P2 | M | B-50 |
 | [B-52](docs/backlog/B-52-pause-and-resume.md) `[ ]` | Pause and resume partitions without leaving the group | P2 | M | - |
 | [B-53](docs/backlog/B-53-consumer-lag-in-metrics.md) `[ ]` | Consumer metrics, lag first | P2 | M | - |
@@ -132,7 +131,7 @@ verdict.
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (49)
+## Closed (50)
 
 **It builds, and a test can fail**
 
@@ -217,6 +216,7 @@ verdict.
 
 - [B-47](docs/backlog/B-47-a-producer-can-write-a-tombstone.md) `[x]` - A producer can write a tombstone: a record whose value is null
 - [B-48](docs/backlog/B-48-commit-explicit-offsets.md) `[x]` - Commit named offsets, not only everything poll returned
+- [B-49](docs/backlog/B-49-committed-and-position.md) `[x]` - Read back committed offsets and the current position
 - [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[x]` - A rebalance listener: say which partitions arrive and which leave
 
 <!-- END INDEX -->

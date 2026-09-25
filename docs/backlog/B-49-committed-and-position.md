@@ -1,7 +1,7 @@
 ---
 id: B-49
 title: "Read back committed offsets and the current position"
-status: wip
+status: done
 priority: P2
 size: S
 stage: stage-11-everyday-gaps
@@ -29,3 +29,22 @@ progress, or check a commit, reads it from outside with `kafka-consumer-groups`.
   two arms agree for the same records.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaConsumer.kt`,
   `docs/api/consumer-contract.md`.
+
+## Findings (2026-09-25)
+
+- **The trap was real, and was closed rather than documented.** `rd_kafka_position` has no answer before a
+  record is consumed. Returned raw, it made both position tests fail. The native arm now answers the way
+  the Java client does:
+  - with `assign`: its own position map, with the logical beginning and end resolved through the
+    watermarks;
+  - in a group: librdkafka's position, then the group's commit, then `auto.offset.reset`.
+
+  The map is not used in a group, because it would be stale across a rebalance.
+- **AC: `committed` equals what `kafka-consumer-groups --describe` shows**, on both arms (7).
+- **AC: after `poll` returns the batch, `position` is the offset after its last record** (20), and the arms
+  agree. They also agree before any read, on all eight readings, which is more than the item asked.
+- **Mutants, each caught by name:**
+  - native returning librdkafka's raw position: both position tests fail;
+  - native leaving a seek to the beginning unresolved (−2);
+  - native passing the committed sentinel (−1001) through instead of null;
+  - JVM turning a missing commit into −1.

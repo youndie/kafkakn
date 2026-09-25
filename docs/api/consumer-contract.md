@@ -77,6 +77,8 @@ interface KafkaConsumer {                                   // B-36, B-37
     suspend fun commit()                                    // B-37
     suspend fun commit(offsets: Map<TopicPartition, Long>)  // B-48: each value is the next offset to read
     suspend fun assignment(): List<TopicPartition>          // B-37
+    suspend fun position(partition: TopicPartition): Long   // B-49: the next offset poll returns
+    suspend fun committed(partitions: List<TopicPartition>): Map<TopicPartition, Long?>   // B-49
     suspend fun groupMetadata(): ConsumerGroupMetadata      // B-38
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
     suspend fun poll(timeout: Duration): List<ConsumerRecord>
@@ -124,6 +126,21 @@ class ConsumerRecord(                                       // B-36
   so kafkakn passes it through rather than refusing it. Under a subscription, the broker may judge such a
   commit against the member's generation. That is not measured yet; it belongs with the rebalance
   listener ([B-50](../backlog/B-50-a-rebalance-listener.md)).
+- **`position` is a number on both arms, before any record too** ([B-49](../backlog/B-49-committed-and-position.md)).
+  The Java client answers `position` from wherever it must. librdkafka does not: `rdkafka.h` says
+  `rd_kafka_position` gives *"the offset of the last consumed message + 1, or RD_KAFKA_OFFSET_INVALID in
+  case there was no previous message"*. So the native arm answers the way the Java client does:
+  - with `assign`: from its own map, which consumption and seeks both write, with a seek to the beginning
+    or the end resolved through `rd_kafka_query_watermark_offsets`;
+  - in a group: from librdkafka's position once a record was consumed;
+  - otherwise from the group's commit (`rd_kafka_committed`), and otherwise from `auto.offset.reset`.
+
+  *Measured* (`ci/b-49/run.sh`): the arms agree on all eight readings. After seeks to the beginning, the
+  end and offset 7 they read 0, 20 and 7. After reading everything, 20; after seeking back, 7. A fresh
+  member of a group that committed 7 reads 7, and a new group with `earliest` reads 0. A partition not
+  assigned is refused with `IllegalStateException` on both arms.
+- **`committed` returns null where nothing is committed**, never −1: both clients use −1 internally, and a
+  caller could read it as an offset. What each arm returns is what `kafka-consumer-groups.sh` shows.
 - **`subscribe` and `commit` need a `group.id` the caller named**, on both arms. The native arm's
   private `kafkakn-assign-*` id exists only so librdkafka will `assign`; a subscription joining it, or a
   commit landing in it, would be a group nobody asked for.
