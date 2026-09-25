@@ -113,11 +113,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (9)
+## Open (8)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[ ]` | Cooperative rebalancing: partitions move without stopping the whole group | P2 | L | B-50 |
 | [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[ ]` | List and describe consumer groups | P2 | M | - |
 | [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[ ]` | A consumer group's committed offsets and its lag, read by the admin client | P2 | M | B-58 |
 | [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[ ]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
@@ -127,7 +126,7 @@ verdict.
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (55)
+## Closed (56)
 
 **It builds, and a test can fail**
 
@@ -219,6 +218,10 @@ verdict.
 - [B-53](docs/backlog/B-53-consumer-lag-in-metrics.md) `[x]` - Consumer metrics, lag first
 - [B-54](docs/backlog/B-54-a-flow-over-poll.md) `[x]` - A Flow of records, built on poll
 - [B-64](docs/backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md) `[x]` - After an eviction, the native poll throws where the JVM's rejoins
+
+**Groups as they are run now**
+
+- [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[x]` - Cooperative rebalancing: partitions move without stopping the whole group
 
 <!-- END INDEX -->
 

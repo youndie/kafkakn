@@ -142,6 +142,15 @@ The contract is [consumer-contract](../api/consumer-contract.md).
   `max.poll.interval.ms` is reported to the listener as lost, rejoins at the next poll and reads again from
   the committed offset, the same way on both arms (B-64).
 
+### Scenario: A cooperative group moves only what changes owner
+* **Given:** a group on a six-partition topic with `partition.assignment.strategy=cooperative-sticky`: a
+  JVM member, a native member, and a third, native, joining 30 s later, while records are being written.
+* **When:** each member arrives.
+* **Then:** earlier members give up only the partitions that move and keep reading the others; nobody
+  gives up everything mid-stream. Nothing is lost or processed twice, counted against the broker. A
+  strategy only one arm understands is refused at construction.
+* **Automated:** `CooperativeTest` on both arms, the group run by `ci/b-55/run.sh`.
+
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.
 * **When:** one member processes 50 records and leaves, in both directions.
@@ -158,5 +167,5 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 
 ## 5. Out of scope
 
-Cooperative rebalancing, static membership and
+Static membership and
 KIP-848: each is its own item in stages 11 and 12. `onLost` is mapped on both arms but not exercised.

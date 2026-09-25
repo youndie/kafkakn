@@ -137,6 +137,11 @@ internal class NativeKafkaConsumer(
      */
     private val namesAGroup = config.namesAGroup()
 
+    init {
+        // Refused here as on the JVM, before librdkafka reads it (B-55). The words themselves are librdkafka's.
+        config.assignmentStrategy()
+    }
+
     private val properties =
         config.withContractDefaults().let { settled ->
             if ("group.id" in settled) settled else settled + ("group.id" to "kafkakn-assign-${randomToken()}")

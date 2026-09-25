@@ -38,7 +38,13 @@ internal class JvmKafkaConsumer(
 
     private val namesAGroup = config.namesAGroup()
 
-    private val properties = translateForJava(config.withContractDefaults())
+    private val properties =
+        translateForJava(config.withContractDefaults()).let { translated ->
+            // The portable words, as the Java client's class names (B-55).
+            val strategy = config.assignmentStrategy() ?: return@let translated
+            translated +
+                ("partition.assignment.strategy" to strategy.joinToString(",") { JAVA_ASSIGNORS.getValue(it) })
+        }
 
     init {
         val known = configNames()
@@ -359,3 +365,11 @@ internal class JvmGroupMetadata(
 ) : ConsumerGroupMetadata() {
     override val groupId: String get() = apache.groupId()
 }
+
+/** The Java client's class for each portable assignor word (B-55). */
+private val JAVA_ASSIGNORS: Map<String, String> =
+    mapOf(
+        "range" to "org.apache.kafka.clients.consumer.RangeAssignor",
+        "roundrobin" to "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+        "cooperative-sticky" to "org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
+    )
