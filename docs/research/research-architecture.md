@@ -302,7 +302,7 @@ It is not in the gate, and no claim is made about it until it is.
 
 Amended 2026-09-25 ([§2.28](#228-h5-settled-linuxarm64-costs-build-code-three-traps-and-a-higher-glibc-floor)):
 `linuxArm64` is now built and run on arm64 hardware, declared only on request (`-Pkafkakn.linuxArm64`),
-and not published. Its binaries need glibc 2.25.
+and not published. Its binaries need glibc 2.17, the same as x64 ([B-44](../backlog/B-44-arm64-glibc-floor.md)).
 
 **D7 — snapshots to reposilite only.** `reposilite.kotlin.website/snapshots`, group
 `io.github.youndie.kafkakn` — the **project's** namespace rather than the account's, so every
@@ -338,7 +338,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H2 | ~~Per-message headers can be carried without `rd_kafka_producev` (§1.5)~~ — **settled 2026-09-17: `rd_kafka_produceva` takes the same fields as an array, see §2.10** | [B-10](../backlog/B-10-record-headers.md) `done` |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
-| H5 | ~~`linuxArm64` costs a matrix row and no code (D6)~~ — **settled 2026-09-25: no code in the library, but build code and three traps, and a glibc floor of 2.25; see §2.28** | [B-39](../backlog/B-39-linux-arm64.md) `done` |
+| H5 | ~~`linuxArm64` costs a matrix row and no code (D6)~~ — **settled 2026-09-25: no code in the library, but build code and three traps, and a glibc floor of 2.25, since lowered to 2.17; see §2.28** | [B-39](../backlog/B-39-linux-arm64.md) `done` |
 | H6 | ~~Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8)~~ — **settled 2026-09-24: yes, and systematically; see §2.19** | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) `done` |
 | H7 | ~~A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model~~ — **settled 2026-09-24 for assign and poll: yes, see §2.25; groups are B-37's** | [B-36](../backlog/B-36-assign-and-poll.md) `done` |
 
@@ -1127,7 +1127,8 @@ What the second Linux target took:
   - a bundle path with the architecture in it;
   - a refusal to build on a Docker of the other architecture;
 - the target, declared on request only (`-Pkafkakn.linuxArm64`). Its bundle needs an arm64 Docker, which
-  neither the build box nor CI has, so declaring it by default would stop every publish;
+  the build box does not have and this repository's CI does not run, so declaring it by default would
+  stop every publish. GitHub's `ubuntu-24.04-arm` runner, free for a public repository, would have one;
 - `kotlin.mpp.enableCInteropCommonization`. With two Linux targets `nativeMain` becomes a shared
   compilation of its own, and without the commonizer it cannot see the bindings: `Unresolved reference
   'rdkafka'` in `compileNativeMainKotlinMetadata`;
@@ -1149,6 +1150,14 @@ What the second Linux target took:
    sysroot is 2.19, where it does not. lld leaves the version need unmarked as weak, so the loader
    enforces it. On `manylinux2014_aarch64` (glibc 2.17) the binary stops with `version 'GLIBC_2.25' not
    found`. `ci/b-39/run.sh` pins the number. Whether to lower it is [B-44](../backlog/B-44-arm64-glibc-floor.md).
+
+   **Lowered to 2.17 on 2026-09-25 by B-44.** The aarch64 bundle configures OpenSSL with
+   `--with-rand-seed=devrandom`, which compiles out the `getrandom` path that declares `getentropy`, and
+   seeds from `/dev/urandom` after `/dev/random` is ready. It is a Configure option, not a patch. x64
+   keeps the default `os` seed source, where the weak reference stays empty. The runner now proves the
+   floor by running the downstream binary on `manylinux2014_aarch64` (glibc 2.17) and counting its
+   records with the broker's consumer. One trap in the old guard: the `nm -u` pair looks for `U` and did
+   not see a weak `w` reference, so `inside.sh` now checks `getentropy` on aarch64 by itself.
 
 **Running across two machines exposed two assumptions in the suite, neither of them about arm64:**
 - **The log-append scenario read the broker's clock on the test's clock**, on the reasoning that the two
