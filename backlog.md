@@ -213,3 +213,11 @@ lands: on somebody else's release, or on ours.
 
 **Snapshots to reposilite, never Maven Central.** No release, no version promise. Publication is a
 decision nobody has taken.
+
+**linuxArm64 is not published and does not run in CI** (the owner, 2026-09-25). It builds and runs on
+request only (`-Pkafkakn.linuxArm64`, `ci/b-39/run.sh` on a Mac, whose Docker is an arm64 host). It has
+been measured there down to glibc 2.17 ([B-39](docs/backlog/B-39-linux-arm64.md),
+[B-44](docs/backlog/B-44-arm64-glibc-floor.md)). A public repository gets GitHub's `ubuntu-24.04-arm`
+runner free, so adding it to CI costs no money; it was offered and declined. Nor is it published, which
+would need that runner or an arm64 machine at publish time. What a user can rely on is the published
+targets: `jvm` and `linuxX64`.
