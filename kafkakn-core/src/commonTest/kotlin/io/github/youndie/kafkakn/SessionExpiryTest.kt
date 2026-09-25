@@ -23,7 +23,7 @@ import kotlin.time.TimeSource
 class SessionExpiryTest {
     @Test
     fun a_member_of_a_group_whose_session_may_expire() =
-        runTest(timeout = 3.minutes) {
+        runTest(timeout = 10.minutes) {
             val group = testEnv("KAFKAKN_SESSION_GROUP")
             if (group == null) {
                 recordArmFact("session.member", "not asked")
@@ -32,6 +32,8 @@ class SessionExpiryTest {
             val topic = testEnv("KAFKAKN_SESSION_TOPIC") ?: error("KAFKAKN_SESSION_TOPIC")
             val end = testEnv("KAFKAKN_SESSION_END")!!.toLong()
             val name = testEnv("KAFKAKN_SESSION_NAME") ?: armName
+            // B-68 keeps a member for several freezes in a row; B-65's rounds use the default.
+            val minStay = testEnv("KAFKAKN_SESSION_STAY_S")?.toLong()?.seconds ?: MIN_STAY
             val heard = mutableListOf<String>()
             val seen = mutableListOf<String>()
             val held = mutableSetOf<Int>()
@@ -90,7 +92,7 @@ class SessionExpiryTest {
                     consumer.subscribe(listOf(topic), listener)
                     val started = TimeSource.Monotonic.markNow()
                     while (true) {
-                        check(started.elapsedNow() < STAY_AT_MOST) { "gave up: $heard" }
+                        check(started.elapsedNow() < minStay + STAY_MARGIN) { "gave up: $heard" }
                         for (record in consumer.poll(POLL)) {
                             // A record of a partition this member does not hold, by its own listener's account:
                             // one fetched before the loss and handed over after it.
@@ -107,7 +109,7 @@ class SessionExpiryTest {
                             processed[TopicPartition(record.topic, record.partition)] = record.offset + 1
                         }
                         val holding = consumer.assignment()
-                        if (started.elapsedNow() >= MIN_STAY && holding.isNotEmpty() &&
+                        if (started.elapsedNow() >= minStay && holding.isNotEmpty() &&
                             holding.all { consumer.position(it) >= end }
                         ) {
                             break
@@ -132,6 +134,6 @@ class SessionExpiryTest {
         const val SESSION_TIMEOUT_MS = "10000"
         val POLL = 200.milliseconds
         val MIN_STAY = 75.seconds
-        val STAY_AT_MOST = 150.seconds
+        val STAY_MARGIN = 75.seconds
     }
 }
