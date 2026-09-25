@@ -193,6 +193,15 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Automated:** `ConsumerProtocolTest` on both arms, and `CooperativeTest`'s member under the new protocol;
   run and counted by `ci/b-57/run.sh`.
 
+### Scenario: A member whose session expires hears onLost and comes back from the group's commit
+* **Given:** a group of one member on each arm, each committing only on revocation, while records are written.
+* **When:** one member's process is frozen with `SIGSTOP` for longer than `session.timeout.ms`, and resumed,
+  in both directions.
+* **Then:** the broker removes it on heartbeat expiration, and the other member takes its partitions. On
+  resuming, it hears `onLost` and then `onAssigned` on both arms, and reads from exactly the group's commit.
+  Nothing is lost against the broker's end offsets, and the group's commits reach every end.
+* **Automated:** `SessionExpiryTest`'s member, run, frozen and counted by `ci/b-65/run.sh`.
+
 ## 5. Out of scope
 
 Making the `consumer` protocol the default: it stays the clients' own `classic`. `onLost` is mapped on both arms but not exercised.
