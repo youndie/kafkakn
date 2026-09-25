@@ -194,6 +194,31 @@ internal class NativeKafkaConsumer(
         }
     }
 
+    override suspend fun commit(offsets: Map<TopicPartition, Long>) {
+        requireGroup(namesAGroup, "commit")
+        requireCommittable(offsets)
+        if (offsets.isEmpty()) return
+        serial.withLock {
+            withPartitionList(offsets.entries.map { (partition, offset) -> partition to offset }) { list ->
+                // Synchronous, as commit() is. With a list, librdkafka commits exactly these offsets and
+                // reports an error per partition as well as for the call, so both are read.
+                val err = withContext(Dispatchers.IO) { rd_kafka_commit(handle, list, 0) }
+                val refused =
+                    (0 until list.pointed.cnt).mapNotNull { index ->
+                        val entry = list.pointed.elems!![index]
+                        if (entry.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
+                            null
+                        } else {
+                            "${entry.topic?.toKString()}-${entry.partition}: ${rd_kafka_err2str(entry.err)?.toKString()}"
+                        }
+                    }
+                if (err != RD_KAFKA_RESP_ERR_NO_ERROR || refused.isNotEmpty()) {
+                    throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()} $refused")
+                }
+            }
+        }
+    }
+
     /**
      * librdkafka's group metadata, serialised: `rd_kafka_consumer_group_metadata_write` exists "for
      * client binding use", and bytes need no lifetime managed across the consumer and the producer. The
@@ -377,7 +402,7 @@ internal class NativeKafkaConsumer(
     }
 
     /** A partition list for one call, with each entry's offset set, freed however the call ends. */
-    private fun <T> withPartitionList(
+    private inline fun <T> withPartitionList(
         entries: List<Pair<TopicPartition, Long>>,
         anyPartition: Boolean = false,
         use: (CPointer<rd_kafka_topic_partition_list_t>) -> T,

@@ -39,6 +39,16 @@ public interface KafkaConsumer {
     public suspend fun commit()
 
     /**
+     * Commits, synchronously, exactly these offsets
+     * ([B-48](../../../../../../../docs/backlog/B-48-commit-explicit-offsets.md)). Each value is the **next
+     * offset to read** for its partition, the position after the last record processed, as
+     * [KafkaProducer.sendOffsetsToTransaction] takes it. This is how a caller who processes records one
+     * at a time commits what was processed rather than everything [poll] returned. Needs a `group.id`
+     * the caller named. An empty map commits nothing; a negative offset is refused here, on both arms.
+     */
+    public suspend fun commit(offsets: Map<TopicPartition, Long>)
+
+    /**
      * What a transactional producer needs to commit this consumer's progress inside its transaction —
      * [KafkaProducer.sendOffsetsToTransaction] ([B-38](../../../../../../../docs/backlog/B-38-exactly-once-read-process-write.md)).
      * Opaque, taken fresh for each transaction, and good only for a producer on the same arm in the
@@ -102,6 +112,13 @@ internal fun requireGroup(
     call: String,
 ) {
     check(named) { "$call needs a group.id: set one in ConsumerConfig. assign() and poll() work without it" }
+}
+
+/** An offset to commit is the next one to read: never negative. Checked in common code, once for both arms. */
+internal fun requireCommittable(offsets: Map<TopicPartition, Long>) {
+    offsets.forEach { (partition, offset) ->
+        require(offset >= 0) { "an offset to commit must not be negative: $partition -> $offset" }
+    }
 }
 
 /** The defaults consumer-contract §3 sets on both arms, under whatever the caller wrote. */

@@ -11,6 +11,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.apache.kafka.clients.consumer.ConsumerConfig.configNames
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -92,6 +93,17 @@ internal class JvmKafkaConsumer(
         // commitSync with no arguments: the positions after everything `poll` has returned, for every
         // partition held. It waits for the coordinator, on the lane.
         withContext(lane) { delegate.commitSync() }
+    }
+
+    override suspend fun commit(offsets: Map<TopicPartition, Long>) {
+        requireGroup(namesAGroup, "commit")
+        requireCommittable(offsets)
+        if (offsets.isEmpty()) return
+        // commitSync(Map): the offsets as given, each the next one to read, which is also what
+        // OffsetAndMetadata means. No metadata string: nothing here needs one (B-48).
+        withContext(lane) {
+            delegate.commitSync(offsets.entries.associate { (partition, offset) -> partition.apache() to OffsetAndMetadata(offset) })
+        }
     }
 
     override suspend fun groupMetadata(): ConsumerGroupMetadata {
