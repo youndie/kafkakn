@@ -182,7 +182,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 
 | Capability | librdkafka 2.13.0 | kafka-clients 4.3.1 | kafkakn today |
 |---|---|---|---|
-| transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | the four since [B-30](../backlog/B-30-transactions.md) — §2.23; `sendOffsetsToTransaction` is B-38 |
+| transactions | `rd_kafka_init_transactions`, `…begin…`, `…send_offsets_to…`, `…commit…` | `Producer.initTransactions`, `beginTransaction`, `sendOffsetsToTransaction`, `commitTransaction`, `abortTransaction` | the four since [B-30](../backlog/B-30-transactions.md) — §2.23; `sendOffsetsToTransaction` since [B-38](../backlog/B-38-exactly-once-read-process-write.md) |
 | explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | partition since [B-27](../backlog/B-27-a-record-can-name-its-partition.md), timestamp since [B-28](../backlog/B-28-a-record-carries-its-timestamp.md) |
 | topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | `partitionsFor` since [B-29](../backlog/B-29-topic-metadata.md) — §2.22 |
 | consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | assign, seek and poll since [B-36](../backlog/B-36-assign-and-poll.md) — §2.25 |

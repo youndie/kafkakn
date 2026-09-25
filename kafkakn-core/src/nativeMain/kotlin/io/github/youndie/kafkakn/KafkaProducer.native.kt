@@ -52,6 +52,9 @@ import rdkafka.rd_kafka_conf_set_dr_msg_cb
 import rdkafka.rd_kafka_conf_set_error_cb
 import rdkafka.rd_kafka_conf_set_oauthbearer_token_refresh_cb
 import rdkafka.rd_kafka_conf_set_opaque
+import rdkafka.rd_kafka_consumer_group_metadata_destroy
+import rdkafka.rd_kafka_consumer_group_metadata_read
+import rdkafka.rd_kafka_consumer_group_metadata_t
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_code
@@ -75,10 +78,14 @@ import rdkafka.rd_kafka_outq_len
 import rdkafka.rd_kafka_poll
 import rdkafka.rd_kafka_produceva
 import rdkafka.rd_kafka_resp_err_t
+import rdkafka.rd_kafka_send_offsets_to_transaction
 import rdkafka.rd_kafka_t
 import rdkafka.rd_kafka_topic_destroy
 import rdkafka.rd_kafka_topic_name
 import rdkafka.rd_kafka_topic_new
+import rdkafka.rd_kafka_topic_partition_list_add
+import rdkafka.rd_kafka_topic_partition_list_destroy
+import rdkafka.rd_kafka_topic_partition_list_new
 import rdkafka.rd_kafka_type_t
 import rdkafka.rd_kafka_vtype_t
 import rdkafka.rd_kafka_vu_t
@@ -621,6 +628,43 @@ internal class NativeKafkaProducer(
         }
 
     override suspend fun beginTransaction() = transactional("beginTransaction") { rd_kafka_begin_transaction(handle) }
+
+    override suspend fun sendOffsetsToTransaction(
+        offsets: Map<TopicPartition, Long>,
+        group: ConsumerGroupMetadata,
+    ) {
+        val bytes =
+            (group as? NativeGroupMetadata)?.serialized
+                ?: throw IllegalArgumentException("group metadata from another arm or another library: $group")
+        // Blocks until the offsets are in the transaction; `-1`, as for the other transactional calls.
+        withContext(Dispatchers.IO) {
+            memScoped {
+                val metadata = alloc<CPointerVar<rd_kafka_consumer_group_metadata_t>>()
+                val unreadable =
+                    rd_kafka_consumer_group_metadata_read(metadata.ptr, bytes.refTo(0), bytes.size.convert())
+                unreadable?.let { error ->
+                    val said = rd_kafka_error_string(error)?.toKString()
+                    rd_kafka_error_destroy(error)
+                    throw KafkaProduceException("sendOffsetsToTransaction: group metadata unreadable: $said")
+                }
+                val list =
+                    rd_kafka_topic_partition_list_new(offsets.size)
+                        ?: error("rd_kafka_topic_partition_list_new returned null")
+                try {
+                    for ((partition, next) in offsets) {
+                        rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)!!.pointed.offset =
+                            next
+                    }
+                    transactional("sendOffsetsToTransaction") {
+                        rd_kafka_send_offsets_to_transaction(handle, list, metadata.value, -1)
+                    }
+                } finally {
+                    rd_kafka_topic_partition_list_destroy(list)
+                    rd_kafka_consumer_group_metadata_destroy(metadata.value)
+                }
+            }
+        }
+    }
 
     override suspend fun commitTransaction() =
         withContext(Dispatchers.IO) {

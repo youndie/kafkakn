@@ -52,6 +52,20 @@ public interface KafkaProducer {
     /** Starts a transaction. Every [send] until [commitTransaction] or [abortTransaction] belongs to it. */
     public suspend fun beginTransaction()
 
+    /**
+     * Commits a consumer's progress **inside** the open transaction, so that the records this producer
+     * sent in it and the input positions they came from become visible together or not at all —
+     * exactly-once read-process-write ([B-38](../../../../../../../docs/backlog/B-38-exactly-once-read-process-write.md)).
+     *
+     * [offsets] are the next offset to read per partition — one past the last record processed — and
+     * [group] is [KafkaConsumer.groupMetadata], taken from the consumer that read them. The loop around
+     * it is the caller's.
+     */
+    public suspend fun sendOffsetsToTransaction(
+        offsets: Map<TopicPartition, Long>,
+        group: ConsumerGroupMetadata,
+    )
+
     /** Flushes, then commits: every record of the transaction becomes visible to `read_committed` readers. */
     public suspend fun commitTransaction()
 
@@ -90,6 +104,11 @@ internal object UnimplementedProducer : KafkaProducer {
     override suspend fun initTransactions(): Unit = TODO("no producer yet")
 
     override suspend fun beginTransaction(): Unit = TODO("no producer yet")
+
+    override suspend fun sendOffsetsToTransaction(
+        offsets: Map<TopicPartition, Long>,
+        group: ConsumerGroupMetadata,
+    ): Unit = TODO("no producer yet")
 
     override suspend fun commitTransaction(): Unit = TODO("no producer yet")
 

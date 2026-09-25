@@ -1,0 +1,21 @@
+=== environment ===
+2026-09-25T04:44:04+02:00
+
+=== broker, and both arms built first ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+
+=== jvm: 300 input records, three stops ===
+  processor exit=0, trickled 300
+  seed 577524598; stops: after 2 committed batches, 6 records, after the output;after 3 committed batches, 1 records, after the offsets;after 1 committed batches, 1 records, after the output
+  read_committed:   300 output records, 300 distinct inputs (expected 300, each once)
+  read_uncommitted: 308 output records - the aborted attempts are the 8 above that
+
+=== linuxX64: 300 input records, three stops ===
+  processor exit=0, trickled 300
+  seed -651167694; stops: after 1 committed batches, 1 records, after the offsets;after 3 committed batches, 14 records, after the offsets;after 3 committed batches, 1 records, after the offsets
+  read_committed:   300 output records, 300 distinct inputs (expected 300, each once)
+  read_uncommitted: 316 output records - the aborted attempts are the 16 above that
+
+B-38: every input record reached the committed output exactly once across three stops, on both arms

@@ -30,6 +30,7 @@ interface KafkaProducer {
     suspend fun partitionsFor(topic: String): List<PartitionInfo>   // B-29
     suspend fun initTransactions()                                 // B-30
     suspend fun beginTransaction()
+    suspend fun sendOffsetsToTransaction(offsets: Map<TopicPartition, Long>, group: ConsumerGroupMetadata)   // B-38
     suspend fun commitTransaction()
     suspend fun abortTransaction()
     suspend fun flush()
@@ -325,6 +326,30 @@ is recorded, not promised:
 | native | `_FENCED (-144)`, fatal: *"Failed to end transaction: Local: This instance has been fenced by a newer instance"* | *"Local: This instance has been fenced by a newer instance"* |
 
 A fenced producer is finished; the only call left that means anything is `close`.
+
+### Exactly-once read-process-write
+
+`sendOffsetsToTransaction(offsets, group)` commits a consumer's progress **inside** the open transaction,
+so that the records sent in it and the input positions they came from become visible together or not
+at all ([B-38](../backlog/B-38-exactly-once-read-process-write.md)). `offsets` are the next offset to
+read per partition; `group` is `KafkaConsumer.groupMetadata()`, taken from the consumer that read them.
+The loop around it is the caller's.
+
+- **The group metadata is opaque**, and good only for a producer on the same arm in the same process.
+  The JVM arm carries the Java consumer's own object; the native arm carries librdkafka's serialised form
+  (`rd_kafka_consumer_group_metadata_write`, *"mainly for client binding use"*), so no C object has to
+  outlive the call that needs it — the producer reads it back for `rd_kafka_send_offsets_to_transaction`
+  and destroys it.
+- **It depends on the consumer's `read_committed` default** ([consumer-contract](consumer-contract.md) §3):
+  a loop that reads uncommitted input is not exactly-once whatever it does with its output.
+
+**Measured 2026-09-25**, `ci/b-38/run.sh`: 300 input records trickled in by a third party, the
+processor stopped three times at random points — each after one to three committed batches, either
+after its output or after its offsets, walking away with the transaction open — and restarted with
+the same `transactional.id`. On each arm, under `read_committed` every input record reached the output
+**exactly once** (300 of 300, 300 distinct); under `read_uncommitted` the aborted attempts showed (8 on
+the JVM, 16 on native) — exactly the sizes of the batches the stops abandoned. With the native call made
+to add no offsets, the output held 395 records for 300 inputs.
 
 ### `flush`
 

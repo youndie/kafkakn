@@ -52,6 +52,11 @@ internal class NaiveProducer(
 
     override suspend fun beginTransaction() = delegate.beginTransaction()
 
+    override suspend fun sendOffsetsToTransaction(
+        offsets: Map<TopicPartition, Long>,
+        group: ConsumerGroupMetadata,
+    ) = delegate.sendOffsetsToTransaction(offsets, group)
+
     override suspend fun commitTransaction() = delegate.commitTransaction()
 
     override suspend fun abortTransaction() = delegate.abortTransaction()

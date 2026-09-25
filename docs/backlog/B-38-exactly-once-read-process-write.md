@@ -1,7 +1,7 @@
 ---
 id: B-38
 title: "Exactly-once read-process-write: offsets committed inside the producer's transaction"
-status: open
+status: done
 priority: P3
 size: L
 stage: stage-8-consume
@@ -31,3 +31,23 @@ is why it waits for [B-30](B-30-transactions.md) and [B-37](B-37-consumer-groups
 - AC: under `read_uncommitted` the same run shows the aborted attempts — proof that the fixture
   produced the failures the green is about.
 - Anchors: `docs/research/research-architecture.md`, `ci/harness/broker.sh`.
+
+## Findings (2026-09-25)
+
+**Measured, `ci/b-38/run.sh`, both arms.** 300 input records were trickled in by a third party. The
+processor was stopped three times at random points (seeded, and the seed is recorded) and restarted
+with the same `transactional.id`. Each stop came after one to three committed batches, either after
+the output or after the offsets, and left the transaction open.
+- Under `read_committed`: 300 of 300, each input exactly once.
+- Under `read_uncommitted`: 8 aborted attempts on the JVM, 16 on native. That is exactly the sum of the
+  batches the stops abandoned (6+1+1 and 1+14+1).
+
+**The first version of the test could not fail.** Every stop fell in an instance's first batch, before
+anything had been committed. The last instance then processed everything from the start, and the run
+passed with the native `sendOffsetsToTransaction` adding no offsets at all. Stops now follow committed
+work, and that mutant leaves 395 output records for 300 inputs under `read_committed` (`logs/b-38/`).
+The run script also refuses a run whose stops do not all follow committed work.
+
+**Native group metadata travels as librdkafka's serialised bytes**
+(`rd_kafka_consumer_group_metadata_write`/`_read`, "for client binding use"). No C object has to
+outlive the call that needs it.

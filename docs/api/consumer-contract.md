@@ -76,6 +76,7 @@ interface KafkaConsumer {                                   // B-36, B-37
     suspend fun subscribe(topics: List<String>)             // B-37
     suspend fun commit()                                    // B-37
     suspend fun assignment(): List<TopicPartition>          // B-37
+    suspend fun groupMetadata(): ConsumerGroupMetadata      // B-38
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
     suspend fun poll(timeout: Duration): List<ConsumerRecord>
     suspend fun close()
@@ -223,7 +224,9 @@ client's own semantics, and the contract says which.
 - **A `Flow` as the primary shape** (§2).
 - **The `consumer` group protocol** (KIP-848), static membership, cooperative rebalancing chosen on
   the caller's behalf.
-- **Exactly-once read-process-write** — [B-38](../backlog/B-38-exactly-once-read-process-write.md).
+- **Exactly-once as a built-in loop.** `groupMetadata()` and the producer's `sendOffsetsToTransaction` are
+  in since [B-38](../backlog/B-38-exactly-once-read-process-write.md); the read-process-write loop
+  around them is the caller's.
 - **Deserializers.** Bytes in, bytes out, as for the producer.
 - **Pause and resume, per-partition flow control, incremental fetch tuning.**
 - **Metrics** — [B-41](../backlog/B-41-metrics-an-operator-can-read.md), for both clients at once.

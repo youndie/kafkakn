@@ -35,12 +35,18 @@ import rdkafka.rd_kafka_commit
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_consumer_close
+import rdkafka.rd_kafka_consumer_group_metadata
+import rdkafka.rd_kafka_consumer_group_metadata_destroy
+import rdkafka.rd_kafka_consumer_group_metadata_write
 import rdkafka.rd_kafka_consumer_poll
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
+import rdkafka.rd_kafka_error_destroy
+import rdkafka.rd_kafka_error_string
 import rdkafka.rd_kafka_header_cnt
 import rdkafka.rd_kafka_header_get_all
 import rdkafka.rd_kafka_headers_t
+import rdkafka.rd_kafka_mem_free
 import rdkafka.rd_kafka_message_destroy
 import rdkafka.rd_kafka_message_headers
 import rdkafka.rd_kafka_message_t
@@ -184,6 +190,35 @@ internal class NativeKafkaConsumer(
             // Nothing handed out since the last commit is not a failure; the Java client says nothing.
             if (err != RD_KAFKA_RESP_ERR_NO_ERROR && err != RD_KAFKA_RESP_ERR__NO_OFFSET) {
                 throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()}")
+            }
+        }
+    }
+
+    /**
+     * librdkafka's group metadata, serialised: `rd_kafka_consumer_group_metadata_write` exists "for
+     * client binding use", and bytes need no lifetime managed across the consumer and the producer. The
+     * producer reads them back for the one call that needs the object (B-38).
+     */
+    override suspend fun groupMetadata(): ConsumerGroupMetadata {
+        requireGroup(namesAGroup, "groupMetadata")
+        return serial.withLock {
+            val metadata =
+                rd_kafka_consumer_group_metadata(handle) ?: throw KafkaConsumeException("groupMetadata: none")
+            try {
+                memScoped {
+                    val buffer = alloc<COpaquePointerVar>()
+                    val size = alloc<size_tVar>()
+                    rd_kafka_consumer_group_metadata_write(metadata, buffer.ptr, size.ptr)?.let { error ->
+                        val said = rd_kafka_error_string(error)?.toKString()
+                        rd_kafka_error_destroy(error)
+                        throw KafkaConsumeException("groupMetadata: $said")
+                    }
+                    val bytes = buffer.value!!.readBytes(size.value.toInt())
+                    rd_kafka_mem_free(null, buffer.value)
+                    NativeGroupMetadata(bytes, properties.getValue("group.id"))
+                }
+            } finally {
+                rd_kafka_consumer_group_metadata_destroy(metadata)
             }
         }
     }
@@ -379,3 +414,9 @@ internal class NativeKafkaConsumer(
         const val PARTITION_UNASSIGNED = -1
     }
 }
+
+/** librdkafka's group metadata as the bytes it serialises to — same process, same build only (B-38). */
+internal class NativeGroupMetadata(
+    val serialized: ByteArray,
+    override val groupId: String,
+) : ConsumerGroupMetadata()
