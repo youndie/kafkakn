@@ -1,7 +1,7 @@
 ---
 id: B-68
 title: "The native poll can return records of a partition revoked or lost during that same poll"
-status: question
+status: wip
 priority: P1
 size: S
 stage: stage-14-unmeasured-promises
@@ -81,3 +81,6 @@ test here. The owner decides between:
    record of a partition it had just lost (1 in about 26), and keep the runner recording strays. Cost XS.
 
 My recommendation is 2 then 1: it is the only path where the change is measured rather than believed.
+
+**The owner's answer (2026-09-26): 2, then by the result.** Instrument the native drain, run the freezes
+again, and choose between 1 and 3 by what the counter shows.
