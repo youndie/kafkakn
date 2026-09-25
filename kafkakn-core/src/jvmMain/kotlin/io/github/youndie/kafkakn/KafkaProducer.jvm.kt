@@ -215,7 +215,7 @@ internal class JvmKafkaProducer(
 
     private val delegate =
         try {
-            org.apache.kafka.clients.producer.KafkaProducer<ByteArray, ByteArray>(
+            org.apache.kafka.clients.producer.KafkaProducer<ByteArray?, ByteArray?>(
                 Properties().apply {
                     properties.forEach { (key, value) -> setProperty(key, value) }
                 },
@@ -282,7 +282,7 @@ internal class JvmKafkaProducer(
      * form did. The headers are handed over in order and duplicates are kept: the Java client stores an
      * ordered list too, so nothing has to be reconciled here.
      */
-    private fun ProducerRecord.toApache(): ApacheRecord<ByteArray, ByteArray> =
+    private fun ProducerRecord.toApache(): ApacheRecord<ByteArray?, ByteArray?> =
         ApacheRecord(
             topic,
             partition,

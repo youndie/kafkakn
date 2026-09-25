@@ -90,6 +90,24 @@ there counts **records** read by `kafka-console-consumer`, and names the isolati
 ([B-30](../backlog/B-30-transactions.md), `ci/b-30/run.sh`). An end-offset delta on such a topic
 proves nothing either way.
 
+### A null value is a tombstone
+
+`ProducerRecord.value` is nullable since [B-47](../backlog/B-47-a-producer-can-write-a-tombstone.md).
+A null value is a **tombstone**: on a topic with `cleanup.policy=compact`, compaction removes the key's
+earlier values and, after the topic's `delete.retention.ms`, the tombstone itself. An **empty** value
+is a value: compaction keeps it as the key's latest. That is the same distinction the header value
+makes (below), and for the same reason: Kafka's protocol carries it and a reader can see it.
+
+| | JVM | native |
+|---|---|---|
+| null value | `null` into the Java record, which `ByteArraySerializer` passes on as null | `RD_KAFKA_VTYPE_VALUE` with a null pointer and size 0 |
+| empty value | an empty array | a zero-length value whose pointer is not null: librdkafka reads a null pointer as a null value |
+
+*Measured* by `ci/b-47/run.sh` on both arms, with the distribution's own client as the reader. It reads
+each key's last record: `~` for a null value, `x` for an empty one. Then it waits for the cleaner and
+checks what compaction left: the tombstoned key holds nothing but its tombstone, and the emptied key
+holds its empty value.
+
 ### Headers
 
 `ProducerRecord.headers` is a **list** of `RecordHeader(name, value)`, and every part of that

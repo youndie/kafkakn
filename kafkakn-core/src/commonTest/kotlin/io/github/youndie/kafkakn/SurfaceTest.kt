@@ -36,6 +36,6 @@ class SurfaceTest {
     fun a_record_carries_bytes_and_an_optional_key() {
         val record = ProducerRecord(topic = "t", value = byteArrayOf(0, -1, 2))
         assertNull(record.key)
-        assertEquals(3, record.value.size)
+        assertEquals(3, record.value?.size)
     }
 }

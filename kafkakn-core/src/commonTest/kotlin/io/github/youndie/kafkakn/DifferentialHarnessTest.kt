@@ -25,7 +25,7 @@ class DifferentialHarnessTest {
         // arms can genuinely differ is recorded by the tests about that behaviour.
         recordObservation("config.acks", config["acks"] ?: "<absent>")
         recordObservation("config.unknown-key-is-null", (config["bootstrapServers"] == null).toString())
-        recordObservation("record.value.size", record.value.size.toString())
+        recordObservation("record.value.size", record.value?.size.toString())
         recordObservation("record.key.size", (record.key?.size ?: 0).toString())
         recordObservation("record.topic", skewed(record.topic))
 

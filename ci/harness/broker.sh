@@ -85,6 +85,12 @@ case "${1:-}" in
     if [ "$(bash "$0" offsets kafkakn-consume)" = "0" ]; then
         bash "$0" records write kafkakn-consume >/dev/null || { echo "  could not write kafkakn-consume" >&2; exit 1; }
     fi
+    # B-47's topic: compacted, one partition (Records.java dumps partition 0), with segments that roll after
+    # a second and a cleaner that takes any dirty ratio. With the broker's defaults a segment lives a week,
+    # and a tombstone's effect would be invisible to any run shorter than that.
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
+        --topic kafkakn-compact --partitions 1 --replication-factor 1 --config cleanup.policy=compact \
+        --config segment.ms=1000 --config min.cleanable.dirty.ratio=0.001 >/dev/null 2>&1
     # SCRAM credentials (B-32), on every `up`: they live in the metadata log, which a recreated
     # container does not have. `--alter` replaces, so running it on a broker that has them is a no-op
     # in effect. PLAIN's users are in the JAAS file and need nothing here.
@@ -263,6 +269,14 @@ case "${1:-}" in
     kc /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" \
         --topic "$2" --partition "$3" --offset earliest --timeout-ms "${CONSUME_MS:-15000}" \
         --formatter-property print.value=true 2>/dev/null
+    ;;
+  produce-keyed)
+    # Reads `key:value` lines from stdin. A compacted topic refuses a record without a key ("Compacted
+    # topic cannot accept message without key"), and plain `produce` above drops the refusal with its
+    # stderr: B-47's segment-rolling record vanished that way, and the cleaner then had nothing to clean.
+    kci /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP" \
+        --topic "$2" --command-property acks=all \
+        --reader-property parse.key=true --reader-property key.separator=:
     ;;
   produce)
     # Reads stdin. Note kci, not kc.

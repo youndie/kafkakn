@@ -194,6 +194,12 @@ private const val METADATA_PARTITIONS = 7
 internal val consumeTopic: String get() = testEnv("KAFKAKN_CONSUME_TOPIC") ?: "kafkakn-consume"
 internal const val CONSUME_COUNT: Int = 20
 
+/**
+ * The compacted fixture (B-47): one partition, `cleanup.policy=compact`, segments that roll after a
+ * second, created by `broker.sh up`. A tombstone is only a tombstone to a topic that compacts.
+ */
+internal val compactTopic: String get() = testEnv("KAFKAKN_COMPACT_TOPIC") ?: "kafkakn-compact"
+
 /** The SASL listeners (B-32): over plaintext, and over TLS — the second is what hosted Kafka is. */
 internal val saslBootstrap: String get() = testEnv("KAFKAKN_SASL_BOOTSTRAP") ?: "127.0.0.1:9096"
 internal val saslSslBootstrap: String get() = testEnv("KAFKAKN_SASL_SSL_BOOTSTRAP") ?: "127.0.0.1:9097"
