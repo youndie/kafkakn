@@ -39,6 +39,11 @@ internal class JvmKafkaConsumer(
 
     private val namesAGroup = config.namesAGroup()
 
+    init {
+        // Before the strategy's translation, which would hand the Java client a class name it then refuses (B-57).
+        config.checkGroupProtocolKeys()
+    }
+
     private val properties =
         translateForJava(config.withContractDefaults()).let { translated ->
             // The portable words, as the Java client's class names (B-55).

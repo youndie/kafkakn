@@ -76,6 +76,9 @@ class CooperativeTest {
             val end = testEnv("KAFKAKN_COOP_END")!!.toLong()
             val name = testEnv("KAFKAKN_COOP_NAME") ?: armName
             val joinAfter = testEnv("KAFKAKN_COOP_JOIN_AFTER_MS")?.toLong()?.milliseconds
+            // B-57: the same member under the KIP-848 protocol, where the broker assigns and the strategy key
+            // is refused; `ci/b-57/run.sh` asks for it.
+            val protocol = testEnv("KAFKAKN_COOP_PROTOCOL") ?: "classic"
             val events = mutableListOf<String>()
             // When each event happened, on the machine's clock: the members are separate processes, and only
             // a wall clock orders their events against each other.
@@ -113,7 +116,11 @@ class CooperativeTest {
                             "bootstrap.servers" to bootstrap,
                             "group.id" to group,
                             "auto.offset.reset" to "earliest",
-                            "partition.assignment.strategy" to "cooperative-sticky",
+                            if (protocol == "consumer") {
+                                "group.protocol" to "consumer"
+                            } else {
+                                "partition.assignment.strategy" to "cooperative-sticky"
+                            },
                         ),
                     )
                 try {

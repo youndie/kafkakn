@@ -364,6 +364,32 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
   prints `GROUP-EPOCH` as `-` for a classic group, so it cannot show a generation that did or did not change.
   The broker's "Stabilized group G generation N" lines can.
 
+### The KIP-848 protocol, `group.protocol=consumer` ([B-57](../backlog/B-57-the-kip-848-consumer-protocol.md))
+
+A supported value on both arms, and not the default: the default stays the clients' own, `classic`, until
+both clients change it. The test broker, `apache/kafka:4.3.1`, accepts it with no configuration change.
+- **The broker assigns.** `kafka-groups.sh --list` names such a group TYPE `Consumer`, PROTOCOL `consumer`, and
+  its assignor is the broker's (`uniform` on the fixture). The runner checks the type, so a member that
+  quietly fell back to `classic` would not pass.
+- **Three classic keys are refused at construction with `IllegalArgumentException`, on both arms:**
+  `partition.assignment.strategy`, `session.timeout.ms` and `heartbeat.interval.ms`. Under the new
+  protocol the broker owns them: `group.remote.assignor` names the assignor, and the broker's
+  `group.consumer.*` settings are the timeouts. Both clients refuse them anyway, but in different types
+  (the Java client's `ConfigException`, a failed `rd_kafka_new`), so kafkakn refuses first, in one type.
+  Under `classic` the same keys are still the client's to judge.
+- **The promises of §2 and §2a hold, measured on both arms and in a mixed group:**
+  - a lone member reads every record once;
+  - its listener hears `+[0]` and, on `close`, `-[0]`;
+  - an explicit commit reads back;
+  - a commit made in `onRevoked` at `close` is what the broker then holds.
+
+  In a group of a JVM member and a native member, with a native third joining mid-stream, each committing
+  only on revocation: nothing is lost or processed twice across 1 200 records, the commits reach every end,
+  and nobody gives up everything mid-stream. Assignments arrive in pieces: the late member heard `+[2, 5]`
+  and then `+[0, 1, 3, 4]` as the others left. The listener must not assume one `onAssigned` per rebalance.
+- **Native: why it works.** librdkafka reports the new protocol as `COOPERATIVE`, and the rebalance callback
+  already switches to incremental assign for that (B-55). With that switch forced off, the lone member fails.
+
 **Rejected alternatives.**
 - *Suspending callbacks.* See above: a blocking wait wearing a `suspend` signature, and a deadlock the
   moment the listener calls the consumer.
@@ -385,7 +411,7 @@ on 2026-09-24, and `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`. Five of these r
 | `check.crcs` | `true` | `false` | **`true`, both arms** | corruption surfaces as an error instead of as bytes |
 | `auto.offset.reset` | `latest` | `largest` | `latest`, travels | the same meaning; librdkafka accepts `earliest` and `latest` too, so those two spellings travel and the rest (`none`, `error`, `smallest`) are platform values |
 | `partition.assignment.strategy` | `RangeAssignor`, `CooperativeStickyAssignor` | `range,roundrobin` | unset: each arm's own; set: **portable since [B-55](../backlog/B-55-cooperative-rebalancing.md)** | librdkafka's words, `range`, `roundrobin` and `cooperative-sticky`, which the JVM arm translates into class names. A Java class name, `sticky`, or cooperative next to an eager assignor is refused at construction on both arms. Unset, the two defaults share `range`, which is what a mixed group settles on ([B-37](../backlog/B-37-consumer-groups.md)) |
-| `group.protocol` | `classic` | `classic` | `classic`, travels | `consumer` (KIP-848) was out of scope; planned since 2026-09-25 as [B-57](../backlog/B-57-the-kip-848-consumer-protocol.md) |
+| `group.protocol` | `classic` | `classic` | `classic`, travels | `consumer` (KIP-848) is supported and measured since [B-57](../backlog/B-57-the-kip-848-consumer-protocol.md): see §2a. Not the default until both clients make it theirs |
 | `group.id` | none | none | travels; required by `subscribe` and `commit` | |
 | `group.instance.id` | none | none | travels | static membership, measured in [B-56](../backlog/B-56-static-membership.md): see §2a |
 | `max.poll.interval.ms` | 300 000 | 300 000 | travels | §1 |
@@ -445,7 +471,7 @@ client's own semantics, and the contract says which.
 - **The `consumer` group protocol** (KIP-848), static membership, cooperative rebalancing chosen on
   the caller's behalf. Cooperative rebalancing is now the caller's choice (B-55); it is still not
   chosen for them. Static membership has since been measured (B-56); it works through the key the caller
-  sets.
+  sets. The `consumer` protocol is supported since B-57, and not chosen for the caller either.
 - **Exactly-once as a built-in loop.** `groupMetadata()` and the producer's `sendOffsetsToTransaction` are
   in since [B-38](../backlog/B-38-exactly-once-read-process-write.md); the read-process-write loop
   around them is the caller's.

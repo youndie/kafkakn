@@ -1,7 +1,7 @@
 ---
 id: B-57
 title: "The KIP-848 consumer protocol, on both arms and in a mixed group"
-status: open
+status: done
 priority: P3
 size: L
 stage: stage-12-group-protocols
@@ -35,3 +35,34 @@ reversed that on 2026-09-25.
   ([B-48](B-48-commit-explicit-offsets.md)) keep their promises under it, or the contract says where
   they do not.
 - Anchors: `docs/api/consumer-contract.md`, `ci/broker/`.
+
+## Findings (2026-09-25)
+
+- **The hypothesis held: the fixture needs no change.** `apache/kafka:4.3.1` accepts `group.protocol=consumer`
+  as configured. The distribution's console consumer formed such a group first, and `kafka-groups.sh --list`
+  named it `Consumer consumer`, with the broker's `uniform` assignor. The anchor `ci/broker/` is unchanged.
+- **AC: a group of one member on each arm under the new protocol forms and reads every record once.** This
+  is `ci/b-57/run.sh`, B-55's mixed run with the members switched: a JVM member, a native member and a
+  native third joining 30 s later. Across 1 200 records, 0 were lost and 0 processed twice. The commits
+  reach every end, and nobody gave up everything mid-stream. The broker's tool lists the group as
+  `Consumer consumer`, which rules out a quiet fallback to `classic`.
+- **AC: the listener and explicit commits keep their promises.** On each arm alone, and compared across
+  the arms:
+  - `+[0] -[0]`;
+  - every record once;
+  - an explicit commit of 12 reads back;
+  - the commit made in `onRevoked` at `close` (17) is what the broker holds afterwards.
+
+  In the mixed group, members commit only on revocation, and no record is repeated. One difference for a
+  listener is recorded in the contract: assignments arrive in pieces (`+[2, 5]`, then `+[0, 1, 3, 4]`).
+- **Found: the classic keys were refused by both clients in different types.** The Java client threw
+  `ConfigException`; librdkafka's `rd_kafka_new` failed, which native reported as `IllegalStateException`.
+  The keys are `partition.assignment.strategy`, `session.timeout.ms` and `heartbeat.interval.ms`. They are
+  now refused in common code, first, with `IllegalArgumentException` on both arms, as B-55 refuses a
+  strategy only one arm understands.
+- **Native works because of B-55's switch.** librdkafka reports the new protocol as `COOPERATIVE`, and the
+  rebalance callback's incremental assign serves it.
+- **Mutants:** all four killed, each by name:
+  - the check skipped: killed by the keys test (JVM);
+  - the check's call removed on native, and on the JVM: killed by the keys test on each arm;
+  - native's incremental switch forced off: killed by the lone-member test.

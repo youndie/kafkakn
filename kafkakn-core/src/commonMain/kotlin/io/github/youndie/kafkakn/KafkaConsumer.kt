@@ -251,6 +251,26 @@ internal fun requireCommittable(offsets: Map<TopicPartition, Long>) {
 }
 
 /**
+ * The keys the KIP-848 group protocol moves to the broker
+ * ([B-57](../../../../../../../docs/backlog/B-57-the-kip-848-consumer-protocol.md)). Under
+ * `group.protocol=consumer` the broker assigns and times the group, and both clients refuse these three at
+ * construction, in different types: `ConfigException` from the Java client, a failed `rd_kafka_new` from
+ * librdkafka. Refused here first, in one type on both arms. The assignor is named with `group.remote.assignor`
+ * instead, and the timeouts are the broker's `group.consumer.*` settings.
+ */
+internal fun ConsumerConfig.checkGroupProtocolKeys() {
+    if (properties["group.protocol"]?.trim()?.lowercase() != "consumer") return
+    val classicOnly = CLASSIC_PROTOCOL_KEYS.filter { it in properties }
+    require(classicOnly.isEmpty()) {
+        "${classicOnly.joinToString()}: not honoured under group.protocol=consumer, where the broker assigns and " +
+            "times the group; name the assignor with group.remote.assignor, and the timeouts are the broker's"
+    }
+}
+
+private val CLASSIC_PROTOCOL_KEYS =
+    listOf("partition.assignment.strategy", "session.timeout.ms", "heartbeat.interval.ms")
+
+/**
  * `partition.assignment.strategy`, in the one spelling both arms honour
  * ([B-55](../../../../../../../docs/backlog/B-55-cooperative-rebalancing.md)): librdkafka's words, which the
  * JVM arm translates into the Java client's class names. A value only one arm understands (a Java class

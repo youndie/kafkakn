@@ -144,7 +144,8 @@ internal class NativeKafkaConsumer(
     private val namesAGroup = config.namesAGroup()
 
     init {
-        // Refused here as on the JVM, before librdkafka reads it (B-55). The words themselves are librdkafka's.
+        // Refused here as on the JVM, before librdkafka reads it (B-55, B-57). The words themselves are librdkafka's.
+        config.checkGroupProtocolKeys()
         config.assignmentStrategy()
     }
 
