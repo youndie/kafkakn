@@ -64,3 +64,13 @@ services:
       # SCRAM credentials are not in the file - `broker.sh up` creates them through the broker's tools.
       KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/broker-jaas.conf"
       KAFKA_SASL_ENABLED_MECHANISMS: "PLAIN,SCRAM-SHA-256,SCRAM-SHA-512"
+      # OAUTHBEARER (B-33), on the plaintext SASL listener only, and configured there alone. The broker's
+      # OAUTHBEARER validator demands exactly one JAAS entry - with it in the shared KafkaServer section
+      # beside PLAIN and SCRAM the broker refused to start: "Must supply exactly 1 non-null JAAS mechanism
+      # configuration (size was 3)". No server callback handler is named, so it validates with
+      # OAuthBearerUnsecuredValidatorCallbackHandler - unsigned JWTs, a fixture's tokens (SaslChannelBuilder,
+      # 4.3.1). And an OAUTHBEARER connection re-authenticates every ten seconds, so a client that did not
+      # refresh its token is refused rather than quietly kept on.
+      KAFKA_LISTENER_NAME_SASL__PLAINTEXT_SASL_ENABLED_MECHANISMS: "PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER"
+      KAFKA_LISTENER_NAME_SASL__PLAINTEXT_OAUTHBEARER_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required unsecuredLoginStringClaim_sub=\"broker\";"
+      KAFKA_LISTENER_NAME_SASL__PLAINTEXT_OAUTHBEARER_CONNECTIONS_MAX_REAUTH_MS: "10000"

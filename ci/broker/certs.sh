@@ -42,6 +42,27 @@ derive_pkcs1() {
         echo "certs.sh: the PKCS#1 keys are not in the form B-42 asks about" >&2; exit 1; }
 }
 
+# The broker's SASL users (B-32), written on EVERY run like the keys
+# above: a file only the full generation wrote would never change on a box whose certificates are
+# still valid, and the broker would keep reading the old one.
+write_jaas() {
+    cat > "$OUT/broker-jaas.conf" <<'JAAS'
+KafkaServer {
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+        user_alice="alice-secret"
+        user_quoted="kafkakn\"quote\\slash";
+    org.apache.kafka.common.security.scram.ScramLoginModule required;
+};
+JAAS
+    chmod 644 "$OUT/broker-jaas.conf"
+    cat > "$OUT/client-sasl-oauthbearer.properties" <<'PROPS'
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=OAUTHBEARER
+sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required unsecuredLoginStringClaim_sub="alice";
+PROPS
+    chmod 644 "$OUT/client-sasl-oauthbearer.properties"
+}
+
 # IDEMPOTENT, and that is a correctness property rather than a speed one. The broker loads its
 # keystore once, at startup; regenerating the certificates under a running broker leaves it holding
 # a certificate no client trusts any more, and the symptom is an SSL handshake failure that looks
@@ -51,10 +72,10 @@ derive_pkcs1() {
 # container, which is what `broker.sh down` followed by `up` does.
 if [ -z "${FORCE:-}" ] && [ -s "$OUT/ca.pem" ] && [ -s "$OUT/broker.keystore.p12" ] \
         && [ -s "$OUT/wrong-ca.pem" ] && [ -s "$OUT/client.pem" ] && [ -s "$OUT/wrong-client.pem" ] \
-        && [ -s "$OUT/broker-jaas.conf" ] \
         && openssl x509 -in "$OUT/broker.pem" -noout -checkend 86400 >/dev/null 2>&1; then
     echo "  certificates already in $OUT, and the broker's is valid for another day - kept"
     derive_pkcs1
+    write_jaas
     exit 0
 fi
 
@@ -166,14 +187,6 @@ cat wrong-client.pem wrong-client.key > wrong-client-bundle.pem
 # `quoted` is the user the item exists for: a password with a double quote and a backslash, which a
 # JAAS string must escape. Written here ESCAPED, because this file is parsed too - and the proof it
 # was escaped right is the native arm, which sends the password raw and still has to get in.
-cat > broker-jaas.conf <<'JAAS'
-KafkaServer {
-    org.apache.kafka.common.security.plain.PlainLoginModule required
-        user_alice="alice-secret"
-        user_quoted="kafkakn\"quote\\slash";
-    org.apache.kafka.common.security.scram.ScramLoginModule required;
-};
-JAAS
 
 # Client configurations for the broker's OWN tools, so the fixture can be questioned without
 # involving kafkakn at all. The paths are the container's, because that is where they are read.
@@ -223,5 +236,6 @@ sasl_props client-sasl-ssl-scram512.properties SASL_SSL SCRAM-SHA-512 alice alic
 chmod 644 ./*.properties ./*.pem ./*.conf client.key wrong-client.key
 
 derive_pkcs1
+write_jaas
 echo "  certificates in $OUT: ca.pem, broker.keystore.p12, wrong-ca.pem, client.pem, wrong-client.pem"
 echo "  the right CA verifies the broker, the wrong CA does not - both checked, not assumed"
