@@ -1,7 +1,7 @@
 ---
 id: B-40
 title: "macOS, so a contributor can run the native arm without the Linux box"
-status: open
+status: wip
 priority: P3
 size: M
 stage: stage-9-targets
