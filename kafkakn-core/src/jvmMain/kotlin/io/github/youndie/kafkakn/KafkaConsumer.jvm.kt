@@ -199,6 +199,36 @@ internal class JvmKafkaConsumer(
         return partitions.associateWith { answer[it.apache()]?.offset() }
     }
 
+    override suspend fun pause(partitions: List<TopicPartition>) {
+        enter("pause")
+        withContext(lane) { delegate.pause(held(partitions, "pause")) }
+    }
+
+    override suspend fun resume(partitions: List<TopicPartition>) {
+        enter("resume")
+        withContext(lane) { delegate.resume(held(partitions, "resume")) }
+    }
+
+    override suspend fun paused(): List<TopicPartition> {
+        enter("paused")
+        return withContext(lane) {
+            delegate.paused().map { TopicPartition(it.topic(), it.partition()) }.sortedWith(PARTITION_ORDER)
+        }
+    }
+
+    /** [partitions] as the Java client's, refused in the contract's words if any is not held. */
+    private fun held(
+        partitions: List<TopicPartition>,
+        call: String,
+    ): List<ApachePartition> {
+        val holding = delegate.assignment()
+        return partitions.map { it.apache() }.onEach {
+            check(
+                it in holding,
+            ) { "$call: $it is not held by this consumer" }
+        }
+    }
+
     override suspend fun assignment(): List<TopicPartition> {
         enter("assignment")
         return withContext(lane) {

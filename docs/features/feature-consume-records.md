@@ -116,6 +116,16 @@ The contract is [consumer-contract](../api/consumer-contract.md).
   The third is refused with `IllegalStateException`. The two arms agree.
 * **Automated:** `GroupSeekTest` on both arms, compared by `ci/b-51/run.sh`.
 
+### Scenario: A paused partition returns nothing, and the member stays
+* **Given:** a topic with 2000 records on partition 0 and a member polling it, with `max.poll.interval.ms`
+  at 6 s.
+* **When:** partition 0 is paused after its first batch, and the member polls for 10 s while partition 1
+  receives records. Then partition 0 is resumed.
+* **Then:** partition 0 returns nothing while paused, partition 1 returns its records, and the member still
+  holds both and can commit. After `resume`, partition 0's 2000 records arrive exactly once. A seek does not
+  undo a pause.
+* **Automated:** `PauseTest` on both arms, counted against the broker by `ci/b-52/run.sh`.
+
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.
 * **When:** one member processes 50 records and leaves, in both directions.
@@ -132,5 +142,5 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 
 ## 5. Out of scope
 
-Pause and resume, consumer lag, a `Flow` over `poll`, cooperative rebalancing, static membership and
+Consumer lag, a `Flow` over `poll`, cooperative rebalancing, static membership and
 KIP-848: each is its own item in stages 11 and 12. `onLost` is mapped on both arms but not exercised.
