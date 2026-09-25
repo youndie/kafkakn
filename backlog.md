@@ -58,6 +58,18 @@ The first thing §1.8 found is not a missing feature: **the arms disagree by def
 `enable.idempotence`** — `true` on the JVM, `false` on librdkafka — which is why the stage opens with
 [B-25](docs/backlog/B-25-the-arms-disagree-on-idempotence.md) at P0, ahead of anything new.
 
+### Stages 10 to 13: what a caller reaches for next
+
+**Opened 2026-09-25 at the owner's request**, when stages 0 to 9 had closed. They were written from
+what is still missing against the two clients underneath, read out of the same artefacts as §1.8:
+`rdkafka.h` of librdkafka 2.13.0 and `javap` against `kafka-clients` 4.3.1. Every call these items need
+exists in both.
+
+Stage 10 comes first because it is about the truth of what is already there. The stub producer and
+the "nothing is built" sentences are read by every session that starts here.
+
+Two of the stages reverse earlier scope: see the decisions below.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -90,6 +102,10 @@ verdict.
 | `stage-7-admin` | It can manage what it writes to | Topics and the cluster, created and described through the same two arms. |
 | `stage-8-consume` | It reads — designed before it is built | The consumer, in the order that keeps group coordination last: a design, assign-and-poll, groups, exactly-once. |
 | `stage-9-targets` | Where it runs | `linuxArm64`, and macOS so a contributor can run the native arm locally. |
+| `stage-10-housekeeping` | The tree says what exists | Sentences and code that still describe the repository before its first item, and feature documents for what stages 5 to 9 built. |
+| `stage-11-everyday-gaps` | What a caller reaches for next | Tombstones; explicit commits and reading positions back; a rebalance listener, seek in a group, pause and resume; consumer lag; a `Flow` over `poll`. |
+| `stage-12-group-protocols` | Groups as they are run now | Cooperative rebalancing, static membership, and the KIP-848 consumer protocol. |
+| `stage-13-admin` | Administering what it reads and writes | Consumer groups (describe, offsets, reset, delete), topic configuration, adding partitions, deleting records. |
 
 ## Marks
 
@@ -97,9 +113,29 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (19)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-45](docs/backlog/B-45-the-tree-still-says-nothing-is-built.md) `[ ]` | Three places in the tree still say nothing is built, and one of them is code | P1 | S | - |
+| [B-47](docs/backlog/B-47-a-producer-can-write-a-tombstone.md) `[ ]` | A producer can write a tombstone: a record whose value is null | P1 | S | - |
+| [B-48](docs/backlog/B-48-commit-explicit-offsets.md) `[ ]` | Commit named offsets, not only everything poll returned | P1 | S | - |
+| [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[ ]` | A rebalance listener: say which partitions arrive and which leave | P1 | L | B-48 |
+| [B-46](docs/backlog/B-46-feature-documents-for-what-was-built-after-the-producer.md) `[ ]` | Feature documents for consuming, exactly-once and administration | P2 | M | B-45 |
+| [B-49](docs/backlog/B-49-committed-and-position.md) `[ ]` | Read back committed offsets and the current position | P2 | S | B-48 |
+| [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[ ]` | Seek under a subscription, within the partitions the group gave | P2 | M | B-50 |
+| [B-52](docs/backlog/B-52-pause-and-resume.md) `[ ]` | Pause and resume partitions without leaving the group | P2 | M | - |
+| [B-53](docs/backlog/B-53-consumer-lag-in-metrics.md) `[ ]` | Consumer metrics, lag first | P2 | M | - |
+| [B-54](docs/backlog/B-54-a-flow-over-poll.md) `[ ]` | A Flow of records, built on poll | P2 | S | - |
+| [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[ ]` | Cooperative rebalancing: partitions move without stopping the whole group | P2 | L | B-50 |
+| [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[ ]` | List and describe consumer groups | P2 | M | - |
+| [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[ ]` | A consumer group's committed offsets and its lag, read by the admin client | P2 | M | B-58 |
+| [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[ ]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
+| [B-56](docs/backlog/B-56-static-membership.md) `[ ]` | Static membership: a member that restarts keeps its partitions | P3 | M | - |
+| [B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md) `[ ]` | The KIP-848 consumer protocol, on both arms and in a mixed group | P3 | L | B-50, B-55 |
+| [B-61](docs/backlog/B-61-topic-configs.md) `[ ]` | Describe a topic's configuration and change it incrementally | P3 | M | - |
+| [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
+| [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
 ## Closed (44)
 
@@ -221,3 +257,11 @@ been measured there down to glibc 2.17 ([B-39](docs/backlog/B-39-linux-arm64.md)
 runner free, so adding it to CI costs no money; it was offered and declined. Nor is it published, which
 would need that runner or an arm64 machine at publish time. What a user can rely on is the published
 targets: `jvm` and `linuxX64`.
+
+**Scope reversed on 2026-09-25, by the owner: administration beyond topics, and the modern group
+protocols.** Consumer-group administration, topic configuration, adding partitions and deleting records
+had been *not planned*. The KIP-848 protocol, static membership and cooperative rebalancing had been
+*out of scope* for the consumer. Both are now stages 12 and 13. The order still puts the group
+protocols after the rebalance listener ([B-50](docs/backlog/B-50-a-rebalance-listener.md)), which they
+change, and administration after the consumer features it describes. **ACLs, OIDC token fetching,
+Schema Registry and Streams stay out.**
