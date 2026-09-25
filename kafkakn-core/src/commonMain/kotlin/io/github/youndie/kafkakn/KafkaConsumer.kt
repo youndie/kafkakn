@@ -33,6 +33,19 @@ public interface KafkaConsumer {
     public suspend fun subscribe(topics: List<String>)
 
     /**
+     * [subscribe], and tells [listener] when partitions arrive and leave (consumer-contract §2a,
+     * [B-50](../../../../../../../docs/backlog/B-50-a-rebalance-listener.md)). The callbacks run inside
+     * [poll] (and inside [close], which revokes), on the thread that is polling. They are plain
+     * functions, and they must not call this consumer: that would wait for the `poll` that is waiting for
+     * them, so on both arms it throws instead. [RebalanceScope] is the one way back into the client from
+     * inside a callback.
+     */
+    public suspend fun subscribe(
+        topics: List<String>,
+        listener: RebalanceListener,
+    )
+
+    /**
      * Commits, synchronously, the position after every record [poll] has returned — for every partition
      * this consumer holds. Needs a `group.id` the caller named.
      */
@@ -80,6 +93,48 @@ public interface KafkaConsumer {
     /** Releases the consumer. */
     public suspend fun close()
 }
+
+/**
+ * Told when this member's partitions change (consumer-contract §2a). Every callback runs inside `poll` or
+ * `close`, before that call returns, on the thread that made it. None is called with an empty list, on
+ * either arm: the Java client calls `onPartitionsAssigned` with nothing on some rebalances, and librdkafka
+ * does not.
+ */
+public interface RebalanceListener {
+    /**
+     * These partitions are about to leave this member. Commit what was processed on them, through
+     * [scope], here: once this returns they may belong to another member.
+     */
+    public fun onRevoked(
+        partitions: List<TopicPartition>,
+        scope: RebalanceScope,
+    ) {}
+
+    /** These partitions arrived. Called before any of their records is returned by `poll`. */
+    public fun onAssigned(partitions: List<TopicPartition>) {}
+
+    /**
+     * These partitions were taken without a revocation: the member was removed from the group, for
+     * example after missing `session.timeout.ms`. A commit would be refused, so there is no scope.
+     */
+    public fun onLost(partitions: List<TopicPartition>) {}
+}
+
+/** What a revocation callback may do with the client that is running it. */
+public interface RebalanceScope {
+    /**
+     * Commits these offsets synchronously, inside the callback. The same meaning as
+     * [KafkaConsumer.commit] with offsets: each value is the next offset to read.
+     */
+    public fun commit(offsets: Map<TopicPartition, Long>)
+}
+
+/** Thrown when a callback calls the consumer that is running it (consumer-contract §2a). */
+internal fun refuseReentry(call: String): Nothing =
+    throw IllegalStateException(
+        "$call was called from inside a rebalance callback, which runs inside poll or close: it would wait " +
+            "for the call that is waiting for it. Use the RebalanceScope the callback was given.",
+    )
 
 /** Creates a consumer. The implementation is the platform's, as for [kafkaProducer]. */
 public expect fun kafkaConsumer(config: ConsumerConfig): KafkaConsumer

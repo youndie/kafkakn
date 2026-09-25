@@ -3,18 +3,22 @@
 package io.github.youndie.kafkakn
 
 import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.COpaquePointer
 import kotlinx.cinterop.COpaquePointerVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
 import kotlinx.coroutines.Dispatchers
@@ -27,13 +31,18 @@ import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
+import rdkafka.RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS
 import rdkafka.RD_KAFKA_RESP_ERR__NO_OFFSET
 import rdkafka.RD_KAFKA_RESP_ERR__PARTITION_EOF
+import rdkafka.RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS
 import rdkafka.rd_kafka_assign
 import rdkafka.rd_kafka_assignment
+import rdkafka.rd_kafka_assignment_lost
 import rdkafka.rd_kafka_commit
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
+import rdkafka.rd_kafka_conf_set_opaque
+import rdkafka.rd_kafka_conf_set_rebalance_cb
 import rdkafka.rd_kafka_consumer_close
 import rdkafka.rd_kafka_consumer_group_metadata
 import rdkafka.rd_kafka_consumer_group_metadata_destroy
@@ -46,6 +55,8 @@ import rdkafka.rd_kafka_error_string
 import rdkafka.rd_kafka_header_cnt
 import rdkafka.rd_kafka_header_get_all
 import rdkafka.rd_kafka_headers_t
+import rdkafka.rd_kafka_incremental_assign
+import rdkafka.rd_kafka_incremental_unassign
 import rdkafka.rd_kafka_mem_free
 import rdkafka.rd_kafka_message_destroy
 import rdkafka.rd_kafka_message_headers
@@ -54,6 +65,8 @@ import rdkafka.rd_kafka_message_timestamp
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_offsets_for_times
 import rdkafka.rd_kafka_poll_set_consumer
+import rdkafka.rd_kafka_rebalance_protocol
+import rdkafka.rd_kafka_resp_err_t
 import rdkafka.rd_kafka_subscribe
 import rdkafka.rd_kafka_t
 import rdkafka.rd_kafka_topic_name
@@ -120,6 +133,10 @@ internal class NativeKafkaConsumer(
             if ("group.id" in settled) settled else settled + ("group.id" to "kafkakn-assign-${randomToken()}")
         }
 
+    /** What the rebalance callback needs, reached through librdkafka's opaque. Disposed after destroy. */
+    private val bridge = RebalanceBridge()
+    private val bridgeRef = StableRef.create(bridge)
+
     private val handle: CPointer<rd_kafka_t> =
         memScoped {
             val conf = rd_kafka_conf_new() ?: error("rd_kafka_conf_new returned null")
@@ -135,6 +152,11 @@ internal class NativeKafkaConsumer(
                     )
                 }
             }
+            // Always a rebalance callback, listener or not: it has to be on the configuration before
+            // rd_kafka_new. Without a listener it applies each change exactly as librdkafka would by
+            // itself (consumer-contract §2a).
+            rd_kafka_conf_set_opaque(conf, bridgeRef.asCPointer())
+            rd_kafka_conf_set_rebalance_cb(conf, staticCFunction(::onRebalance))
             val created =
                 rd_kafka_new(rd_kafka_type_t.RD_KAFKA_CONSUMER, conf, errstr, ERRSTR.convert())
                     ?: error("rd_kafka_new failed: ${errstr.toKString()}")
@@ -153,7 +175,20 @@ internal class NativeKafkaConsumer(
     private var assigned: List<TopicPartition> = emptyList()
     private val positions = mutableMapOf<TopicPartition, Long>()
 
+    private fun enter(call: String) {
+        if (Reentry.inside) refuseReentry(call)
+    }
+
+    /** A listener's exception, kept by the C callback that could not throw it, thrown by the call it ran in. */
+    private fun rethrowFromCallback() {
+        bridge.failure?.let {
+            bridge.failure = null
+            throw it
+        }
+    }
+
     override suspend fun assign(partitions: List<TopicPartition>) {
+        enter("assign")
         serial.withLock {
             assigned = partitions
             positions.clear()
@@ -165,11 +200,26 @@ internal class NativeKafkaConsumer(
     private var subscribed = false
 
     override suspend fun subscribe(topics: List<String>) {
+        enter("subscribe")
+        bridge.listener = null
+        subscribeTo(topics)
+    }
+
+    override suspend fun subscribe(
+        topics: List<String>,
+        listener: RebalanceListener,
+    ) {
+        enter("subscribe")
+        bridge.listener = listener
+        subscribeTo(topics)
+    }
+
+    private suspend fun subscribeTo(topics: List<String>) {
         requireGroup(namesAGroup, "subscribe")
         serial.withLock {
-            // No rebalance callback: librdkafka then assigns and revokes by itself, eager or
-            // incremental as the group's protocol requires, and with auto-commit off a revoked
-            // partition resumes elsewhere from its last commit - the at-least-once the contract promises.
+            // The rebalance callback (onRebalance, below) assigns and revokes, eager or incremental as the
+            // group's protocol requires. With auto-commit off, a revoked partition resumes elsewhere from
+            // its last commit: the at-least-once the contract promises, whether or not a listener commits.
             withPartitionList(topics.map { TopicPartition(it, 0) to OFFSET_INVALID }, anyPartition = true) { list ->
                 val err = rd_kafka_subscribe(handle, list)
                 if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
@@ -181,6 +231,7 @@ internal class NativeKafkaConsumer(
     }
 
     override suspend fun commit() {
+        enter("commit")
         requireGroup(namesAGroup, "commit")
         serial.withLock {
             // NULL offsets: the stored ones, which `enable.auto.offset.store` fills as each record is
@@ -195,28 +246,13 @@ internal class NativeKafkaConsumer(
     }
 
     override suspend fun commit(offsets: Map<TopicPartition, Long>) {
+        enter("commit")
         requireGroup(namesAGroup, "commit")
         requireCommittable(offsets)
         if (offsets.isEmpty()) return
         serial.withLock {
-            withPartitionList(offsets.entries.map { (partition, offset) -> partition to offset }) { list ->
-                // Synchronous, as commit() is. With a list, librdkafka commits exactly these offsets and
-                // reports an error per partition as well as for the call, so both are read.
-                val err = withContext(Dispatchers.IO) { rd_kafka_commit(handle, list, 0) }
-                val refused =
-                    (0 until list.pointed.cnt).mapNotNull { index ->
-                        val entry = list.pointed.elems!![index]
-                        if (entry.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
-                            null
-                        } else {
-                            val why = rd_kafka_err2str(entry.err)?.toKString()
-                            "${entry.topic?.toKString()}-${entry.partition}: $why"
-                        }
-                    }
-                if (err != RD_KAFKA_RESP_ERR_NO_ERROR || refused.isNotEmpty()) {
-                    throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()} $refused")
-                }
-            }
+            // Synchronous, as commit() is, on a thread that exists for waiting.
+            withContext(Dispatchers.IO) { commitNow(handle, offsets) }
         }
     }
 
@@ -226,6 +262,7 @@ internal class NativeKafkaConsumer(
      * producer reads them back for the one call that needs the object (B-38).
      */
     override suspend fun groupMetadata(): ConsumerGroupMetadata {
+        enter("groupMetadata")
         requireGroup(namesAGroup, "groupMetadata")
         return serial.withLock {
             val metadata =
@@ -249,7 +286,12 @@ internal class NativeKafkaConsumer(
         }
     }
 
-    override suspend fun assignment(): List<TopicPartition> =
+    override suspend fun assignment(): List<TopicPartition> {
+        enter("assignment")
+        return assignmentNow()
+    }
+
+    private suspend fun assignmentNow(): List<TopicPartition> =
         serial.withLock {
             memScoped {
                 val held = alloc<CPointerVar<rd_kafka_topic_partition_list_t>>()
@@ -285,6 +327,7 @@ internal class NativeKafkaConsumer(
         partition: TopicPartition,
         to: SeekTo,
     ) {
+        enter("seek")
         check(!subscribed) { "seek is refused under a subscription, on both arms: the group decides positions" }
         serial.withLock {
             require(partition in assigned) { "seek: $partition is not assigned (assigned: $assigned)" }
@@ -330,7 +373,10 @@ internal class NativeKafkaConsumer(
             if (found < 0) OFFSET_END else found
         }
 
-    override suspend fun poll(timeout: Duration): List<ConsumerRecord> = serial.withLock { drain(timeout) }
+    override suspend fun poll(timeout: Duration): List<ConsumerRecord> {
+        enter("poll")
+        return serial.withLock { drain(timeout) }
+    }
 
     /** Drains what is here, up to the contract's bound; if nothing is, waits by `delay`, never in C. */
     private suspend fun drain(timeout: Duration): List<ConsumerRecord> {
@@ -338,7 +384,10 @@ internal class NativeKafkaConsumer(
         val records = mutableListOf<ConsumerRecord>()
         while (true) {
             while (records.size < MAX_RECORDS) {
-                val message = rd_kafka_consumer_poll(handle, 0) ?: break
+                val message = rd_kafka_consumer_poll(handle, 0)
+                // A rebalance callback runs inside that call; what its listener threw surfaces here.
+                rethrowFromCallback()
+                if (message == null) break
                 try {
                     read(message)?.let { record ->
                         records += record
@@ -393,12 +442,16 @@ internal class NativeKafkaConsumer(
         }
 
     override suspend fun close() {
+        enter("close")
         serial.withLock {
-            // rd_kafka_consumer_close leaves any group and joins librdkafka's threads; it waits.
+            // rd_kafka_consumer_close leaves any group and joins librdkafka's threads; it waits. Leaving
+            // revokes, so the rebalance callback, and a listener's onRevoked, run inside it.
             withContext(Dispatchers.IO) {
                 rd_kafka_consumer_close(handle)
                 rd_kafka_destroy(handle)
             }
+            bridgeRef.dispose()
+            rethrowFromCallback()
         }
     }
 
@@ -446,3 +499,140 @@ internal class NativeGroupMetadata(
     val serialized: ByteArray,
     override val groupId: String,
 ) : ConsumerGroupMetadata()
+
+/** What the rebalance callback needs from the consumer that installed it (consumer-contract §2a). */
+private class RebalanceBridge {
+    var listener: RebalanceListener? = null
+
+    /** What the listener threw, kept here because a C callback cannot throw; the call it ran in throws it. */
+    var failure: Throwable? = null
+}
+
+/** Set while a rebalance callback runs on this thread: a call to the consumer from there is refused. */
+@kotlin.native.concurrent.ThreadLocal
+private object Reentry {
+    var inside = false
+}
+
+/**
+ * librdkafka's rebalance callback, on the thread inside `rd_kafka_consumer_poll` or
+ * `rd_kafka_consumer_close`. Once a callback is set, librdkafka no longer applies an assignment by itself,
+ * so this does, in every case, whatever the listener did. `onRevoked` runs **before** the unassign, while
+ * the partitions are still this member's, which is what makes a commit in it count. `onAssigned` runs
+ * after the assign.
+ */
+private fun onRebalance(
+    rk: CPointer<rd_kafka_t>?,
+    err: rd_kafka_resp_err_t,
+    partitions: CPointer<rd_kafka_topic_partition_list_t>?,
+    opaque: COpaquePointer?,
+) {
+    val bridge = opaque?.asStableRef<RebalanceBridge>()?.get() ?: return
+    val listener = bridge.listener
+    val list = partitions?.let { toPartitions(it) }.orEmpty()
+    val cooperative = rd_kafka_rebalance_protocol(rk)?.toKString() == "COOPERATIVE"
+    when (err) {
+        RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS -> {
+            if (cooperative) {
+                rd_kafka_incremental_assign(rk, partitions)?.let {
+                    rd_kafka_error_destroy(it)
+                }
+            } else {
+                rd_kafka_assign(rk, partitions)
+            }
+            if (listener != null && list.isNotEmpty()) inside(bridge) { listener.onAssigned(list) }
+        }
+
+        RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS -> {
+            try {
+                if (listener != null && list.isNotEmpty()) {
+                    val lost = rd_kafka_assignment_lost(rk) == 1
+                    inside(bridge) {
+                        if (lost) listener.onLost(list) else listener.onRevoked(list, NativeRebalanceScope(rk!!))
+                    }
+                }
+            } finally {
+                if (cooperative) {
+                    rd_kafka_incremental_unassign(rk, partitions)?.let {
+                        rd_kafka_error_destroy(it)
+                    }
+                } else {
+                    rd_kafka_assign(rk, null)
+                }
+            }
+        }
+
+        // An error in place of an assignment: drop what is held, as librdkafka's own example does.
+        else -> {
+            rd_kafka_assign(rk, null)
+        }
+    }
+}
+
+private inline fun inside(
+    bridge: RebalanceBridge,
+    call: () -> Unit,
+) {
+    Reentry.inside = true
+    try {
+        call()
+    } catch (failure: Throwable) {
+        // Nothing may cross back into C. Kept, and thrown by the poll or close this ran inside.
+        if (bridge.failure == null) bridge.failure = failure
+    } finally {
+        Reentry.inside = false
+    }
+}
+
+private class NativeRebalanceScope(
+    private val rk: CPointer<rd_kafka_t>,
+) : RebalanceScope {
+    override fun commit(offsets: Map<TopicPartition, Long>) {
+        requireCommittable(offsets)
+        if (offsets.isNotEmpty()) commitNow(rk, offsets)
+    }
+}
+
+private fun toPartitions(list: CPointer<rd_kafka_topic_partition_list_t>): List<TopicPartition> =
+    (0 until list.pointed.cnt)
+        .map { index ->
+            val entry = list.pointed.elems!![index]
+            TopicPartition(entry.topic!!.toKString(), entry.partition)
+        }.sortedWith(PARTITION_ORDER)
+
+/**
+ * `rd_kafka_commit` of exactly these offsets, synchronously, with every partition's own error read as
+ * well as the call's (B-48). Used by `commit(offsets)` and by the revocation scope, which runs inside the
+ * call that holds the consumer and so must not go through it.
+ */
+private fun commitNow(
+    rk: CPointer<rd_kafka_t>,
+    offsets: Map<TopicPartition, Long>,
+) {
+    val list =
+        rd_kafka_topic_partition_list_new(offsets.size) ?: error("rd_kafka_topic_partition_list_new returned null")
+    try {
+        for ((partition, offset) in offsets) {
+            val entry =
+                rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)
+                    ?: error("list add failed")
+            entry.pointed.offset = offset
+        }
+        val err = rd_kafka_commit(rk, list, 0)
+        val refused =
+            (0 until list.pointed.cnt).mapNotNull { index ->
+                val entry = list.pointed.elems!![index]
+                if (entry.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    null
+                } else {
+                    val why = rd_kafka_err2str(entry.err)?.toKString()
+                    "${entry.topic?.toKString()}-${entry.partition}: $why"
+                }
+            }
+        if (err != RD_KAFKA_RESP_ERR_NO_ERROR || refused.isNotEmpty()) {
+            throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()} $refused")
+        }
+    } finally {
+        rd_kafka_topic_partition_list_destroy(list)
+    }
+}

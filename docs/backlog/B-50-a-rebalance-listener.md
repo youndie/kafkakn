@@ -43,3 +43,13 @@ Both clients have the hook, and they are shaped differently:
   against the broker's consumer.
 - Anchors: `docs/api/consumer-contract.md`, `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaConsumer.kt`,
   `ci/b-37/run.sh`.
+
+## Design review (2026-09-25, the owner)
+
+The contract section (§2a) was written first and put to the owner interactively, with three shapes:
+- plain callbacks with a commit scope;
+- suspending callbacks;
+- rebalances as events returned from `poll`.
+
+**Chosen: plain callbacks with `RebalanceScope`**, as §2a describes. The code follows the section, not
+the other way round.
