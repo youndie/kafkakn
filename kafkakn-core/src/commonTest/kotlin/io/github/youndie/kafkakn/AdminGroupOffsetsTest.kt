@@ -202,7 +202,10 @@ class AdminGroupOffsetsTest {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (thrown: Exception) {
-            "threw ${thrown::class.simpleName}: ${thrown.message}"
+            // By type, not by name alone: the Java client has a GroupNotEmptyException of its own, and a caller
+            // catching kafkakn's would miss it. A mutant that left the Java one unmapped passed a name check.
+            val type = thrown::class.simpleName + if (thrown is GroupNotEmptyException) "" else " (the client's own)"
+            "threw $type: ${thrown.message}"
         }
 
     private companion object {
