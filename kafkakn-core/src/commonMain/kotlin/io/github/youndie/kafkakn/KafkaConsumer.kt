@@ -250,6 +250,37 @@ internal fun requireCommittable(offsets: Map<TopicPartition, Long>) {
     }
 }
 
+/**
+ * `partition.assignment.strategy`, in the one spelling both arms honour
+ * ([B-55](../../../../../../../docs/backlog/B-55-cooperative-rebalancing.md)): librdkafka's words, which the
+ * JVM arm translates into the Java client's class names. A value only one arm understands (a Java class
+ * name, `sticky`) is refused at construction, and so is cooperative next to an eager assignor: librdkafka
+ * runs one protocol at a time. Unset, each arm keeps its client's own default.
+ */
+internal fun ConsumerConfig.assignmentStrategy(): List<String>? {
+    val words = properties["partition.assignment.strategy"]?.split(",")?.map { it.trim() } ?: return null
+    words.forEach { word ->
+        require(word in PORTABLE_ASSIGNORS) {
+            "partition.assignment.strategy: '$word' is not honoured by both arms; the portable values are " +
+                PORTABLE_ASSIGNORS.keys.joinToString()
+        }
+    }
+    require(COOPERATIVE !in words || words.size == 1) {
+        "partition.assignment.strategy: $COOPERATIVE cannot be combined with an eager assignor ($words)"
+    }
+    return words
+}
+
+/** The portable assignor words, and the Java client's class for each. */
+internal val PORTABLE_ASSIGNORS: Map<String, String> =
+    mapOf(
+        "range" to "org.apache.kafka.clients.consumer.RangeAssignor",
+        "roundrobin" to "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+        COOPERATIVE to "org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
+    )
+
+private const val COOPERATIVE = "cooperative-sticky"
+
 /** The defaults consumer-contract §3 sets on both arms, under whatever the caller wrote. */
 internal fun ConsumerConfig.withContractDefaults(): Map<String, String> = CONTRACT_DEFAULTS + properties
 

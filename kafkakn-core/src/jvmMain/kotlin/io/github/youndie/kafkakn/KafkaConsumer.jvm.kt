@@ -38,7 +38,13 @@ internal class JvmKafkaConsumer(
 
     private val namesAGroup = config.namesAGroup()
 
-    private val properties = translateForJava(config.withContractDefaults())
+    private val properties =
+        translateForJava(config.withContractDefaults()).let { translated ->
+            // The portable words, as the Java client's class names (B-55).
+            val strategy = config.assignmentStrategy() ?: return@let translated
+            translated +
+                ("partition.assignment.strategy" to strategy.joinToString(",") { PORTABLE_ASSIGNORS.getValue(it) })
+        }
 
     init {
         val known = configNames()
