@@ -177,8 +177,16 @@ internal class JvmKafkaConsumer(
         requireGroup(namesAGroup, "commit")
         // commitSync with no arguments: the positions after everything `poll` has returned, for every
         // partition held. It waits for the coordinator, on the lane.
-        withContext(lane) { delegate.commitSync() }
+        fencedAsKafkakn { withContext(lane) { delegate.commitSync() } }
     }
+
+    /** The Java client's fencing on a commit, as the one exception both arms throw for it (B-66). */
+    private suspend fun <T> fencedAsKafkakn(call: suspend () -> T): T =
+        try {
+            call()
+        } catch (fenced: FencedInstanceIdException) {
+            throw ConsumerFencedException("commit: fenced by a member with the same group.instance.id", fenced)
+        }
 
     override suspend fun commit(offsets: Map<TopicPartition, Long>) {
         enter("commit")
@@ -188,7 +196,7 @@ internal class JvmKafkaConsumer(
         // commitSync(Map): the offsets as given, each the next one to read, which is also what
         // OffsetAndMetadata means. No metadata string: nothing here needs one (B-48).
         val apache = offsets.entries.associate { it.key.apache() to OffsetAndMetadata(it.value) }
-        withContext(lane) { delegate.commitSync(apache) }
+        fencedAsKafkakn { withContext(lane) { delegate.commitSync(apache) } }
     }
 
     override suspend fun groupMetadata(): ConsumerGroupMetadata {
