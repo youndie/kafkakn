@@ -45,6 +45,7 @@ import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_conf_set_opaque
 import rdkafka.rd_kafka_conf_set_rebalance_cb
+import rdkafka.rd_kafka_conf_set_stats_cb
 import rdkafka.rd_kafka_consumer_close
 import rdkafka.rd_kafka_consumer_group_metadata
 import rdkafka.rd_kafka_consumer_group_metadata_destroy
@@ -138,7 +139,7 @@ internal class NativeKafkaConsumer(
     private val properties =
         config.withContractDefaults().let { settled ->
             if ("group.id" in settled) settled else settled + ("group.id" to "kafkakn-assign-${randomToken()}")
-        }
+        } + ("statistics.interval.ms" to STATISTICS_MS)
 
     /** What the rebalance callback needs, reached through librdkafka's opaque. Disposed after destroy. */
     private val bridge = RebalanceBridge(requestTimeoutMsFor(properties))
@@ -164,6 +165,9 @@ internal class NativeKafkaConsumer(
             // itself (consumer-contract §2a).
             rd_kafka_conf_set_opaque(conf, bridgeRef.asCPointer())
             rd_kafka_conf_set_rebalance_cb(conf, staticCFunction(::onRebalance))
+            // Statistics carry the lag (B-53), delivered inside rd_kafka_consumer_poll like every other
+            // callback here, and kept in the bridge the opaque already points at.
+            rd_kafka_conf_set_stats_cb(conf, staticCFunction(::onStatistics))
             val created =
                 rd_kafka_new(rd_kafka_type_t.RD_KAFKA_CONSUMER, conf, errstr, ERRSTR.convert())
                     ?: error("rd_kafka_new failed: ${errstr.toKString()}")
@@ -499,6 +503,16 @@ internal class NativeKafkaConsumer(
         return serial.withLock { bridge.paused.intersect(heldNow().toSet()).sortedWith(PARTITION_ORDER) }
     }
 
+    /**
+     * `consumer_lag_stored` per held partition, from the latest statistics: the end (the last stable
+     * offset under read_committed) minus the stored offset, which is the position, since each record
+     * handed out is stored. Not `consumer_lag`, which `STATISTICS.md` measures from the committed offset.
+     */
+    override suspend fun metrics(): ConsumerMetrics {
+        enter("metrics")
+        return serial.withLock { ConsumerMetrics(lagFrom(bridge.statistics.value, heldNow())) }
+    }
+
     private fun requireHeld(
         partitions: List<TopicPartition>,
         call: String,
@@ -671,6 +685,9 @@ private class RebalanceBridge(
 
     /** Where a seek in a group put a partition, until a record from it is read (position, B-51). */
     val groupSeeks = mutableMapOf<TopicPartition, Long>()
+
+    /** The latest statistics document (B-53), kept by [onStatistics] and parsed only when asked. */
+    val statistics = kotlin.concurrent.AtomicReference<String?>(null)
 
     /** What this member paused and has not resumed (B-52): librdkafka has no call that lists them. */
     val paused = mutableSetOf<TopicPartition>()
@@ -864,6 +881,21 @@ private fun seekPartitionsNow(
         rd_kafka_topic_partition_list_destroy(list)
     }
 }
+
+/** librdkafka's statistics callback for the consumer: keep the latest document. 0 lets librdkafka free it. */
+private fun onStatistics(
+    rk: CPointer<rd_kafka_t>?,
+    json: CPointer<ByteVar>?,
+    length: platform.posix.size_t,
+    opaque: COpaquePointer?,
+): Int {
+    val bridge = opaque?.asStableRef<RebalanceBridge>()?.get()
+    if (bridge != null && json != null) bridge.statistics.value = json.readBytes(length.toInt()).decodeToString()
+    return 0
+}
+
+/** Statistics once a second: librdkafka's default interval is 0, off, and the lag lives in them. */
+private const val STATISTICS_MS = "1000"
 
 private const val LOGICAL_BEGINNING = -2L
 private const val LOGICAL_END = -1L

@@ -74,3 +74,28 @@ internal fun metricsFrom(document: String?): ProducerMetrics {
 }
 
 private const val MICROS_PER_MILLI = 1000.0
+
+/**
+ * `topics.<topic>.partitions.<n>.consumer_lag_stored` for each of [held], or null where the document does
+ * not have it yet: before the first statistics, or before the partition's first fetch, when librdkafka
+ * reports -1.
+ */
+internal fun lagFrom(
+    document: String?,
+    held: List<TopicPartition>,
+): Map<TopicPartition, Long?> {
+    val topics = document?.let { Json.parseToJsonElement(it).jsonObject["topics"]?.jsonObject }
+    return held.associateWith { partition ->
+        topics
+            ?.get(partition.topic)
+            ?.jsonObject
+            ?.get("partitions")
+            ?.jsonObject
+            ?.get(partition.partition.toString())
+            ?.jsonObject
+            ?.get("consumer_lag_stored")
+            ?.jsonPrimitive
+            ?.longOrNull
+            ?.takeIf { it >= 0 }
+    }
+}
