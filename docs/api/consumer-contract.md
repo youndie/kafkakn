@@ -75,6 +75,7 @@ interface KafkaConsumer {                                   // B-36, B-37
     suspend fun assign(partitions: List<TopicPartition>)   // B-36
     suspend fun subscribe(topics: List<String>)             // B-37
     suspend fun commit()                                    // B-37
+    suspend fun commit(offsets: Map<TopicPartition, Long>)  // B-48: each value is the next offset to read
     suspend fun assignment(): List<TopicPartition>          // B-37
     suspend fun groupMetadata(): ConsumerGroupMetadata      // B-38
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
@@ -111,6 +112,18 @@ class ConsumerRecord(                                       // B-36
   `commit()` is synchronous and commits the position after everything `poll` returned, for every
   partition held: `commitSync()` on the JVM, `rd_kafka_commit(rk, NULL, sync)` on native, whose stored
   offsets are exactly that.
+- **`commit(offsets)` commits exactly the offsets named** ([B-48](../backlog/B-48-commit-explicit-offsets.md)),
+  each the next offset to read, as `sendOffsetsToTransaction` takes it: `commitSync(Map)` on the JVM,
+  `rd_kafka_commit(rk, list, sync)` on native, whose per-partition errors are read as well as the call's.
+  An empty map commits nothing, and a negative offset is refused in common code before either client
+  sees it. *Measured* (`ci/b-48/run.sh`): each arm commits offset 7 in the middle of a batch,
+  `kafka-consumer-groups.sh` shows 7, and a new member of the group reads from 7 on.
+
+  A commit of a partition the consumer does not hold is **accepted by both arms**, and the broker stores
+  it (measured with `assign`, so the group has no generation to check against). The two clients agree,
+  so kafkakn passes it through rather than refusing it. Under a subscription, the broker may judge such a
+  commit against the member's generation. That is not measured yet; it belongs with the rebalance
+  listener ([B-50](../backlog/B-50-a-rebalance-listener.md)).
 - **`subscribe` and `commit` need a `group.id` the caller named**, on both arms. The native arm's
   private `kafkakn-assign-*` id exists only so librdkafka will `assign`; a subscription joining it, or a
   commit landing in it, would be a group nobody asked for.
