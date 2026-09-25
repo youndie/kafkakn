@@ -1,7 +1,7 @@
 ---
 id: B-64
 title: "After an eviction, the native poll throws where the JVM's rejoins"
-status: wip
+status: done
 priority: P1
 size: S
 stage: stage-11-everyday-gaps
@@ -35,3 +35,17 @@ and librdkafka rejoins when the application polls again.
 - AC: the consumer contract's §2 paragraph on eviction says one behaviour, not two.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaConsumer.native.kt`,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/RecordsFlowTest.kt`.
+
+## Findings (2026-09-25)
+
+- **Red first, on native only.** With the test asserting the reference's behaviour, `jvmTest` passed and
+  `linuxX64Test` failed `a_collector_slower_than_max_poll_interval_is_evicted_and_the_caller_is_told`. That
+  run is also the mutation check: it is exactly the fix reverted.
+- **The fix is one line in `read()`.** `RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED` is skipped, as
+  `__PARTITION_EOF` is. librdkafka then rejoins at the next `rd_kafka_consumer_poll`. That behaviour was
+  observed, not assumed: the listener sees `+[0]` again, and records come again from the start.
+- **AC: the same outcome on both arms, asserted.** Completed, with `+[0] ![0] +[0] -[0]` and offsets
+  0–19 then 0–4 on both. `ci/b-54/run.sh` now compares the outcome across the arms instead of only printing
+  it.
+- **AC: the contract's §2 paragraph says one behaviour**, and keeps the history of the two in one
+  sentence.

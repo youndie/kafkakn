@@ -73,8 +73,9 @@ class RecordsFlowTest {
 
     /**
      * The eviction the `Flow` makes easy: while the collector is busy, nothing polls. Here it is busy for
-     * longer than `max.poll.interval.ms`, deliberately, and what each arm then does is recorded, not
-     * assumed. `ci/b-54/run.sh` prints both, and the contract says what they are.
+     * longer than `max.poll.interval.ms`, deliberately. B-54 measured the arms parting at the next poll:
+     * the JVM rejoined and native threw. [B-64](../../../../../../../docs/backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md)
+     * holds both to the reference's behaviour, asserted here.
      */
     @Test
     fun a_collector_slower_than_max_poll_interval_is_evicted_and_the_caller_is_told() =
@@ -127,11 +128,20 @@ class RecordsFlowTest {
                 recordArmFact("flow.slow.outcome", outcome)
                 recordArmFact("flow.slow.events", events.joinToString(" "))
                 recordArmFact("flow.slow.seen", seen.joinToString(","))
-                // Observed, one way or the other: the partition was reported lost, or the collector failed.
+                // B-64: one behaviour, the reference's. The eviction is told to the listener, the next poll
+                // rejoins, and with nothing committed the records come again from the start.
+                assertEquals("completed", outcome, "the collector after an eviction")
+                val lost = events.indexOfFirst { it.startsWith("!") }
                 assertTrue(
-                    events.any { it.startsWith("!") } || outcome.startsWith("threw"),
-                    "the eviction was invisible: $outcome, events $events, seen $seen",
+                    lost >= 0 && events.drop(lost + 1).any { it.startsWith("+") },
+                    "lost, then assigned again: $events",
                 )
+                assertEquals(
+                    (0L until CONSUME_COUNT).toList() + (0L until RECORDS_AFTER - CONSUME_COUNT),
+                    seen,
+                    "records",
+                )
+                recordObservation("flow.slow.outcome", outcome)
             }
         }
 
