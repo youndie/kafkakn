@@ -1,7 +1,7 @@
 ---
 id: B-58
 title: "List and describe consumer groups"
-status: open
+status: done
 priority: P2
 size: M
 stage: stage-13-admin
@@ -32,3 +32,26 @@ the owner reversed that.
   contract states.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaAdmin.kt`,
   `docs/api/producer-contract.md` (the admin section).
+
+## Findings (2026-09-25)
+
+- **AC: a group described alike on both arms, and as `kafka-consumer-groups --describe --members` says.**
+  The member held against the broker's tool is the distribution's console consumer, so kafkakn is on
+  neither side of the comparison. Member id, host, client id and assignment are identical on both arms and
+  in the tool's output. The arms agree on all six observations.
+- **AC: an empty and a missing group reported the same way on both arms.** The missing one was not, at
+  first. The Java client threw `GroupIdNotFoundException`, and librdkafka described it as `DEAD` with no
+  members. It is `DEAD` on both now: librdkafka cannot tell missing from dead, and a portable caller could
+  not name the Java exception. The JVM arm maps it per group. A group with no member left but with
+  commits is `EMPTY` on both.
+- **`listConsumerGroups()` is deprecated in 4.3.1**, and warnings are errors here, so the JVM arm uses
+  `listGroups(ListGroupsOptions.forConsumerGroups())`.
+- **Two faults in my runner, both about reading the broker's tool:** it stripped the host's leading `/`,
+  which the tool prints just as both clients do. And it read the sixth column, which in 4.3.1's `--verbose`
+  is `CURRENT-EPOCH`, not the assignment; it printed `-` and looked like a group still assigning.
+- **Mutants:**
+  - native reporting no members: killed by name;
+  - the JVM rethrowing a missing group: killed by name;
+  - lower-casing the state name: **not a mutant**, the mapping is case-insensitive by construction. It
+    pointed at a real gap instead: nothing tested the two-word states. `both_clients_spellings_of_a_state_read_as_one`
+    now does, and the mutant that drops the camel-case split is killed by it on both arms.

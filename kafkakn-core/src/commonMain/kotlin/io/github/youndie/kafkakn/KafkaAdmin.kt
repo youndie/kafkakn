@@ -25,8 +25,66 @@ public interface KafkaAdmin {
     /** The cluster's id, its brokers and the one it reports as controller. */
     public suspend fun describeCluster(): ClusterDescription
 
+    /**
+     * Every consumer group the cluster has, with its state
+     * ([B-58](../../../../../../../docs/backlog/B-58-list-and-describe-consumer-groups.md)). Consumer groups
+     * only: the Java client's `listGroups` also lists share and streams groups, and both arms are asked
+     * the same question.
+     */
+    public suspend fun listConsumerGroups(): List<ConsumerGroupListing>
+
+    /** Each group named: its state, its assignor, and its members with what each is assigned. */
+    public suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription>
+
     /** Releases the client. */
     public suspend fun close()
+}
+
+/** A consumer group as a listing names it. */
+public data class ConsumerGroupListing(
+    public val groupId: String,
+    public val state: GroupState,
+)
+
+/**
+ * A consumer group as the cluster describes it. [partitionAssignor] is the protocol name the group settled
+ * on (`range`, `cooperative-sticky`), empty while the group has no members.
+ */
+public data class ConsumerGroupDescription(
+    public val groupId: String,
+    public val state: GroupState,
+    public val partitionAssignor: String,
+    public val members: List<GroupMember>,
+)
+
+/** One member of a group, and the partitions it holds, in topic-then-partition order. */
+public data class GroupMember(
+    public val memberId: String,
+    public val clientId: String,
+    public val host: String,
+    public val assignment: List<TopicPartition>,
+)
+
+/**
+ * A group's state, in one set of names for both arms. The Java client's `GroupState` and librdkafka's
+ * `rd_kafka_consumer_group_state_t` share these; a state only one of them knows reads [UNKNOWN].
+ */
+public enum class GroupState {
+    UNKNOWN,
+    PREPARING_REBALANCE,
+    COMPLETING_REBALANCE,
+    STABLE,
+    DEAD,
+    EMPTY,
+    ;
+
+    internal companion object {
+        /** `STABLE`, `Stable` or `PreparingRebalance`: each client's spelling, into one. */
+        fun named(name: String?): GroupState {
+            val normalised = name.orEmpty().replace(Regex("([a-z])([A-Z])"), "$1_$2").uppercase()
+            return entries.firstOrNull { it.name == normalised } ?: UNKNOWN
+        }
+    }
 }
 
 /** Creates an admin client. The implementation is the platform's, as for [kafkaProducer]. */

@@ -12,6 +12,7 @@ import kotlinx.cinterop.convert
 import kotlinx.cinterop.cstr
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.set
 import kotlinx.cinterop.toKString
@@ -24,7 +25,9 @@ import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_ADMIN_OP_CREATETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECLUSTER
+import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECONSUMERGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBETOPICS
+import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPS
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
@@ -32,6 +35,14 @@ import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
 import rdkafka.rd_kafka_AdminOptions_destroy
 import rdkafka.rd_kafka_AdminOptions_new
 import rdkafka.rd_kafka_AdminOptions_t
+import rdkafka.rd_kafka_ConsumerGroupDescription_error
+import rdkafka.rd_kafka_ConsumerGroupDescription_group_id
+import rdkafka.rd_kafka_ConsumerGroupDescription_member
+import rdkafka.rd_kafka_ConsumerGroupDescription_member_count
+import rdkafka.rd_kafka_ConsumerGroupDescription_partition_assignor
+import rdkafka.rd_kafka_ConsumerGroupDescription_state
+import rdkafka.rd_kafka_ConsumerGroupListing_group_id
+import rdkafka.rd_kafka_ConsumerGroupListing_state
 import rdkafka.rd_kafka_CreateTopics
 import rdkafka.rd_kafka_CreateTopics_result_topics
 import rdkafka.rd_kafka_DeleteTopic_destroy_array
@@ -43,8 +54,17 @@ import rdkafka.rd_kafka_DescribeCluster
 import rdkafka.rd_kafka_DescribeCluster_result_cluster_id
 import rdkafka.rd_kafka_DescribeCluster_result_controller
 import rdkafka.rd_kafka_DescribeCluster_result_nodes
+import rdkafka.rd_kafka_DescribeConsumerGroups
+import rdkafka.rd_kafka_DescribeConsumerGroups_result_groups
 import rdkafka.rd_kafka_DescribeTopics
 import rdkafka.rd_kafka_DescribeTopics_result_topics
+import rdkafka.rd_kafka_ListConsumerGroups
+import rdkafka.rd_kafka_ListConsumerGroups_result_valid
+import rdkafka.rd_kafka_MemberAssignment_partitions
+import rdkafka.rd_kafka_MemberDescription_assignment
+import rdkafka.rd_kafka_MemberDescription_client_id
+import rdkafka.rd_kafka_MemberDescription_consumer_id
+import rdkafka.rd_kafka_MemberDescription_host
 import rdkafka.rd_kafka_NewTopic_destroy_array
 import rdkafka.rd_kafka_NewTopic_new
 import rdkafka.rd_kafka_NewTopic_set_config
@@ -65,6 +85,8 @@ import rdkafka.rd_kafka_TopicPartitionInfo_replicas
 import rdkafka.rd_kafka_admin_op_t
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
+import rdkafka.rd_kafka_consumer_group_state_name
+import rdkafka.rd_kafka_consumer_group_state_t
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_code
@@ -72,7 +94,9 @@ import rdkafka.rd_kafka_error_string
 import rdkafka.rd_kafka_event_CreateTopics_result
 import rdkafka.rd_kafka_event_DeleteTopics_result
 import rdkafka.rd_kafka_event_DescribeCluster_result
+import rdkafka.rd_kafka_event_DescribeConsumerGroups_result
 import rdkafka.rd_kafka_event_DescribeTopics_result
+import rdkafka.rd_kafka_event_ListConsumerGroups_result
 import rdkafka.rd_kafka_event_destroy
 import rdkafka.rd_kafka_event_error
 import rdkafka.rd_kafka_event_error_string
@@ -305,6 +329,103 @@ internal class NativeKafkaAdmin(
                 }
             },
         )
+
+    override suspend fun listConsumerGroups(): List<ConsumerGroupListing> =
+        request(
+            RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPS,
+            "listConsumerGroups",
+            submit = { options, queue -> rd_kafka_ListConsumerGroups(handle, options, queue) },
+            read = { event ->
+                val result = rd_kafka_event_ListConsumerGroups_result(event) ?: error("not a ListConsumerGroups result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    val valid = rd_kafka_ListConsumerGroups_result_valid(result, count.ptr)
+                    (0 until count.value.toInt())
+                        .map { index ->
+                            val listing = valid!![index]!!
+                            ConsumerGroupListing(
+                                groupId = rd_kafka_ConsumerGroupListing_group_id(listing)?.toKString() ?: "<unnamed>",
+                                state = stateOf(rd_kafka_ConsumerGroupListing_state(listing)),
+                            )
+                        }.sortedBy { it.groupId }
+                }
+            },
+        )
+
+    override suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription> =
+        request(
+            RD_KAFKA_ADMIN_OP_DESCRIBECONSUMERGROUPS,
+            "describeConsumerGroups",
+            submit = { options, queue ->
+                memScoped {
+                    val array = allocArray<CPointerVar<ByteVar>>(groupIds.size)
+                    groupIds.forEachIndexed { index, id -> array[index] = id.cstr.ptr }
+                    rd_kafka_DescribeConsumerGroups(handle, array, groupIds.size.convert(), options, queue)
+                }
+            },
+            read = { event ->
+                val result =
+                    rd_kafka_event_DescribeConsumerGroups_result(event) ?: error("not a DescribeConsumerGroups result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    val groups = rd_kafka_DescribeConsumerGroups_result_groups(result, count.ptr)
+                    (0 until count.value.toInt()).associate { index ->
+                        val group = groups!![index]!!
+                        val id = rd_kafka_ConsumerGroupDescription_group_id(group)?.toKString() ?: "<unnamed>"
+                        rd_kafka_ConsumerGroupDescription_error(group)?.let { error ->
+                            throw KafkaAdminException(
+                                "describeConsumerGroups: $id: ${rd_kafka_error_string(
+                                    error,
+                                )?.toKString()} (${rd_kafka_error_code(error)})",
+                            )
+                        }
+                        id to
+                            ConsumerGroupDescription(
+                                groupId = id,
+                                state = stateOf(rd_kafka_ConsumerGroupDescription_state(group)),
+                                partitionAssignor =
+                                    rd_kafka_ConsumerGroupDescription_partition_assignor(
+                                        group,
+                                    )?.toKString().orEmpty(),
+                                members =
+                                    (0 until rd_kafka_ConsumerGroupDescription_member_count(group).toInt()).map { at ->
+                                        val member = rd_kafka_ConsumerGroupDescription_member(group, at.convert())!!
+                                        GroupMember(
+                                            memberId =
+                                                rd_kafka_MemberDescription_consumer_id(
+                                                    member,
+                                                )?.toKString().orEmpty(),
+                                            clientId =
+                                                rd_kafka_MemberDescription_client_id(
+                                                    member,
+                                                )?.toKString().orEmpty(),
+                                            host =
+                                                rd_kafka_MemberDescription_host(
+                                                    member,
+                                                )?.toKString().orEmpty(),
+                                            assignment = assignmentOf(member),
+                                        )
+                                    },
+                            )
+                    }
+                }
+            },
+        )
+
+    /** The member's assigned partitions, in topic-then-partition order. */
+    private fun assignmentOf(member: CPointer<rdkafka.rd_kafka_MemberDescription_t>): List<TopicPartition> {
+        val list =
+            rd_kafka_MemberAssignment_partitions(rd_kafka_MemberDescription_assignment(member)) ?: return emptyList()
+        return (0 until list.pointed.cnt)
+            .map { index ->
+                val entry = list.pointed.elems!![index]
+                TopicPartition(entry.topic!!.toKString(), entry.partition)
+            }.sortedWith(PARTITION_ORDER)
+    }
+
+    /** librdkafka's state, by its name (`Stable`, `PreparingRebalance`), into the one both arms report. */
+    private fun stateOf(state: rd_kafka_consumer_group_state_t): GroupState =
+        GroupState.named(rd_kafka_consumer_group_state_name(state)?.toKString())
 
     override suspend fun close() {
         // rd_kafka_destroy joins librdkafka's threads, briefly; on a thread that exists for waiting.
