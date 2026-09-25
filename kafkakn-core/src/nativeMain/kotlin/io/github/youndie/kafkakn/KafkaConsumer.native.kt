@@ -31,8 +31,10 @@ import kotlinx.coroutines.withContext
 import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
+import rdkafka.RD_KAFKA_RESP_ERR_FENCED_INSTANCE_ID
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS
+import rdkafka.RD_KAFKA_RESP_ERR__FATAL
 import rdkafka.RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED
 import rdkafka.RD_KAFKA_RESP_ERR__NO_OFFSET
 import rdkafka.RD_KAFKA_RESP_ERR__PARTITION_EOF
@@ -56,6 +58,7 @@ import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_destroy
 import rdkafka.rd_kafka_error_string
+import rdkafka.rd_kafka_fatal_error
 import rdkafka.rd_kafka_header_cnt
 import rdkafka.rd_kafka_header_get_all
 import rdkafka.rd_kafka_headers_t
@@ -96,6 +99,9 @@ private fun randomToken(): String =
         .toString(RANDOM_RADIX)
 
 private const val RANDOM_RADIX = 36
+
+/** Room for librdkafka's sentence about a fatal error. */
+private const val FATAL_REASON = 512
 
 /** librdkafka refused a consumer operation, or handed back an error instead of a record. */
 public class KafkaConsumeException(
@@ -592,6 +598,20 @@ internal class NativeKafkaConsumer(
         // and was removed from its group. The listener has been told, with onLost, and the next poll
         // rejoins, which is what the Java client does. Thrown, it made the two arms part at exactly this poll.
         if (m.err == RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED) return null
+        // A fatal error is a reason kept elsewhere: rd_kafka_fatal_error names it (B-56). A member fenced by
+        // another with its group.instance.id is the one kafkakn names with a type of its own, as the JVM does.
+        if (m.err == RD_KAFKA_RESP_ERR__FATAL) {
+            memScoped {
+                val reason = allocArray<ByteVar>(FATAL_REASON)
+                val code = rd_kafka_fatal_error(handle, reason, FATAL_REASON.convert())
+                if (code == RD_KAFKA_RESP_ERR_FENCED_INSTANCE_ID) {
+                    throw ConsumerFencedException(
+                        "poll: fenced by a member with the same group.instance.id: ${reason.toKString()}",
+                    )
+                }
+                throw KafkaConsumeException("poll: fatal: ${reason.toKString()} ($code)")
+            }
+        }
         if (m.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
             throw KafkaConsumeException("poll: ${rd_kafka_err2str(m.err)?.toKString()}")
         }

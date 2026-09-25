@@ -298,6 +298,20 @@ private val CONTRACT_DEFAULTS =
 /** Topic, then partition: the order [KafkaConsumer.assignment] returns on both arms. */
 internal val PARTITION_ORDER: Comparator<TopicPartition> = compareBy({ it.topic }, { it.partition })
 
+/**
+ * Another member joined the group with this member's `group.instance.id`, and the broker fenced this one
+ * ([B-56](../../../../../../../docs/backlog/B-56-static-membership.md)): its `poll` throws this, and the only
+ * thing left to do with it is [KafkaConsumer.close].
+ *
+ * **One exception for both arms**, as [ProducerFencedException] is for producers. The Java client throws its
+ * own `FencedInstanceIdException`, kept as the [cause]; librdkafka reports a fatal error whose reason is
+ * `FENCED_INSTANCE_ID`, and its sentence stays in the message.
+ */
+public class ConsumerFencedException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
+
 /** A partition of a topic. */
 public data class TopicPartition(
     public val topic: String,

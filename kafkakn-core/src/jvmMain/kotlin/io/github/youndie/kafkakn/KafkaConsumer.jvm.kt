@@ -14,6 +14,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig.configNames
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp
+import org.apache.kafka.common.errors.FencedInstanceIdException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import java.util.Properties
@@ -335,6 +336,8 @@ internal class JvmKafkaConsumer(
                 return delegate.poll(timeout.toJavaDuration()).map { it.toKafkakn() }
             } catch (leftover: WakeupException) {
                 currentCoroutineContext().ensureActive()
+            } catch (fenced: FencedInstanceIdException) {
+                throw ConsumerFencedException("poll: fenced by a member with the same group.instance.id", fenced)
             }
         }
     }
