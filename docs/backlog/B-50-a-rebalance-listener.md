@@ -1,7 +1,7 @@
 ---
 id: B-50
 title: "A rebalance listener: say which partitions arrive and which leave"
-status: wip
+status: done
 priority: P1
 size: L
 stage: stage-11-everyday-gaps
@@ -77,3 +77,24 @@ the other way round.
   during that run ("Host is down"). The mutant was reverted on the Mac.
 - **Next:** rerun that mutant, and the full `ci/b-50/run.sh` once more on the committed code. Then
   update the contract's §2a from *target* to measured, and close.
+
+## Iteration 2 (2026-09-25): finished once the box was back
+
+- **The unfinished mutant hung rather than failed.** With native's re-entry guard removed, the re-entry
+  test never finished. Two copies of the test binary were found deadlocked, one of them since before the
+  outage. The call deadlocks by *suspending*, on native's lock and on the JVM's lane, so the test now
+  bounds it with `withTimeoutOrNull`. With either arm's guard removed, it fails by name in seconds
+  (`calling_the_consumer_from_inside_a_callback_throws_instead_of_deadlocking`).
+- **The first final run went red on its own vacuity check.** The native leaver, on a fixed fifteen
+  seconds, held its share too briefly to process anything, so its revocation committed nothing. B-37's
+  lesson again: the leaver now leaves after processing 50 records, which is data, not time.
+- **Final run, on the committed code:** both directions green, 0 lost, 0 duplicated; the leavers
+  committed `2:25;3:25` and `0:30;1:30` on revocation. The scope mutants were run again under the new
+  rule and are caught by 50 to 93 duplicates. ktlint passes.
+- **AC:**
+  - the contract section was written and reviewed before the code (above);
+  - the listeners report the partitions gained, and the partitions given up before stopping;
+  - committing in the revocation callback loses nothing and duplicates nothing, counted against the
+    broker.
+
+  `onLost` is not exercised, and the contract says so.

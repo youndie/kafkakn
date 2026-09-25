@@ -167,8 +167,9 @@ Found by B-36, and each is the native arm doing more so that both arms mean the 
 
 ## 2a. Rebalances: a listener that runs inside `poll`
 
-***Target***, [B-50](../backlog/B-50-a-rebalance-listener.md). This section is the design the code will
-be held to. It is written, and put to the owner, before any of the code.
+**Built and measured**, [B-50](../backlog/B-50-a-rebalance-listener.md). This section was written, and put
+to the owner, before any of the code; the owner chose this shape over suspending callbacks and events
+returned from `poll`. What was measured is at the end of the section.
 
 **What the two clients do, read rather than assumed.**
 
@@ -222,6 +223,23 @@ interface RebalanceScope {
 - **Native applies the assignment itself.** Once a `rebalance_cb` is set, librdkafka no longer assigns
   on its own: the callback calls `rd_kafka_assign` with the new list, or with `NULL` on a revoke, after
   the listener has returned. Forgetting it leaves the member holding nothing, silently.
+
+**Measured (`ci/b-50/run.sh`, and `RebalanceListenerTest` on both arms).**
+- **The handover.** A group with one member on each arm, in both directions. Each member commits
+  **only** in `onRevoked`, and the leaver leaves after processing 50 records: 1200 records, 0 lost,
+  0 processed twice. The group's commits reach every partition's end. The eager sequence is visible in
+  the stayer's events: `+[0,1,2,3] -[0,1,2,3] +[0,1] -[0,1] +[0,1,2,3] -[0,1,2,3]`.
+- **The scope is what makes it hold.** With either arm's scope made to commit nothing, the same run
+  finds 50 to 93 records processed twice. When the mutated arm is the leaver, exactly its 50.
+- **Re-entry is refused, not deadlocked.** On both arms, a call to the consumer from `onAssigned` throws
+  `IllegalStateException` with this section's reasoning. With the guard removed, the call deadlocks by
+  suspending, on the JVM's lane and on native's lock. An unbounded test then hung the run, measured
+  twice, so the test bounds the call and fails by name.
+- **No empty lists.** A lone member of a one-partition topic sees exactly `+[0]` and, on `close`,
+  `-[0]`, on both arms.
+- **Not measured:** `onLost`. It needs a member removed for missing `session.timeout.ms`, which no run
+  here arranges yet. The mapping (`onPartitionsLost` overridden; `rd_kafka_assignment_lost` inside
+  `REVOKE`) is read from each client, not observed.
 
 **Rejected alternatives.**
 - *Suspending callbacks.* See above: a blocking wait wearing a `suspend` signature, and a deadlock the
