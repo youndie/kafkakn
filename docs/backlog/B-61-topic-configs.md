@@ -1,7 +1,7 @@
 ---
 id: B-61
 title: "Describe a topic's configuration and change it incrementally"
-status: open
+status: wip
 priority: P3
 size: M
 stage: stage-13-admin
