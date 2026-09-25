@@ -1,7 +1,7 @@
 ---
 id: B-68
 title: "The native poll can return records of a partition revoked or lost during that same poll"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-14-unmeasured-promises
