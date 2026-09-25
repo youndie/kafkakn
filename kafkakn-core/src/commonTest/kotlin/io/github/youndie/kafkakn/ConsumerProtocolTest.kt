@@ -118,7 +118,10 @@ class ConsumerProtocolTest {
     fun a_named_remote_assignor_is_the_one_the_group_runs() =
         runTest(timeout = 2.minutes) {
             withContext(Dispatchers.Default) {
-                val group = "kafkakn-848-assignor-$armName-${randomSuffix()}"
+                // Named and held by ci/b-67/run.sh, which reads the group with the broker's tool while the member is
+                // in it: once the group is empty the tool shows the broker's default assignor, not the one it ran.
+                val group = testEnv("KAFKAKN_ASSIGNOR_GROUP") ?: "kafkakn-848-assignor-$armName-${randomSuffix()}"
+                val hold = testEnv("KAFKAKN_ASSIGNOR_HOLD_MS")?.toLong()?.milliseconds
                 val consumer = kafkaConsumer(config(group, "group.remote.assignor" to "range"))
                 try {
                     consumer.subscribe(listOf(consumeTopic))
@@ -135,6 +138,10 @@ class ConsumerProtocolTest {
                     recordArmFact("848.assignor.group", group)
                     recordObservation("848.assignor.named", assignor)
                     assertEquals("range", assignor, "the assignor the group settled on")
+                    if (hold != null) {
+                        val held = TimeSource.Monotonic.markNow() + hold
+                        while (held.hasNotPassedNow()) consumer.poll(POLL)
+                    }
                 } finally {
                     consumer.close()
                 }
