@@ -1,7 +1,7 @@
 ---
 id: B-43
 title: "The native flush calls a blocking rd_kafka_flush on the caller's thread"
-status: wip
+status: done
 priority: P2
 size: S
 stage: stage-5-producer-parity
@@ -31,3 +31,22 @@ which §2.13 names as the native side of the claim, is about `send`, not `flush`
 - AC: §2.13's sentence is corrected or confirmed in writing.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/TopicMetadataTest.kt`.
+
+## Findings (2026-09-25)
+
+**Measured: it did hold the thread.** `NativeFlushSeamTest` sent five records to a port with no broker
+(`message.timeout.ms=6000`) and called `flush` on a single-lane dispatcher, the mark taken before the
+call. The dispatcher was held for 5.5 s, which is all of the wait. On `Dispatchers.IO` the silence
+stays under the tolerated 500 ms (the green run's figures are in `logs/b-43/`).
+
+**Moved, not dropped.** `rdkafka.c` shows why the call is kept: `rd_kafka_flush` sets `rk_flushing` for
+its own duration, which makes the broker threads treat `linger.ms` as zero. The `rd_kafka_outq_len`
+loop alone would make a caller with a long linger wait that linger on every `flush`.
+
+**The fixture, found on the second try.** The strict topic was tried first. It fails on both arms: the
+broker refuses those records at once, and the refusal drains the queue exactly as an acknowledgement
+would. `JvmDispatcherSeamTest` had already written that down. A port with no broker keeps records
+pending on native only: the Java client queues nothing without metadata. So the test is a platform-seam
+test in `linuxX64Test`; the JVM arm's `flush` is on `Dispatchers.IO` by construction.
+
+**§2.13 is corrected in writing**, at the sentence that was wrong.

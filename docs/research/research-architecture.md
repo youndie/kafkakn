@@ -635,9 +635,13 @@ not the count.
 
 **Consequence.** The JVM actual does its waiting on `Dispatchers.IO`. That is what "suspends" can
 honestly mean over a blocking client: the caller's dispatcher stays free, and the wait happens on a
-thread that exists for waiting. The native arm reaches the same promise by never blocking at all.
-*(Questioned 2026-09-24: its `flush` begins with a blocking `rd_kafka_flush` — read, not measured;
-[B-43](../backlog/B-43-native-flush-may-hold-the-callers-thread.md).)*
+thread that exists for waiting. ~~The native arm reaches the same promise by never blocking at all.~~
+**Corrected 2026-09-25 ([B-43](../backlog/B-43-native-flush-may-hold-the-callers-thread.md)): its `send`
+never blocks, and its `flush` did.** `rd_kafka_flush` waits on the calling thread while records are
+outstanding; with records pending against a broker that was not there it held a single-lane caller for
+5.5 s. It now runs on `Dispatchers.IO` — kept rather than replaced by the `rd_kafka_outq_len` loop,
+because for the length of the call it makes `linger.ms` count as zero (`rk_flushing`,
+`librdkafka-2.13.0.tar.gz!/src/rdkafka.c`), which polling alone does not.
 
 ### 2.14 RQ-A, measured: the shutdown order held, and what that green does not cover
 

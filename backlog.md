@@ -97,18 +97,17 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (6)
+## Open (5)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[?]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
-| [B-43](docs/backlog/B-43-native-flush-may-hold-the-callers-thread.md) `[~]` | The native flush calls a blocking rd_kafka_flush on the caller's thread | P2 | S | - |
 | [B-33](docs/backlog/B-33-sasl-oauthbearer.md) `[ ]` | SASL OAUTHBEARER with a token the caller supplies | P3 | M | B-32 |
 | [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[ ]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (37)
+## Closed (38)
 
 **It builds, and a test can fail**
 
@@ -157,6 +156,7 @@ verdict.
 - [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) `[x]` - A record carries its timestamp, and the metadata says which time the broker kept
 - [B-29](docs/backlog/B-29-topic-metadata.md) `[x]` - partitionsFor: what a topic looks like, from the producer that writes to it
 - [B-30](docs/backlog/B-30-transactions.md) `[x]` - Transactions: records that become visible together, or not at all
+- [B-43](docs/backlog/B-43-native-flush-may-hold-the-callers-thread.md) `[x]` - The native flush calls a blocking rd_kafka_flush on the caller's thread
 
 **It connects where it is deployed**
 
