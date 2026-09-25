@@ -113,14 +113,13 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (2)
+## Open (1)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-62](docs/backlog/B-62-create-partitions.md) `[~]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (62)
+## Closed (63)
 
 **It builds, and a test can fail**
 
@@ -225,6 +224,7 @@ verdict.
 - [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[x]` - A consumer group's committed offsets and its lag, read by the admin client
 - [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[x]` - Reset a group's offsets, delete them, and delete a group
 - [B-61](docs/backlog/B-61-topic-configs.md) `[x]` - Describe a topic's configuration and change it incrementally
+- [B-62](docs/backlog/B-62-create-partitions.md) `[x]` - Add partitions to an existing topic
 
 <!-- END INDEX -->
 

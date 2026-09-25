@@ -523,6 +523,7 @@ interface KafkaAdmin {
     suspend fun deleteConsumerGroups(groupIds: List<String>)                                          // B-60
     suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> // B-61
     suspend fun alterTopicConfigs(name: String, set: Map<String, String>, delete: List<String>)      // B-61
+    suspend fun createPartitions(topic: String, totalCount: Int)                                     // B-62
     suspend fun close()
 }
 ```
@@ -628,6 +629,21 @@ member of the controller quorum; on the fixture both arms reported node 1.
   values and sources, are what `kafka-configs.sh --describe --all` reports. The tool gives no source of its
   own, only synonyms, and a key with none is one nobody set: the default, as both clients report it.
 
+**Adding partitions ([B-62](../backlog/B-62-create-partitions.md)).**
+- `createPartitions(topic, totalCount)` grows a topic to `totalCount`. A count equal to or below the current one
+  is refused by the broker (`INVALID_PARTITIONS`, 37) with **`IllegalArgumentException` on both arms**, and the
+  topic is unchanged. The Java client's `InvalidPartitionsException` is the cause on the JVM.
+- **Keyed records move, and this library does not hide it.** The partitioner maps a key by the partition
+  count, so a key's records written after the growth can land on a different partition from its earlier
+  ones, and per-key order across the growth is lost. Measured: eight keys that all sat in partition 0 of a
+  one-partition topic went to `1 0 2 3 1 0 0 3` of four afterwards. The two arms agree key for key, since both
+  partition by murmur2.
+- A producer made after the growth sees the new count. The grown count was visible to a describe within
+  7 to 31 ms of the call.
+- *Measured* (`ci/b-62/run.sh`), for each arm's topic:
+  - `kafka-topics.sh --describe` reports `PartitionCount: 4`;
+  - `kafka-get-offsets.sh` counts `0:11 1:2 2:1 3:2`, exactly where the arm said its records went.
+
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
 the same rule that keeps a producer from being checked by its own consumer.
@@ -645,6 +661,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | an admin client creates a topic that exists | `TopicExistsException`, on both arms |
 | an admin client alters or deletes the offsets of a group with an active member, or deletes the group | `GroupNotEmptyException`, on both arms |
 | an admin client sets a topic configuration key the broker does not know, or a value it cannot read | `IllegalArgumentException`, on both arms, and nothing is changed |
+| an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | producer closed | `send` throws `IllegalStateException` |
 
