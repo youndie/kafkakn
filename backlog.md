@@ -102,7 +102,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[?]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
-| [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[ ]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
+| [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[~]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 

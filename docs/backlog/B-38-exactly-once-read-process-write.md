@@ -1,7 +1,7 @@
 ---
 id: B-38
 title: "Exactly-once read-process-write: offsets committed inside the producer's transaction"
-status: open
+status: wip
 priority: P3
 size: L
 stage: stage-8-consume
