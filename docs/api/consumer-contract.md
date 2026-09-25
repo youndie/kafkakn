@@ -306,8 +306,17 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
   commit. On native it is the `REVOKE` for which `rd_kafka_assignment_lost` is true. On the JVM it is
   `onPartitionsLost`, overridden so that it is not routed to `onRevoked`.
 - **Order, under the eager protocol both arms use by default:** every partition held is revoked, then
-  the new set is assigned. `onRevoked` sees what is about to go, `onAssigned` what arrived. Cooperative
-  rebalancing changes that, and is [B-55](../backlog/B-55-cooperative-rebalancing.md).
+  the new set is assigned. `onRevoked` sees what is about to go, `onAssigned` what arrived.
+- **Under cooperative rebalancing ([B-55](../backlog/B-55-cooperative-rebalancing.md)), `onRevoked` sees
+  only what moves.** A member keeps reading the partitions it keeps, and `onAssigned` sees only what it
+  gained. Native's callback switches to `rd_kafka_incremental_assign`/`_unassign` when
+  `rd_kafka_rebalance_protocol` says `COOPERATIVE`; librdkafka refuses a plain `assign` under that protocol
+  ("must be made using incremental_assign()", measured). *Measured* in a group with a member on each arm
+  and a third joining 30 s later (`ci/b-55/run.sh`):
+  - B joins: the JVM member gives up `[3,4,5]`, keeps `[0,1,2]`, and the native member B receives
+    `[3,4,5]`;
+  - C joins: the JVM member gives up `[2]` and B gives up `[5]`, and the third member C receives `[2,5]`;
+  - over 1200 records, nothing is lost or processed twice.
 - **Native applies the assignment itself.** Once a `rebalance_cb` is set, librdkafka no longer assigns
   on its own: the callback calls `rd_kafka_assign` with the new list, or with `NULL` on a revoke, after
   the listener has returned. Forgetting it leaves the member holding nothing, silently.
@@ -349,7 +358,7 @@ on 2026-09-24, and `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`. Five of these r
 | `allow.auto.create.topics` | `true` | `false` | **`false`, both arms** | reading a topic should not create it; the fixture refuses auto-creation for the same reason |
 | `check.crcs` | `true` | `false` | **`true`, both arms** | corruption surfaces as an error instead of as bytes |
 | `auto.offset.reset` | `latest` | `largest` | `latest`, travels | the same meaning; librdkafka accepts `earliest` and `latest` too, so those two spellings travel and the rest (`none`, `error`, `smallest`) are platform values |
-| `partition.assignment.strategy` | `RangeAssignor`, `CooperativeStickyAssignor` | `range,roundrobin` | each arm's own; **platform key** | spelled as class names on one arm and as words on the other; the two defaults share `range`, which is what a mixed group will settle on — [B-37](../backlog/B-37-consumer-groups.md) measures that |
+| `partition.assignment.strategy` | `RangeAssignor`, `CooperativeStickyAssignor` | `range,roundrobin` | unset: each arm's own; set: **portable since [B-55](../backlog/B-55-cooperative-rebalancing.md)** | librdkafka's words, `range`, `roundrobin` and `cooperative-sticky`, which the JVM arm translates into class names. A Java class name, `sticky`, or cooperative next to an eager assignor is refused at construction on both arms. Unset, the two defaults share `range`, which is what a mixed group settles on ([B-37](../backlog/B-37-consumer-groups.md)) |
 | `group.protocol` | `classic` | `classic` | `classic`, travels | `consumer` (KIP-848) was out of scope; planned since 2026-09-25 as [B-57](../backlog/B-57-the-kip-848-consumer-protocol.md) |
 | `group.id` | none | none | travels; required by `subscribe` and `commit` | |
 | `group.instance.id` | none | none | travels | static membership is not in the first consumer; [B-56](../backlog/B-56-static-membership.md) measures it |
@@ -408,7 +417,8 @@ client's own semantics, and the contract says which.
 - **Auto-commit by default**, on either arm (§3).
 - **A `Flow` as the primary shape** (§2).
 - **The `consumer` group protocol** (KIP-848), static membership, cooperative rebalancing chosen on
-  the caller's behalf.
+  the caller's behalf. Cooperative rebalancing is now the caller's choice (B-55); it is still not
+  chosen for them.
 - **Exactly-once as a built-in loop.** `groupMetadata()` and the producer's `sendOffsetsToTransaction` are
   in since [B-38](../backlog/B-38-exactly-once-read-process-write.md); the read-process-write loop
   around them is the caller's.

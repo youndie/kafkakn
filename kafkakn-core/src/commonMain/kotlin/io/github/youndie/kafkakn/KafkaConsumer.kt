@@ -262,7 +262,7 @@ internal fun ConsumerConfig.assignmentStrategy(): List<String>? {
     words.forEach { word ->
         require(word in PORTABLE_ASSIGNORS) {
             "partition.assignment.strategy: '$word' is not honoured by both arms; the portable values are " +
-                PORTABLE_ASSIGNORS.keys.joinToString()
+                PORTABLE_ASSIGNORS.joinToString()
         }
     }
     require(COOPERATIVE !in words || words.size == 1) {
@@ -271,13 +271,11 @@ internal fun ConsumerConfig.assignmentStrategy(): List<String>? {
     return words
 }
 
-/** The portable assignor words, and the Java client's class for each. */
-internal val PORTABLE_ASSIGNORS: Map<String, String> =
-    mapOf(
-        "range" to "org.apache.kafka.clients.consumer.RangeAssignor",
-        "roundrobin" to "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-        COOPERATIVE to "org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
-    )
+/**
+ * The portable assignor words. The Java client's class for each is the JVM arm's business, not common
+ * code's (`scripts/common_is_platform_free.py` refuses a Java package here).
+ */
+internal val PORTABLE_ASSIGNORS: Set<String> = setOf("range", "roundrobin", COOPERATIVE)
 
 private const val COOPERATIVE = "cooperative-sticky"
 
