@@ -30,6 +30,7 @@ describes the cluster. On both arms, and checked with the broker's own tools
   broker holds exactly those.
 - Creating a topic that exists fails with one kafkakn exception on both arms, `TopicExistsException`.
 - No call holds the caller's dispatcher while the cluster answers.
+- A topic's partition count only grows, and growing it moves keyed records written afterwards.
 - A topic's configuration is changed incrementally only: a key not named is never reset.
 - A group with an active member is never moved or deleted: the broker refuses, and both arms throw
   `GroupNotEmptyException`.
@@ -126,8 +127,15 @@ describes the cluster. On both arms, and checked with the broker's own tools
   arms. The valid half of such a call is not applied.
 * **Automated:** `AdminConfigsTest` on both arms, held against the broker's tool by `ci/b-61/run.sh`.
 
+### Scenario: A topic grows, and the same keys written after it land elsewhere
+* **Given:** a one-partition topic holding eight keyed records.
+* **When:** it is grown to four partitions, and the same eight keys are written again.
+* **Then:** `kafka-topics.sh --describe` reports four partitions, and the keys spread over them the same way on
+  both arms, as the broker's end offsets count. A count that does not grow the topic is refused with
+  `IllegalArgumentException` on both arms, and the topic keeps its partitions.
+* **Automated:** `AdminPartitionsTest` on both arms, held against the broker's tools by `ci/b-62/run.sh`.
+
 ## 5. Out of scope
 
-Broker configuration, which is an operator's tool, not a service's. Adding partitions
-([B-62](../backlog/B-62-create-partitions.md)) and deleting records ([B-63](../backlog/B-63-delete-records.md))
-are the rest of stage 13. ACLs are not planned.
+Broker configuration, which is an operator's tool, not a service's. Deleting records
+([B-63](../backlog/B-63-delete-records.md)) is the rest of stage 13. ACLs are not planned.
