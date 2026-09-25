@@ -1,0 +1,6 @@
+=== mutant: the native sendOffsetsToTransaction hands librdkafka an empty list, so the offsets never join ===
+processor exit=0
+read_committed: 395 records, 300 distinct; stops: after 2 committed batches, 1 records, after the offsets;after 1 committed batches, 5 records, after the output;after 2 committed batches, 3 records, after the output
+DONE
+
+The test's first version (every stop in an instance's first batch) passed this mutant: 300 records, 300 distinct.

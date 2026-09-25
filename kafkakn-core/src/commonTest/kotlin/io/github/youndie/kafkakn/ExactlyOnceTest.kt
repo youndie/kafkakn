@@ -49,10 +49,15 @@ class ExactlyOnceTest {
             recordArmFact("eos.expected", expected.toString())
             recordArmFact("eos.seed", seed.toString())
             recordArmFact("eos.stops", run.stops.joinToString(";"))
-            assertTrue(
-                run.stops.size == STOPS,
-                "the processor was stopped ${run.stops.size} times, not $STOPS: ${run.stops}",
-            )
+            // Only with a trickling input can an instance commit a batch and then stop in the next one; in a
+            // suite run the input is the fixture's twenty records, which arrive as one batch, and there is
+            // nothing to stop between. `ci/b-38/run.sh` asks for the stops, and refuses a run without them.
+            if (testEnv("KAFKAKN_EOS_INPUT") != null) {
+                assertTrue(
+                    run.stops.size == STOPS,
+                    "the processor was stopped ${run.stops.size} times, not $STOPS: ${run.stops}",
+                )
+            }
         }
 
     private enum class Stop { AFTER_OUTPUT, AFTER_OFFSETS }
@@ -72,16 +77,21 @@ class ExactlyOnceTest {
         fun done() = committed.size >= expected
 
         /**
-         * Where the next instance stops, drawn from the seed: after its output or after its offsets, in the
-         * first batch it processes - whose size depends on when it started against the trickling input.
+         * Where the next instance stops, drawn from the seed: after it has COMMITTED one to three batches,
+         * in the next one, after its output or after its offsets.
+         *
+         * The first version stopped every instance in its first batch, before it had committed anything -
+         * and passed with the native `sendOffsetsToTransaction` doing nothing at all: no instance ever had
+         * committed progress to resume from, so the last one simply processed everything from the start.
+         * A stop only tests exactly-once when there is committed work behind it.
          */
-        fun stopPoint() = Stop.entries[random.nextInt(Stop.entries.size)]
+        fun stopPoint() = random.nextInt(1, 4) to Stop.entries[random.nextInt(Stop.entries.size)]
 
         /**
          * One instance of the processor: a consumer and a transactional producer, the same group and the
          * same `transactional.id` as every instance before it.
          */
-        suspend fun instance(stopAt: Stop?) {
+        suspend fun instance(stopAt: Pair<Int, Stop>?) {
             val consumer =
                 kafkaConsumer(
                     ConsumerConfig(
@@ -96,6 +106,7 @@ class ExactlyOnceTest {
                 producer.initTransactions()
                 consumer.subscribe(listOf(input))
                 var batches = 0
+                var committedBatches = 0
                 val quietUntil = TimeSource.Monotonic.markNow() + QUIET
                 while (!done()) {
                     val batch = consumer.poll(POLL)
@@ -111,8 +122,10 @@ class ExactlyOnceTest {
                             ProducerRecord(output, "$stamp:${record.partition}:${record.offset}".encodeToByteArray()),
                         )
                     }
-                    if (stopAt == Stop.AFTER_OUTPUT) {
-                        stops += "${batch.size} records, after the output"
+                    // Where this batch stops, if it does: only once the instance has committed work behind it.
+                    val stopHere = stopAt?.takeIf { committedBatches >= it.first }?.second
+                    if (stopHere == Stop.AFTER_OUTPUT) {
+                        stops += "after $committedBatches committed batches, ${batch.size} records, after the output"
                         return
                     }
                     // One past the last record processed, per partition: where the next instance resumes.
@@ -121,11 +134,12 @@ class ExactlyOnceTest {
                             .groupBy { TopicPartition(it.topic, it.partition) }
                             .mapValues { (_, records) -> records.maxOf { it.offset } + 1 }
                     producer.sendOffsetsToTransaction(next, consumer.groupMetadata())
-                    if (stopAt == Stop.AFTER_OFFSETS) {
-                        stops += "${batch.size} records, after the offsets"
+                    if (stopHere == Stop.AFTER_OFFSETS) {
+                        stops += "after $committedBatches committed batches, ${batch.size} records, after the offsets"
                         return
                     }
                     producer.commitTransaction()
+                    committedBatches++
                     committed += batch.map { "${it.partition}:${it.offset}" }
                 }
             } finally {

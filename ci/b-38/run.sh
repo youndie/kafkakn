@@ -54,7 +54,12 @@ for arm in jvm linuxX64; do
     [ "$code" -eq 0 ] || { tail -30 "build/b-38-$arm.out"; echo "  THE PROCESSOR FAILED on $arm"; exit 1; }
     f="$OBS/$arm-local.txt"
     stamp=$(sed -n 's/^eos\.stamp=//p' "$f" | tail -1)
-    printf '  seed %s; stops: %s\n' "$(sed -n 's/^eos\.seed=//p' "$f" | tail -1)" "$(sed -n 's/^eos\.stops=//p' "$f" | tail -1)"
+    stops=$(sed -n 's/^eos\.stops=//p' "$f" | tail -1)
+    printf '  seed %s; stops: %s\n' "$(sed -n 's/^eos\.seed=//p' "$f" | tail -1)" "$stops"
+    # Every stop must have committed work behind it, or the restart has nothing to resume from and
+    # exactly-once is not what the green measured (the first version of the test: see its KDoc).
+    [ "$(echo "$stops" | tr ';' '\n' | grep -c 'after [1-9][0-9]* committed batches')" -eq 3 ] \
+        || bad "$arm: not three stops each after committed work: $stops"
 
     CONSUME_MS=20000 ISOLATION=read_committed bash "$H" values "$output" | grep -a "^$stamp:" | sort > "build/b-38-$arm-committed.txt"
     CONSUME_MS=20000 ISOLATION=read_uncommitted bash "$H" values "$output" | grep -a "^$stamp:" | sort > "build/b-38-$arm-uncommitted.txt"
