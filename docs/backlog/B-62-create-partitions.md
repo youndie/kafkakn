@@ -1,7 +1,7 @@
 ---
 id: B-62
 title: "Add partitions to an existing topic"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-13-admin
