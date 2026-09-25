@@ -8,6 +8,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.ConfigEntry
 import org.apache.kafka.clients.admin.ListGroupsOptions
+import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.ConfigResource
@@ -15,6 +16,7 @@ import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.errors.InvalidPartitionsException
 import org.apache.kafka.common.errors.UnknownMemberIdException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
@@ -241,6 +243,20 @@ internal class JvmKafkaAdmin(
         }
 
     private fun TopicPartition.java() = ApacheTopicPartition(topic, partition)
+
+    override suspend fun createPartitions(
+        topic: String,
+        totalCount: Int,
+    ) {
+        try {
+            answer(
+                "createPartitions",
+            ) { delegate.createPartitions(mapOf(topic to NewPartitions.increaseTo(totalCount))).all() }
+        } catch (refused: InvalidPartitionsException) {
+            // The broker's INVALID_PARTITIONS, a count that does not grow the topic: one type on both arms (B-62).
+            throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
+        }
+    }
 
     override suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> {
         val described =

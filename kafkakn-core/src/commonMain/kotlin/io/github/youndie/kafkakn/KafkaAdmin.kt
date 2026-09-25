@@ -100,6 +100,18 @@ public interface KafkaAdmin {
         delete: List<String> = emptyList(),
     )
 
+    /**
+     * Grows [topic] to [totalCount] partitions ([B-62](../../../../../../../docs/backlog/B-62-create-partitions.md)).
+     * A partition count only grows: a count that does not is refused by the broker with
+     * [IllegalArgumentException]. **Keyed records move:** the partitioner maps a key by the partition count,
+     * so records written after the growth can land on a different partition from the same key's earlier ones,
+     * and per-key order across the growth is lost. That is Kafka's, and this library does not hide it.
+     */
+    public suspend fun createPartitions(
+        topic: String,
+        totalCount: Int,
+    )
+
     /** Releases the client. */
     public suspend fun close()
 }
