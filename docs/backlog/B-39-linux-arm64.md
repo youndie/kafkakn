@@ -1,7 +1,7 @@
 ---
 id: B-39
 title: "linuxArm64: settle H5 — does a second native target cost a matrix row and no code?"
-status: open
+status: question
 priority: P2
 size: M
 stage: stage-9-targets
@@ -29,3 +29,41 @@ and has never tried.
 - AC: the glibc floor for the arm64 binary is measured the way `ci/b-16/run.sh` measures it for x64.
 - AC: H5 is marked settled in the research, with what it actually cost.
 - Anchors: `ci/librdkafka/build.sh`, `kafkakn-core/build.gradle.kts`, `ci/b-16/run.sh`.
+
+## Iteration 1 (2026-09-25) — stopped on the environment, and a question
+
+**What was read, before anything was built.** H5 says the second target costs "a matrix row and no
+code". Four places already name x86_64 or assume one architecture, so the claim does not hold as
+written:
+
+| Where | What is x86_64 |
+|---|---|
+| `ci/librdkafka/oldglibc.Dockerfile` | `FROM quay.io/pypa/manylinux2014_x86_64` |
+| `ci/librdkafka/inside.sh` | OpenSSL `./Configure linux-x86_64` |
+| `ci/librdkafka/build.sh`, `kafkakn-core/build.gradle.kts` | one bundle path, `~/.cache/kafkakn/librdkafka-<version>`, with no architecture in it: an arm64 bundle would overwrite the x64 one |
+| `kafkakn-core/build.gradle.kts` | the cinterop is declared on `linuxX64 { }` only |
+
+Each is small. Together they are code in the build, which is not what H5 said, and research D6 should
+say so whatever this item decides.
+
+**What stopped it.** The item asks for the binary to *run* ("run, not only link", B-15's lesson), and
+the build box cannot run an arm64 binary today. `/proc/sys/fs/binfmt_misc` has no `qemu-aarch64`
+entry, and no qemu-user is installed. Building the C bundle in `manylinux2014_aarch64` needs that
+emulation too. Registering it means running a privileged container that changes the host kernel's
+binfmt table (`tonistiigi/binfmt --install arm64`; the image is already on the box). That is a
+system-level change to the owner's machine, and the loop does not make it on its own.
+
+**The question: how should an arm64 binary be run?** A person decides.
+
+1. **Register arm64 emulation on the build box.** Run
+   `docker run --privileged --rm tonistiigi/binfmt --install arm64` once per WSL start, since binfmt
+   registrations do not survive a restart. The item then proceeds under emulation, and the write-up
+   says so.
+2. **A real arm64 host**, if one is available. The xyk bench hosts are borrowed only on request, and
+   are IPv6-only.
+3. **Cross-build without running.** Use a cross toolchain for the C bundle and a linked but never-run
+   binary. This is the alternative the item rejects, so choosing it means changing the item.
+4. **Leave linuxArm64 unbuilt for now**, correct H5's "no code" in research D6 with the table above,
+   and close the item as `dropped`.
+
+Until then the loop moves on to the next pickable item.

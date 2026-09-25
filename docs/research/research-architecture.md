@@ -334,7 +334,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H2 | ~~Per-message headers can be carried without `rd_kafka_producev` (§1.5)~~ — **settled 2026-09-17: `rd_kafka_produceva` takes the same fields as an array, see §2.10** | [B-10](../backlog/B-10-record-headers.md) `done` |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
-| H5 | `linuxArm64` costs a matrix row and no code (D6) | [B-39](../backlog/B-39-linux-arm64.md) |
+| H5 | `linuxArm64` costs a matrix row and no code (D6) — **questioned 2026-09-25: four places in the C-bundle build already assume x86_64; see B-39's first iteration. Running it waits on a decision** | [B-39](../backlog/B-39-linux-arm64.md) `question` |
 | H6 | ~~Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8)~~ — **settled 2026-09-24: yes, and systematically; see §2.19** | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) `done` |
 | H7 | ~~A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model~~ — **settled 2026-09-24 for assign and poll: yes, see §2.25; groups are B-37's** | [B-36](../backlog/B-36-assign-and-poll.md) `done` |
 
