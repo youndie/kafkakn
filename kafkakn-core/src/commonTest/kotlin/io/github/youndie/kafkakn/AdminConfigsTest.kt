@@ -2,11 +2,15 @@ package io.github.youndie.kafkakn
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * [B-61](../../../../../../../docs/backlog/B-61-topic-configs.md): a topic's configuration, described and
@@ -34,7 +38,7 @@ class AdminConfigsTest {
 
                     // Incremental: one key set, the one set at creation left alone.
                     admin.alterTopicConfigs(topic, set = mapOf("max.message.bytes" to MAX_MESSAGE))
-                    val altered = watched(admin, topic)
+                    val altered = watchedOnce(admin, topic, "set") { it["max.message.bytes"] == "$MAX_MESSAGE/TOPIC" }
                     assertEquals("$MAX_MESSAGE/TOPIC", altered["max.message.bytes"], "the key set")
                     assertEquals("$RETENTION/TOPIC", altered["retention.ms"], "a key not named is left alone")
                     recordArmFact("configs.topic", topic)
@@ -45,7 +49,7 @@ class AdminConfigsTest {
 
                     // Deleted: back to what the topic would have without it.
                     admin.alterTopicConfigs(topic, delete = listOf("retention.ms"))
-                    val deleted = watched(admin, topic)
+                    val deleted = watchedOnce(admin, topic, "delete") { it["retention.ms"] != "$RETENTION/TOPIC" }
                     assertEquals("604800000/DEFAULT", deleted["retention.ms"], "a deleted key returns to its default")
                     assertEquals("$MAX_MESSAGE/TOPIC", deleted["max.message.bytes"], "and the other stays")
 
@@ -118,6 +122,29 @@ class AdminConfigsTest {
             }
         }
 
+    /**
+     * [watched], once it shows [changed]. A change is accepted by the controller and reaches the broker's view
+     * of the topic a moment later, so a describe right after the call can still show the old value: seen on
+     * the native arm once, and a race on either. How long it took is recorded; a change never seen fails here.
+     */
+    private suspend fun watchedOnce(
+        admin: KafkaAdmin,
+        topic: String,
+        what: String,
+        changed: (Map<String, String>) -> Boolean,
+    ): Map<String, String> {
+        val started = TimeSource.Monotonic.markNow()
+        while (true) {
+            val seen = watched(admin, topic)
+            if (changed(seen)) {
+                recordArmFact("configs.$what.visible.after.ms", started.elapsedNow().inWholeMilliseconds.toString())
+                return seen
+            }
+            check(started.elapsedNow() < VISIBLE_WITHIN) { "the $what was not visible after $VISIBLE_WITHIN: $seen" }
+            delay(RETRY)
+        }
+    }
+
     /** The three keys this test changes, as `value/source`. */
     private suspend fun watched(
         admin: KafkaAdmin,
@@ -157,5 +184,7 @@ class AdminConfigsTest {
         const val RETENTION = "86400000"
         const val MAX_MESSAGE = "2000000"
         val WATCHED = listOf("retention.ms", "max.message.bytes", "cleanup.policy")
+        val VISIBLE_WITHIN = 10.seconds
+        val RETRY = 100.milliseconds
     }
 }
