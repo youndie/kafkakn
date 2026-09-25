@@ -42,7 +42,8 @@ rm -rf "$OBS"
 for task in jvmTest linuxX64Test; do
     ./gradlew --console=plain ":kafkakn-core:$task" --rerun --tests '*PollAfterRebalanceTest*' > "build/b-68-$task.out" 2>&1
     code=$?
-    printf '  %-14s exit=%s, strays %s\n' "$task" "$code" "$(sed -n 's/^poll\.rebalance\.strays=//p' "$OBS"/*-local.txt 2>/dev/null | tail -1)"
+    printf '  %-14s exit=%s, strays %s, mid-drain %s\n' "$task" "$code" "$(sed -n 's/^poll\.rebalance\.strays=//p' "$OBS"/*-local.txt 2>/dev/null | tail -1)" \
+        "$(sed -n 's/^poll\.rebalance\.mid\.drain=//p' "$OBS"/*-local.txt 2>/dev/null | tail -1)"
     [ "$code" -eq 0 ] || { grep -E "FAILED|AssertionError|expected" "build/b-68-$task.out" | head -6; bad "$task failed"; }
 done
 
@@ -89,6 +90,8 @@ heard=$(fact linuxX64 linuxX64 heard)
 strays=$(fact linuxX64 linuxX64 stray.records)
 lost=$(grep -o '!\[' <<< "$heard" | wc -l)
 printf '  native onLost heard %s times; native strays: %s; jvm strays: %s\n' "$lost" "$(fact linuxX64 linuxX64 strays)" "$(fact jvm jvm strays)"
+printf '  native callbacks that took partitions after the poll had collected records / records of those partitions: %s\n' \
+    "$(fact linuxX64 linuxX64 mid.drain)"
 [ "$lost" -ge $((FREEZES / 2)) ] || bad "the native member heard onLost only $lost times in $FREEZES freezes: the run did not do what it is for"
 python3 - "$heard" "$strays" <<'PY'
 import re, sys

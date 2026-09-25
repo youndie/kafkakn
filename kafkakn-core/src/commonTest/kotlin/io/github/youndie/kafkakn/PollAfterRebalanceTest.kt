@@ -104,6 +104,7 @@ class PollAfterRebalanceTest {
                     }
                     check(revocations > 0) { "A never went through the rebalance" }
                     recordArmFact("poll.rebalance.strays", strays.joinToString(" ").ifEmpty { "none" })
+                    recordArmFact("poll.rebalance.mid.drain", givenUpMidDrain())
                     recordObservation("poll.rebalance.strays", strays.size.toString())
                     assertEquals(emptyList(), strays.take(5), "records handed over after the listener gave them up")
                 } finally {
