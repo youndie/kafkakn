@@ -160,6 +160,13 @@ private fun tlsFile(name: String): String = "${testEnv("HOME")}/.cache/kafkakn/t
 internal val clientCertPath: String get() = testEnv("KAFKAKN_CLIENT_CERT") ?: tlsFile("client.pem")
 internal val clientKeyPath: String get() = testEnv("KAFKAKN_CLIENT_KEY") ?: tlsFile("client.key")
 
+/**
+ * The same client key in OpenSSL's traditional PKCS#1 form (B-42): plain, and encrypted the
+ * traditional way (`Proc-Type: 4,ENCRYPTED`) with [clientKeyPassword].
+ */
+internal val clientPkcs1KeyPath: String get() = tlsFile("client-pkcs1.key")
+internal val clientPkcs1EncryptedKeyPath: String get() = tlsFile("client-pkcs1-encrypted.key")
+
 /** The fixture password `ci/broker/certs.sh` encrypted [clientKeyPath] with. */
 internal val clientKeyPassword: String get() = testEnv("KAFKAKN_CLIENT_KEY_PASSWORD") ?: "kafkakn-client"
 

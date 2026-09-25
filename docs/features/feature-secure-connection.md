@@ -216,6 +216,10 @@ that requires one, and both arms answering it.
   the broker answered `certificate_required` to both arms. A caller with a certificate from
   the wrong authority therefore reads *"certificate required"* — true, and not the sentence they will
   look for.
+- **A client key must be PKCS#8 on both arms** ([B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md)).
+  An OpenSSL key in the traditional `BEGIN RSA PRIVATE KEY` form worked on native and failed on the
+  JVM with *"Invalid PEM keystore configs"*; both now refuse it at construction and say
+  `openssl pkcs8 -topk8`.
 - **librdkafka constructs a producer from a certificate with no key.** It checks the pair only when a
   key is set (`check_pkey`). Refused by this library on both arms, measured 2026-09-24.
 
@@ -246,3 +250,4 @@ that requires one, and both arms answering it.
 | the SASL rules both arms enforce | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/SaslKeys.kt` |
 | the SASL scenarios | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/SaslTest.kt` |
 | the run that measured SASL | `ci/b-32/run.sh` |
+| the rule on the key's form, and the run that measured it | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KeyFiles.kt`, `ci/b-42/run.sh` |

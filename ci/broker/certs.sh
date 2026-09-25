@@ -27,6 +27,21 @@ KEY_PASSWORD=${KEY_PASSWORD:-kafkakn}
 # from the broker's, so a client handed the wrong one cannot succeed by coincidence.
 CLIENT_KEY_PASSWORD=${CLIENT_KEY_PASSWORD:-kafkakn-client}
 
+# B-42: the right client key again, in OpenSSL's TRADITIONAL (PKCS#1) form - plain, and encrypted the
+# traditional way. Derived from client.key rather than generated, so the certificate still matches,
+# and derived on every run, BEFORE the early exit below: new files must never be the reason the whole
+# set is regenerated under a running broker, which is the trap the next comment describes.
+derive_pkcs1() {
+    [ -s "$OUT/client.key" ] || return 0
+    [ -s "$OUT/client-pkcs1.key" ] || openssl rsa -in "$OUT/client.key" -passin "pass:$CLIENT_KEY_PASSWORD" \
+        -traditional -out "$OUT/client-pkcs1.key" 2>/dev/null
+    [ -s "$OUT/client-pkcs1-encrypted.key" ] || openssl rsa -in "$OUT/client.key" -passin "pass:$CLIENT_KEY_PASSWORD" \
+        -traditional -aes256 -passout "pass:$CLIENT_KEY_PASSWORD" -out "$OUT/client-pkcs1-encrypted.key" 2>/dev/null
+    chmod 644 "$OUT"/client-pkcs1*.key 2>/dev/null || true
+    grep -q 'BEGIN RSA PRIVATE KEY' "$OUT/client-pkcs1.key" && grep -q 'Proc-Type: 4,ENCRYPTED' "$OUT/client-pkcs1-encrypted.key" || {
+        echo "certs.sh: the PKCS#1 keys are not in the form B-42 asks about" >&2; exit 1; }
+}
+
 # IDEMPOTENT, and that is a correctness property rather than a speed one. The broker loads its
 # keystore once, at startup; regenerating the certificates under a running broker leaves it holding
 # a certificate no client trusts any more, and the symptom is an SSL handshake failure that looks
@@ -39,6 +54,7 @@ if [ -z "${FORCE:-}" ] && [ -s "$OUT/ca.pem" ] && [ -s "$OUT/broker.keystore.p12
         && [ -s "$OUT/broker-jaas.conf" ] \
         && openssl x509 -in "$OUT/broker.pem" -noout -checkend 86400 >/dev/null 2>&1; then
     echo "  certificates already in $OUT, and the broker's is valid for another day - kept"
+    derive_pkcs1
     exit 0
 fi
 
@@ -206,5 +222,6 @@ sasl_props client-sasl-scram256-wrong.properties SASL_PLAINTEXT SCRAM-SHA-256 al
 sasl_props client-sasl-ssl-scram512.properties SASL_SSL SCRAM-SHA-512 alice alice-secret
 chmod 644 ./*.properties ./*.pem ./*.conf client.key wrong-client.key
 
+derive_pkcs1
 echo "  certificates in $OUT: ca.pem, broker.keystore.p12, wrong-ca.pem, client.pem, wrong-client.pem"
 echo "  the right CA verifies the broker, the wrong CA does not - both checked, not assumed"

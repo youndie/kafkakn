@@ -133,11 +133,19 @@ is set — and that producer presents nothing, so the refusal would arrive at th
 against a listener that asks. The Java client refuses the same half at construction. The contract
 refuses it at construction on both, and the message names both keys.
 
-**The key must be PKCS#8 for the JVM arm** — `-----BEGIN PRIVATE KEY-----` or
-`-----BEGIN ENCRYPTED PRIVATE KEY-----`. The Java client parses the key through
-`PKCS8EncodedKeySpec`/`EncryptedPrivateKeyInfo`; librdkafka hands the file to OpenSSL, which reads
-the older `BEGIN RSA PRIVATE KEY` form too. That difference was read in the source and is **not
-measured** here; [B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md) measures it and decides.
+**The key must be PKCS#8 on both arms** — `-----BEGIN PRIVATE KEY-----` or
+`-----BEGIN ENCRYPTED PRIVATE KEY-----` — and anything else is refused at construction with the
+conversion in the message ([B-42](../backlog/B-42-a-pkcs1-key-works-on-one-arm.md)). **Measured
+2026-09-25, before the rule:** librdkafka hands the file to OpenSSL and took the traditional PKCS#1 form
+(`BEGIN RSA PRIVATE KEY`), plain and traditionally encrypted, and sent through the listener that
+requires a client certificate; the Java client, which parses through
+`PKCS8EncodedKeySpec`/`EncryptedPrivateKeyInfo`, refused both at construction with *"Invalid PEM
+keystore configs"* over an `IOException` — not a sentence that says the form is the problem. One key
+file, two answers. The rule answers once, on both arms, and names the way out, verified to produce a
+PKCS#8 key that matches the certificate:
+`openssl pkcs8 -topk8 -in <key> -out <new> -v2 aes-256-cbc`, or `-nocrypt` for an unencrypted one.
+Converting on the JVM arm was the rejected alternative: it is this library's own cryptography,
+OpenSSL's traditional encryption included, in the arm whose value is having none.
 An encrypted PKCS#8 key with `ssl.key.password` is measured on both arms: the suite's own key is one.
 
 **A certificate from an authority the broker does not trust is not sent at all — by either
