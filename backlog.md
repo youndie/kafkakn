@@ -113,11 +113,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (15)
+## Open (14)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-46](docs/backlog/B-46-feature-documents-for-what-was-built-after-the-producer.md) `[ ]` | Feature documents for consuming, exactly-once and administration | P2 | M | B-45 |
 | [B-49](docs/backlog/B-49-committed-and-position.md) `[ ]` | Read back committed offsets and the current position | P2 | S | B-48 |
 | [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[ ]` | Seek under a subscription, within the partitions the group gave | P2 | M | B-50 |
 | [B-52](docs/backlog/B-52-pause-and-resume.md) `[ ]` | Pause and resume partitions without leaving the group | P2 | M | - |
@@ -133,7 +132,7 @@ verdict.
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (48)
+## Closed (49)
 
 **It builds, and a test can fail**
 
@@ -212,6 +211,7 @@ verdict.
 **The tree says what exists**
 
 - [B-45](docs/backlog/B-45-the-tree-still-says-nothing-is-built.md) `[x]` - Three places in the tree still say nothing is built, and one of them is code
+- [B-46](docs/backlog/B-46-feature-documents-for-what-was-built-after-the-producer.md) `[x]` - Feature documents for consuming, exactly-once and administration
 
 **What a caller reaches for next**
 
