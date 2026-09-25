@@ -165,9 +165,9 @@ on 2026-09-24, and `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`. Five of these r
 | `check.crcs` | `true` | `false` | **`true`, both arms** | corruption surfaces as an error instead of as bytes |
 | `auto.offset.reset` | `latest` | `largest` | `latest`, travels | the same meaning; librdkafka accepts `earliest` and `latest` too, so those two spellings travel and the rest (`none`, `error`, `smallest`) are platform values |
 | `partition.assignment.strategy` | `RangeAssignor`, `CooperativeStickyAssignor` | `range,roundrobin` | each arm's own; **platform key** | spelled as class names on one arm and as words on the other; the two defaults share `range`, which is what a mixed group will settle on — [B-37](../backlog/B-37-consumer-groups.md) measures that |
-| `group.protocol` | `classic` | `classic` | `classic`, travels | `consumer` (KIP-848) is out of scope |
+| `group.protocol` | `classic` | `classic` | `classic`, travels | `consumer` (KIP-848) was out of scope; planned since 2026-09-25 as [B-57](../backlog/B-57-the-kip-848-consumer-protocol.md) |
 | `group.id` | none | none | travels; required by `subscribe` and `commit` | |
-| `group.instance.id` | none | none | travels | static membership is not in the first consumer |
+| `group.instance.id` | none | none | travels | static membership is not in the first consumer; [B-56](../backlog/B-56-static-membership.md) measures it |
 | `max.poll.interval.ms` | 300 000 | 300 000 | travels | §1 |
 | `session.timeout.ms` | 45 000 | 45 000 | travels | |
 | `heartbeat.interval.ms` | 3 000 | 3 000 | travels | |
@@ -232,6 +232,23 @@ client's own semantics, and the contract says which.
 - **Metrics** — [B-41](../backlog/B-41-metrics-an-operator-can-read.md), for both clients at once.
 - **More than one call in flight on one consumer.** Calls are serialised by the lane (§1); a caller
   who wants parallelism runs more consumers.
+
+**Amended 2026-09-25.** At the owner's request, most of this list is now planned, each as its own item
+with a differential test:
+- the rebalance listener ([B-50](../backlog/B-50-a-rebalance-listener.md)), designed in this contract
+  before it is built;
+- a seek under a subscription ([B-51](../backlog/B-51-seek-under-a-subscription.md));
+- pause and resume ([B-52](../backlog/B-52-pause-and-resume.md));
+- consumer lag ([B-53](../backlog/B-53-consumer-lag-in-metrics.md));
+- the `Flow` over `poll` ([B-54](../backlog/B-54-a-flow-over-poll.md));
+- cooperative rebalancing, static membership and KIP-848 ([B-55](../backlog/B-55-cooperative-rebalancing.md)
+  to [B-57](../backlog/B-57-the-kip-848-consumer-protocol.md));
+- explicit commits and reading positions back ([B-48](../backlog/B-48-commit-explicit-offsets.md),
+  [B-49](../backlog/B-49-committed-and-position.md)).
+
+What stays out: auto-commit by default, exactly-once as a built-in loop, deserializers, and more than
+one call in flight on one consumer. The list above is kept as it was written, because the reason each
+entry was first left out is what its item has to answer.
 
 ## 6. Code anchors
 
