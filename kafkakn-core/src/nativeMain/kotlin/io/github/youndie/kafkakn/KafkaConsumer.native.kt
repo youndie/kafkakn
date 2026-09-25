@@ -88,6 +88,7 @@ import rdkafka.rd_kafka_topic_partition_list_destroy
 import rdkafka.rd_kafka_topic_partition_list_new
 import rdkafka.rd_kafka_topic_partition_list_t
 import rdkafka.rd_kafka_type_t
+import kotlin.concurrent.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource
 
