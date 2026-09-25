@@ -5,12 +5,16 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.ConfigEntry
 import org.apache.kafka.clients.admin.ListGroupsOptions
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.KafkaFuture
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.errors.UnknownMemberIdException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
@@ -237,6 +241,41 @@ internal class JvmKafkaAdmin(
         }
 
     private fun TopicPartition.java() = ApacheTopicPartition(topic, partition)
+
+    override suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> {
+        val described =
+            answer("describeTopicConfigs") {
+                delegate.describeConfigs(names.map { ConfigResource(ConfigResource.Type.TOPIC, it) }).all()
+            }
+        return names.associateWith { name ->
+            described
+                .getValue(ConfigResource(ConfigResource.Type.TOPIC, name))
+                .entries()
+                .sortedBy { it.name() }
+                .associate { it.name() to TopicConfigEntry(it.value(), ConfigSource.named(it.source()?.name)) }
+        }
+    }
+
+    override suspend fun alterTopicConfigs(
+        name: String,
+        set: Map<String, String>,
+        delete: List<String>,
+    ) {
+        val changes =
+            set.map { (key, value) -> AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.SET) } +
+                delete.map { key -> AlterConfigOp(ConfigEntry(key, null), AlterConfigOp.OpType.DELETE) }
+        try {
+            answer("alterTopicConfigs") {
+                delegate
+                    .incrementalAlterConfigs(
+                        mapOf(ConfigResource(ConfigResource.Type.TOPIC, name) to changes),
+                    ).all()
+            }
+        } catch (refused: InvalidConfigurationException) {
+            // The broker's INVALID_CONFIG, an unknown key or an unreadable value: the one type both arms throw (B-61).
+            throw IllegalArgumentException("alterTopicConfigs: $name: ${refused.message}", refused)
+        }
+    }
 
     override suspend fun close() {
         // `close` waits for pending requests; on a thread that exists for waiting.

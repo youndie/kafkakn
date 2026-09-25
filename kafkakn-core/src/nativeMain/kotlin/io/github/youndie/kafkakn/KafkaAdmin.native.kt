@@ -28,17 +28,28 @@ import rdkafka.RD_KAFKA_ADMIN_OP_DELETECONSUMERGROUPOFFSETS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETEGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_DELETETOPICS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECLUSTER
+import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECONFIGS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBECONSUMERGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_DESCRIBETOPICS
+import rdkafka.RD_KAFKA_ADMIN_OP_INCREMENTALALTERCONFIGS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPOFFSETS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTOFFSETS
+import rdkafka.RD_KAFKA_ALTER_CONFIG_OP_TYPE_DELETE
+import rdkafka.RD_KAFKA_ALTER_CONFIG_OP_TYPE_SET
+import rdkafka.RD_KAFKA_CONFIG_SOURCE_DEFAULT_CONFIG
+import rdkafka.RD_KAFKA_CONFIG_SOURCE_DYNAMIC_BROKER_CONFIG
+import rdkafka.RD_KAFKA_CONFIG_SOURCE_DYNAMIC_DEFAULT_BROKER_CONFIG
+import rdkafka.RD_KAFKA_CONFIG_SOURCE_DYNAMIC_TOPIC_CONFIG
+import rdkafka.RD_KAFKA_CONFIG_SOURCE_STATIC_BROKER_CONFIG
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_OFFSET_INVALID
 import rdkafka.RD_KAFKA_OFFSET_SPEC_EARLIEST
 import rdkafka.RD_KAFKA_OFFSET_SPEC_LATEST
+import rdkafka.RD_KAFKA_RESOURCE_TOPIC
 import rdkafka.RD_KAFKA_RESP_ERR_GROUP_SUBSCRIBED_TO_TOPIC
+import rdkafka.RD_KAFKA_RESP_ERR_INVALID_CONFIG
 import rdkafka.RD_KAFKA_RESP_ERR_NON_EMPTY_GROUP
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
@@ -46,11 +57,24 @@ import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
 import rdkafka.rd_kafka_AdminOptions_destroy
 import rdkafka.rd_kafka_AdminOptions_new
 import rdkafka.rd_kafka_AdminOptions_t
+import rdkafka.rd_kafka_AlterConfigOpType_t
 import rdkafka.rd_kafka_AlterConsumerGroupOffsets
 import rdkafka.rd_kafka_AlterConsumerGroupOffsets_destroy
 import rdkafka.rd_kafka_AlterConsumerGroupOffsets_new
 import rdkafka.rd_kafka_AlterConsumerGroupOffsets_result_groups
 import rdkafka.rd_kafka_AlterConsumerGroupOffsets_t
+import rdkafka.rd_kafka_ConfigEntry_name
+import rdkafka.rd_kafka_ConfigEntry_source
+import rdkafka.rd_kafka_ConfigEntry_value
+import rdkafka.rd_kafka_ConfigResource_add_incremental_config
+import rdkafka.rd_kafka_ConfigResource_configs
+import rdkafka.rd_kafka_ConfigResource_destroy_array
+import rdkafka.rd_kafka_ConfigResource_error
+import rdkafka.rd_kafka_ConfigResource_error_string
+import rdkafka.rd_kafka_ConfigResource_name
+import rdkafka.rd_kafka_ConfigResource_new
+import rdkafka.rd_kafka_ConfigResource_t
+import rdkafka.rd_kafka_ConfigSource_t
 import rdkafka.rd_kafka_ConsumerGroupDescription_error
 import rdkafka.rd_kafka_ConsumerGroupDescription_group_id
 import rdkafka.rd_kafka_ConsumerGroupDescription_member
@@ -80,10 +104,14 @@ import rdkafka.rd_kafka_DescribeCluster
 import rdkafka.rd_kafka_DescribeCluster_result_cluster_id
 import rdkafka.rd_kafka_DescribeCluster_result_controller
 import rdkafka.rd_kafka_DescribeCluster_result_nodes
+import rdkafka.rd_kafka_DescribeConfigs
+import rdkafka.rd_kafka_DescribeConfigs_result_resources
 import rdkafka.rd_kafka_DescribeConsumerGroups
 import rdkafka.rd_kafka_DescribeConsumerGroups_result_groups
 import rdkafka.rd_kafka_DescribeTopics
 import rdkafka.rd_kafka_DescribeTopics_result_topics
+import rdkafka.rd_kafka_IncrementalAlterConfigs
+import rdkafka.rd_kafka_IncrementalAlterConfigs_result_resources
 import rdkafka.rd_kafka_ListConsumerGroupOffsets
 import rdkafka.rd_kafka_ListConsumerGroupOffsets_destroy
 import rdkafka.rd_kafka_ListConsumerGroupOffsets_new
@@ -124,6 +152,7 @@ import rdkafka.rd_kafka_consumer_group_state_t
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_code
+import rdkafka.rd_kafka_error_destroy
 import rdkafka.rd_kafka_error_string
 import rdkafka.rd_kafka_event_AlterConsumerGroupOffsets_result
 import rdkafka.rd_kafka_event_CreateTopics_result
@@ -131,8 +160,10 @@ import rdkafka.rd_kafka_event_DeleteConsumerGroupOffsets_result
 import rdkafka.rd_kafka_event_DeleteGroups_result
 import rdkafka.rd_kafka_event_DeleteTopics_result
 import rdkafka.rd_kafka_event_DescribeCluster_result
+import rdkafka.rd_kafka_event_DescribeConfigs_result
 import rdkafka.rd_kafka_event_DescribeConsumerGroups_result
 import rdkafka.rd_kafka_event_DescribeTopics_result
+import rdkafka.rd_kafka_event_IncrementalAlterConfigs_result
 import rdkafka.rd_kafka_event_ListConsumerGroupOffsets_result
 import rdkafka.rd_kafka_event_ListConsumerGroups_result
 import rdkafka.rd_kafka_event_ListOffsets_result
@@ -567,6 +598,154 @@ internal class NativeKafkaAdmin(
             },
         )
     }
+
+    override suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> =
+        request(
+            RD_KAFKA_ADMIN_OP_DESCRIBECONFIGS,
+            "describeTopicConfigs",
+            submit = { options, queue ->
+                withTopicResources(names, { }) { array ->
+                    rd_kafka_DescribeConfigs(handle, array, names.size.convert(), options, queue)
+                }
+            },
+            read = { event ->
+                val result = rd_kafka_event_DescribeConfigs_result(event) ?: error("not a DescribeConfigs result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    val resources = rd_kafka_DescribeConfigs_result_resources(result, count.ptr)
+                    (0 until count.value.toInt()).associate { index ->
+                        val resource = resources!![index]!!
+                        val name = checkResource("describeTopicConfigs", resource)
+                        val entryCount = alloc<size_tVar>()
+                        val entries = rd_kafka_ConfigResource_configs(resource, entryCount.ptr)
+                        name to
+                            (0 until entryCount.value.toInt())
+                                .map { at -> entries!![at]!! }
+                                .sortedBy { rd_kafka_ConfigEntry_name(it)?.toKString().orEmpty() }
+                                .associate { entry ->
+                                    rd_kafka_ConfigEntry_name(entry)?.toKString().orEmpty() to
+                                        TopicConfigEntry(
+                                            value = rd_kafka_ConfigEntry_value(entry)?.toKString(),
+                                            source = sourceOf(rd_kafka_ConfigEntry_source(entry)),
+                                        )
+                                }
+                    }
+                }
+            },
+        )
+
+    override suspend fun alterTopicConfigs(
+        name: String,
+        set: Map<String, String>,
+        delete: List<String>,
+    ) {
+        request(
+            RD_KAFKA_ADMIN_OP_INCREMENTALALTERCONFIGS,
+            "alterTopicConfigs",
+            submit = { options, queue ->
+                withTopicResources(listOf(name), { resource ->
+                    set.forEach { (key, value) ->
+                        addIncremental(
+                            resource,
+                            key,
+                            RD_KAFKA_ALTER_CONFIG_OP_TYPE_SET,
+                            value,
+                        )
+                    }
+                    delete.forEach { key ->
+                        addIncremental(
+                            resource,
+                            key,
+                            RD_KAFKA_ALTER_CONFIG_OP_TYPE_DELETE,
+                            null,
+                        )
+                    }
+                }) { array ->
+                    rd_kafka_IncrementalAlterConfigs(handle, array, 1.convert(), options, queue)
+                }
+            },
+            read = { event ->
+                val result =
+                    rd_kafka_event_IncrementalAlterConfigs_result(event)
+                        ?: error("not an IncrementalAlterConfigs result")
+                memScoped {
+                    val count = alloc<size_tVar>()
+                    val resources = rd_kafka_IncrementalAlterConfigs_result_resources(result, count.ptr)
+                    (0 until count.value.toInt()).forEach { index ->
+                        checkResource("alterTopicConfigs", resources!![index]!!)
+                    }
+                }
+            },
+        )
+    }
+
+    /** One incremental change on [resource]; librdkafka refuses a malformed one here, before any request. */
+    private fun addIncremental(
+        resource: CPointer<rd_kafka_ConfigResource_t>,
+        key: String,
+        op: rd_kafka_AlterConfigOpType_t,
+        value: String?,
+    ) {
+        rd_kafka_ConfigResource_add_incremental_config(resource, key, op, value)?.let { error ->
+            val said = rd_kafka_error_string(error)?.toKString()
+            rd_kafka_error_destroy(error)
+            throw IllegalArgumentException("alterTopicConfigs: $key: $said")
+        }
+    }
+
+    /** Topic resources for [names], each shaped by [shape], handed to [use] as an array, and freed. */
+    private fun withTopicResources(
+        names: List<String>,
+        shape: (CPointer<rd_kafka_ConfigResource_t>) -> Unit,
+        use: (CPointer<CPointerVar<rd_kafka_ConfigResource_t>>) -> Unit,
+    ) {
+        memScoped {
+            val array = allocArray<CPointerVar<rd_kafka_ConfigResource_t>>(names.size)
+            var built = 0
+            try {
+                names.forEachIndexed { index, name ->
+                    val resource =
+                        rd_kafka_ConfigResource_new(RD_KAFKA_RESOURCE_TOPIC, name)
+                            ?: error("rd_kafka_ConfigResource_new returned null")
+                    array[index] = resource
+                    built++
+                    shape(resource)
+                }
+                use(array)
+            } finally {
+                rd_kafka_ConfigResource_destroy_array(array, built.convert())
+            }
+        }
+    }
+
+    /** A resource's own outcome: its name, or the broker's refusal as an exception. */
+    private fun checkResource(
+        what: String,
+        resource: CPointer<rd_kafka_ConfigResource_t>,
+    ): String {
+        val name = rd_kafka_ConfigResource_name(resource)?.toKString() ?: "<unnamed>"
+        val err = rd_kafka_ConfigResource_error(resource)
+        if (err == RD_KAFKA_RESP_ERR_NO_ERROR) return name
+        val said = "$what: $name: ${rd_kafka_ConfigResource_error_string(resource)?.toKString()} ($err)"
+        // The broker's INVALID_CONFIG, an unknown key or an unreadable value: the one type both arms throw (B-61).
+        if (err == RD_KAFKA_RESP_ERR_INVALID_CONFIG) throw IllegalArgumentException(said)
+        throw KafkaAdminException(said)
+    }
+
+    /** librdkafka's source, as the one both arms report: its broker sources are one here. */
+    private fun sourceOf(source: rd_kafka_ConfigSource_t): ConfigSource =
+        when (source) {
+            RD_KAFKA_CONFIG_SOURCE_DYNAMIC_TOPIC_CONFIG -> ConfigSource.TOPIC
+
+            RD_KAFKA_CONFIG_SOURCE_DYNAMIC_BROKER_CONFIG,
+            RD_KAFKA_CONFIG_SOURCE_DYNAMIC_DEFAULT_BROKER_CONFIG,
+            RD_KAFKA_CONFIG_SOURCE_STATIC_BROKER_CONFIG,
+            -> ConfigSource.BROKER
+
+            RD_KAFKA_CONFIG_SOURCE_DEFAULT_CONFIG -> ConfigSource.DEFAULT
+
+            else -> ConfigSource.UNKNOWN
+        }
 
     /** A partition list of [partitions], each carrying [offset] of itself, freed after [use]. */
     private fun <T> withPartitionList(
