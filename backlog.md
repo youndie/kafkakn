@@ -113,11 +113,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (8)
+## Open (7)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[~]` | List and describe consumer groups | P2 | M | - |
 | [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[ ]` | A consumer group's committed offsets and its lag, read by the admin client | P2 | M | B-58 |
 | [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[ ]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
 | [B-56](docs/backlog/B-56-static-membership.md) `[ ]` | Static membership: a member that restarts keeps its partitions | P3 | M | - |
@@ -126,7 +125,7 @@ verdict.
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (56)
+## Closed (57)
 
 **It builds, and a test can fail**
 
@@ -222,6 +221,10 @@ verdict.
 **Groups as they are run now**
 
 - [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[x]` - Cooperative rebalancing: partitions move without stopping the whole group
+
+**Administering what it reads and writes**
+
+- [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[x]` - List and describe consumer groups
 
 <!-- END INDEX -->
 

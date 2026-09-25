@@ -514,6 +514,8 @@ interface KafkaAdmin {
     suspend fun deleteTopics(names: List<String>)
     suspend fun describeTopics(names: List<String>): Map<String, List<PartitionInfo>>
     suspend fun describeCluster(): ClusterDescription         // cluster id, controller, nodes
+    suspend fun listConsumerGroups(): List<ConsumerGroupListing>                                // B-58
+    suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription>  // B-58
     suspend fun close()
 }
 ```
@@ -538,6 +540,22 @@ listNodes"*, native *"Failed while waiting for controller: Local: Timed out"*, b
 
 `controller` is whatever broker the cluster reports in that role. Under KRaft it is not necessarily a
 member of the controller quorum; on the fixture both arms reported node 1.
+
+**Consumer groups ([B-58](../backlog/B-58-list-and-describe-consumer-groups.md)).**
+- `listConsumerGroups` lists consumer groups only. On the JVM that is `listGroups(ListGroupsOptions.forConsumerGroups())`:
+  `listConsumerGroups()` is deprecated in 4.3.1, and share and streams groups are left out so that both
+  arms answer the same question. On native it is `rd_kafka_ListConsumerGroups`.
+- `describeConsumerGroups` gives, per group:
+  - a state, in one `GroupState` for both clients' spellings (`STABLE` from the Java client, `Stable` or
+    `PreparingRebalance` from librdkafka; a state only one client knows reads `UNKNOWN`);
+  - the assignor the group settled on;
+  - each member's id, client id, host (verbatim, `/127.0.0.1` on both) and assignment.
+- **A group that does not exist is `DEAD` with no members, on both arms.** The Java client throws
+  `GroupIdNotFoundException` for it, and librdkafka describes it as `DEAD` and cannot tell a missing group
+  from a dead one. So the JVM arm maps the exception, per group, rather than fail the whole call. A group
+  with no member left but with commits is `EMPTY`.
+- *Measured* (`ci/b-58/run.sh`): a member that is not kafkakn, the distribution's console consumer, is
+  described by both arms exactly as `kafka-consumer-groups.sh --describe --members --verbose` prints it.
 
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —

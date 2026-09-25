@@ -67,8 +67,18 @@ describes the cluster. On both arms, and checked with the broker's own tools
 * **Then:** it fails with `TopicExistsException`.
 * **Automated:** `AdminTest.creating_a_topic_that_exists_fails_with_one_kafkakn_exception_on_both_arms`.
 
+### Scenario: Consumer groups are listed and described as the broker's tool describes them
+* **Given:** a group with a live member, the same group once its member left, a group that never existed,
+  and a group whose member is the distribution's console consumer.
+* **When:** each arm lists and describes them.
+* **Then:** the live group is `STABLE` with its one member and assignment, the left one `EMPTY`, and the
+  missing one `DEAD` with no members, on both arms. The console consumer's member id, host, client id and
+  assignment are what `kafka-consumer-groups.sh --describe --members --verbose` prints.
+* **Automated:** `AdminGroupsTest` on both arms, held against the broker's tool by `ci/b-58/run.sh`.
+
 ## 5. Out of scope
 
-Consumer-group administration, topic configuration on an existing topic, adding partitions and deleting
+Consumer-group offsets, resetting and deleting groups ([B-59](../backlog/B-59-consumer-group-offsets-and-lag.md),
+[B-60](../backlog/B-60-reset-and-delete-group-offsets.md)), topic configuration on an existing topic, adding partitions and deleting
 records are stage 13 ([B-58](../backlog/B-58-list-and-describe-consumer-groups.md) to
 [B-63](../backlog/B-63-delete-records.md)). ACLs are not planned.
