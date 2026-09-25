@@ -124,8 +124,12 @@ class GroupTest {
             }
         }
 
+    /**
+     * Before B-51 every seek under a subscription was refused. Now a member seeks the partitions its group
+     * gave it (`GroupSeekTest`), and this is what stays refused: a seek before the group has given anything.
+     */
     @Test
-    fun a_seek_under_a_subscription_is_refused_on_both_arms() =
+    fun a_seek_before_the_group_has_assigned_anything_is_refused_on_both_arms() =
         runTest(timeout = TIMEOUT) {
             val consumer =
                 kafkaConsumer(

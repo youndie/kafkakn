@@ -88,8 +88,10 @@ public interface KafkaConsumer {
     public suspend fun assignment(): List<TopicPartition>
 
     /**
-     * Moves where [partition] is read from next. The partition must be [assign]ed; under a
-     * subscription the group decides positions, and a seek is refused on both arms for now.
+     * Moves where [partition] is read from next. The partition must be held: [assign]ed, or given to this
+     * member by its group ([B-51](../../../../../../../docs/backlog/B-51-seek-under-a-subscription.md)). A
+     * partition not held is refused with [IllegalStateException], on both arms. To seek a partition as a
+     * group hands it over, use [RebalanceScope.seek] from the listener.
      */
     public suspend fun seek(
         partition: TopicPartition,
@@ -129,14 +131,37 @@ public interface RebalanceListener {
     public fun onAssigned(partitions: List<TopicPartition>) {}
 
     /**
+     * The same moment, with a [scope] to [seek][RebalanceScope.seek] the partitions that arrived to where
+     * reading should start ([B-51](../../../../../../../docs/backlog/B-51-seek-under-a-subscription.md)).
+     * This is the one both arms call. By default it calls the one-argument form, so a listener overrides
+     * whichever it needs.
+     */
+    public fun onAssigned(
+        partitions: List<TopicPartition>,
+        scope: RebalanceScope,
+    ) {
+        onAssigned(partitions)
+    }
+
+    /**
      * These partitions were taken without a revocation: the member was removed from the group, for
      * example after missing `session.timeout.ms`. A commit would be refused, so there is no scope.
      */
     public fun onLost(partitions: List<TopicPartition>) {}
 }
 
-/** What a revocation callback may do with the client that is running it. */
+/** What a rebalance callback may do with the client that is running it. */
 public interface RebalanceScope {
+    /**
+     * Moves where [partition] is read from, from inside `onAssigned` (B-51), taking effect before the
+     * first of its records is returned. Only for a partition that just arrived. From `onRevoked` it is
+     * refused: the partition is leaving.
+     */
+    public fun seek(
+        partition: TopicPartition,
+        to: SeekTo,
+    )
+
     /**
      * Commits these offsets synchronously, inside the callback. The same meaning as
      * [KafkaConsumer.commit] with offsets: each value is the next offset to read.

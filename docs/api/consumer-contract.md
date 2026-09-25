@@ -144,9 +144,16 @@ class ConsumerRecord(                                       // B-36
 - **`subscribe` and `commit` need a `group.id` the caller named**, on both arms. The native arm's
   private `kafkakn-assign-*` id exists only so librdkafka will `assign`; a subscription joining it, or a
   commit landing in it, would be a group nobody asked for.
-- **A seek under a subscription is refused on both arms**, for now: the native arm seeks by
-  re-assigning, which a subscription does not allow, and a seek only one arm could honour is the shape
-  the configuration rule refuses.
+- **A seek in a group is allowed for the partitions the group gave this member**, and refused with
+  `IllegalStateException` for any other, on both arms ([B-51](../backlog/B-51-seek-under-a-subscription.md)).
+  Until B-51 every seek under a subscription was refused, because the native arm seeks by re-assigning,
+  and in a group the assignment is not the member's to make. In a group the native arm now seeks with
+  `rd_kafka_seek_partitions`, and `position` answers the seek until a record is read. To seek a partition
+  as the group hands it over, use the listener's scope (§2a). *Measured* (`ci/b-51/run.sh`), with the arms
+  agreeing:
+  - a member that read the whole fixture and sought to 7 reads position 7, and its next record is 7;
+  - a seek from `onAssigned` to 12 makes 12 the first record the member is given;
+  - a seek before the group has assigned anything is still refused.
 
 ### At-least-once, measured for loss
 
@@ -213,6 +220,8 @@ interface RebalanceListener {
     fun onRevoked(partitions: List<TopicPartition>, scope: RebalanceScope) {}
     /** Called inside poll, after these partitions arrived, before any of their records is returned. */
     fun onAssigned(partitions: List<TopicPartition>) {}
+    /** The same moment, with the scope: seek what arrived. Both arms call this one; it defaults to the above. B-51 */
+    fun onAssigned(partitions: List<TopicPartition>, scope: RebalanceScope) { onAssigned(partitions) }
     /** Called instead of onRevoked when the member was removed from the group: a commit would be refused. */
     fun onLost(partitions: List<TopicPartition>) {}
 }
@@ -220,8 +229,17 @@ interface RebalanceListener {
 interface RebalanceScope {
     /** Commits synchronously, directly on the client, inside the callback. B-48's meaning. */
     fun commit(offsets: Map<TopicPartition, Long>)
+    /** From onAssigned only: where an arriving partition is read from. Refused from onRevoked. B-51 */
+    fun seek(partition: TopicPartition, to: SeekTo)
 }
 ```
+
+**Amended by B-51: the scope seeks as well as commits, and `onAssigned` is given it.** The rule is the same
+one: the scope is the only way back into the client from a callback. A seek right after an assignment is
+refused by librdkafka (*"Erroneous state"*, measured in B-36). So on native, `onAssigned` runs just
+**before** `rd_kafka_assign`, and a seek made in it becomes that partition's starting offset in the list
+assigned. No record can be fetched in between, so what the contract promises is unchanged: the seek takes
+effect before the partition's first record. On the JVM it is `seek` on the lane's thread, inside `poll`.
 
 - **Plain functions, not `suspend`.** They run inside `poll`, on the thread that polls, and they must
   return before the rebalance can finish, within the group's rebalance timeout. A suspending callback
@@ -333,7 +351,7 @@ client's own semantics, and the contract says which.
 
 ## 5. What the first consumer will not do
 
-- **Rebalance callbacks**, and a seek under a subscription (§2).
+- **Rebalance callbacks**, and a seek under a subscription (§2). Both have since been built: B-50 and B-51.
 - **Auto-commit by default**, on either arm (§3).
 - **A `Flow` as the primary shape** (§2).
 - **The `consumer` group protocol** (KIP-848), static membership, cooperative rebalancing chosen on
