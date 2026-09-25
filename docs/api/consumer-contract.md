@@ -334,9 +334,27 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
   twice, so the test bounds the call and fails by name.
 - **No empty lists.** A lone member of a one-partition topic sees exactly `+[0]` and, on `close`,
   `-[0]`, on both arms.
-- **Not measured:** `onLost`. It needs a member removed for missing `session.timeout.ms`, which no run
-  here arranges yet. The mapping (`onPartitionsLost` overridden; `rd_kafka_assignment_lost` inside
-  `REVOKE`) is read from each client, not observed.
+- **`onLost`, measured on both roads out of a group.**
+  - A collector slower than `max.poll.interval.ms` is evicted (§2, [B-64](../backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md)).
+  - A member whose session expires ([B-65](../backlog/B-65-onlost-when-the-session-expires.md)) was measured
+    with its process frozen by `SIGSTOP` for 25 s past a 10 s `session.timeout.ms`, which stops heartbeats
+    and polls alike. The broker's log names the removal *"on heartbeat expiration"*. On resuming, the member
+    hears `onLost` and then `onAssigned`, on both arms and in a group with one member on each. The other
+    member held its partitions in between.
+  - **It comes back reading from exactly the group's commit** at the moment the partitions are handed back
+    (for example `0:189/189`), not from its own old position.
+  - What it processed and had not committed is processed again by the next owner: 34 to 365 records a
+    round here, depending only on how long it held them uncommitted. **That is `onLost` having no scope,
+    not a defect:** a member that was removed cannot commit.
+  - The mapping is what makes this hold: `onPartitionsLost` overridden on the JVM, and
+    `rd_kafka_assignment_lost` inside `REVOKE` on native. With either removed, the lost partitions arrive
+    as revoked, and the listener's commit fails: `CommitFailedException` on the JVM, *"Unknown member"* on
+    native.
+  - The time from `onLost` to `onAssigned` varied from 40 ms to 3 s on the JVM, and was about 100 ms on
+    native. Nothing here depends on it.
+  - **Not yet held:** a record collected earlier in the same native `poll` can reach the caller after
+    `onLost` or `onRevoked` for its partition (1 in 5 frozen rounds). The Java client never returns one.
+    [B-68](../backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) is the fix.
 
 ### Static membership ([B-56](../backlog/B-56-static-membership.md))
 
