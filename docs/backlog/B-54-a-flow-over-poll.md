@@ -1,7 +1,7 @@
 ---
 id: B-54
 title: "A Flow of records, built on poll"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-11-everyday-gaps
