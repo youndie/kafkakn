@@ -80,6 +80,26 @@ public interface KafkaAdmin {
     /** Deletes the groups named, commits included. A group with members is refused with [GroupNotEmptyException]. */
     public suspend fun deleteConsumerGroups(groupIds: List<String>)
 
+    /**
+     * Each topic's configuration, every key the broker reports for it, with its value and where the value
+     * comes from ([B-61](../../../../../../../docs/backlog/B-61-topic-configs.md)): set on the topic, set on the
+     * broker, or the default. Keys in alphabetical order. A sensitive key's value is null.
+     */
+    public suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>>
+
+    /**
+     * Changes topic [name]'s configuration **incrementally**: the keys in [set] take those values, the keys in
+     * [delete] return to what the topic would have without them, and every other key is left alone. The
+     * non-incremental `alterConfigs` of both clients resets every key not named, and is deliberately not
+     * offered. A key or value the broker refuses fails the whole call with [IllegalArgumentException], and
+     * nothing is changed.
+     */
+    public suspend fun alterTopicConfigs(
+        name: String,
+        set: Map<String, String> = emptyMap(),
+        delete: List<String> = emptyList(),
+    )
+
     /** Releases the client. */
     public suspend fun close()
 }
@@ -151,6 +171,42 @@ public sealed interface OffsetSpec {
             // timestamp would silently become a different question.
             require(timestamp >= 0) { "timestamp must not be negative, was $timestamp" }
         }
+    }
+}
+
+/** One key of a topic's configuration: its [value] (null when the broker calls it sensitive) and its [source]. */
+public data class TopicConfigEntry(
+    public val value: String?,
+    public val source: ConfigSource,
+)
+
+/**
+ * Where a topic's configuration value comes from. Both clients name more sources than these; the broker's
+ * own ones (dynamic, dynamic default, static) are one here, since a service cannot change any of them.
+ */
+public enum class ConfigSource {
+    /** Set on this topic: `kafka-configs --alter --entity-type topics`, or at creation. */
+    TOPIC,
+
+    /** Set on the broker, dynamically or in its configuration file. */
+    BROKER,
+
+    /** Nobody set it: the broker's built-in default. */
+    DEFAULT,
+
+    /** A source neither of the above, or one this library does not know. */
+    UNKNOWN,
+    ;
+
+    internal companion object {
+        /** Both clients' names for a source (`DYNAMIC_TOPIC_CONFIG`, `STATIC_BROKER_CONFIG`), into one. */
+        fun named(name: String?): ConfigSource =
+            when (name) {
+                "DYNAMIC_TOPIC_CONFIG" -> TOPIC
+                "DYNAMIC_BROKER_CONFIG", "DYNAMIC_DEFAULT_BROKER_CONFIG", "STATIC_BROKER_CONFIG" -> BROKER
+                "DEFAULT_CONFIG" -> DEFAULT
+                else -> UNKNOWN
+            }
     }
 }
 
