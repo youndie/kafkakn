@@ -1,6 +1,7 @@
 package io.github.youndie.kafkakn
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.take
@@ -8,6 +9,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -48,13 +50,16 @@ class RecordsFlowTest {
                 try {
                     consumer.assign(listOf(partition))
                     consumer.seek(partition, SeekTo.End)
-                    // Nothing to read at the end: the collector is waiting inside poll when it is cancelled.
-                    val collecting = launch { consumer.records().collect { } }
+                    // Nothing to read at the end: the collector is waiting inside poll when it is cancelled. In a
+                    // scope of its own, and the join bounded: a collector that does not stop would otherwise
+                    // keep this test's scope waiting forever, and the run hangs instead of failing by name.
+                    val collecting = CoroutineScope(Dispatchers.Default).launch { consumer.records().collect { } }
                     delay(WAIT_FIRST)
                     val cancelledAt = TimeSource.Monotonic.markNow()
                     collecting.cancel()
-                    collecting.join()
+                    val stopped = withTimeoutOrNull(STOP_WITHIN) { collecting.join() } != null
                     val took = cancelledAt.elapsedNow()
+                    assertTrue(stopped, "the collector did not stop within $STOP_WITHIN of being cancelled")
                     consumer.seek(partition, SeekTo.Beginning)
                     val after = consumer.records().take(1).toList()
                     assertTrue(took < PROMPT, "cancelling took $took")
@@ -134,6 +139,7 @@ class RecordsFlowTest {
         const val RECORDS_AFTER = 25
         val WAIT_FIRST = 500.milliseconds
         val PROMPT = 2.seconds
+        val STOP_WITHIN = 10.seconds
         val SLOWER_THAN_THE_INTERVAL = 10.seconds
     }
 }
