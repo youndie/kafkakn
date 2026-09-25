@@ -414,6 +414,16 @@ both clients change it. The test broker, `apache/kafka:4.3.1`, accepts it with n
   only on revocation: nothing is lost or processed twice across 1 200 records, the commits reach every end,
   and nobody gives up everything mid-stream. Assignments arrive in pieces: the late member heard `+[2, 5]`
   and then `+[0, 1, 3, 4]` as the others left. The listener must not assume one `onAssigned` per rebalance.
+- **`group.remote.assignor` names the broker's assignor, measured**
+  ([B-67](../backlog/B-67-group-remote-assignor.md)).
+  - The fixture offers `uniform` and `range` (`group.consumer.assignors`). A member of either arm that asks
+    for `range` gets it: the group's ASSIGNMENT-STRATEGY reads `range` in `kafka-consumer-groups.sh --describe
+    --state` while the member is in it, and in the admin client's description.
+  - **An empty group reports the broker's default, not the assignor it ran:** `uniform` once the member has
+    left. Read the tool while the group has members.
+  - A name the broker does not offer is refused at the first `poll` with `IllegalArgumentException`, on both
+    arms. The Java client throws `UnsupportedAssignorException`, kept as the cause. librdkafka makes it a
+    fatal error whose reason is `UNSUPPORTED_ASSIGNOR` (112), and its sentence stays in the message.
 - **Native: why it works.** librdkafka reports the new protocol as `COOPERATIVE`, and the rebalance callback
   already switches to incremental assign for that (B-55). With that switch forced off, the lone member fails.
 
