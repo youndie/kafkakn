@@ -114,20 +114,23 @@ print(sum(1 for k, _, t in re.findall(r"([-+!])(\[[^\]]*\])@(\d+)", sys.argv[1])
     # same partitions when it gave them back: the group's commit. Earlier than that is work done twice by
     # choice of the client, not because the lost member could not commit.
     local resumed_from
-    resumed_from=$(python3 - "$(fact "$frozen" "$frozen" firsts)" "$(fact "$taker" "$taker" committed)" "$resumed" <<'PY'
-import sys
-firsts, commits, resumed = sys.argv[1].split(), sys.argv[2].split(), int(sys.argv[3])
+    resumed_from=$(python3 - "$(fact "$frozen" "$frozen" firsts)" "$(fact "$taker" "$taker" committed)" "$fheard" "$stopped" <<'PY'
+import re, sys
+firsts, commits, heard, stopped = sys.argv[1].split(), sys.argv[2].split(), sys.argv[3], int(sys.argv[4])
+# The hand-back: the frozen member's first assignment after the freeze. Not a fixed time after SIGCONT: the
+# JVM member took 3 s to rejoin, and a 2 s cutoff read the other member's commit from before the freeze.
+back_at = min(int(t) for k, _, t in re.findall(r"([-+!])(\[[^\]]*\])@(\d+)", heard) if k == "+" and int(t) >= stopped)
 back = {}
 for f in firsts:
     po, t = f.split("@")
     p, o = map(int, po.split(":"))
-    if int(t) >= resumed - 1000 and p not in back:
+    if int(t) == back_at and p not in back:
         back[p] = o
 given = {}
 for c in commits:
     po, t = c.split("@")
     p, o = map(int, po.split(":"))
-    if int(t) <= max(resumed + 2000, resumed):
+    if int(t) <= back_at:
         given[p] = o
 print(" ".join("%d:%s/%s" % (p, back[p], given.get(p, "-")) for p in sorted(back)))
 PY
