@@ -37,19 +37,30 @@ class SessionExpiryTest {
             val held = mutableSetOf<Int>()
             val processed = mutableMapOf<TopicPartition, Long>()
             var strays = 0
+            // Where each assignment started reading: "p:o@t" for the first record of each partition after an
+            // onAssigned at wall time t. And what each revocation committed: "p:o@t". Together they say whether a
+            // member that comes back starts from the group's commit or from its own old position.
+            val firsts = mutableListOf<String>()
+            val committed = mutableListOf<String>()
+            val unread = mutableMapOf<Int, Long>()
             val listener =
                 object : RebalanceListener {
                     override fun onAssigned(partitions: List<TopicPartition>) {
-                        heard += "+${partitions.map { it.partition }}@${wallClock()}"
+                        val at = wallClock()
+                        heard += "+${partitions.map { it.partition }}@$at"
                         held += partitions.map { it.partition }
+                        partitions.forEach { unread[it.partition] = at }
                     }
 
                     override fun onRevoked(
                         partitions: List<TopicPartition>,
                         scope: RebalanceScope,
                     ) {
-                        heard += "-${partitions.map { it.partition }}@${wallClock()}"
-                        scope.commit(processed.filterKeys { it in partitions })
+                        val at = wallClock()
+                        heard += "-${partitions.map { it.partition }}@$at"
+                        val committing = processed.filterKeys { it in partitions }
+                        scope.commit(committing)
+                        committing.forEach { (partition, offset) -> committed += "${partition.partition}:$offset@$at" }
                         held -= partitions.map { it.partition }.toSet()
                     }
 
@@ -80,6 +91,10 @@ class SessionExpiryTest {
                             // A record of a partition this member does not hold, by its own listener's account:
                             // one fetched before the loss and handed over after it.
                             if (record.partition !in held) strays++
+                            unread.remove(record.partition)?.let { at ->
+                                firsts +=
+                                    "${record.partition}:${record.offset}@$at"
+                            }
                             seen += "${record.partition}:${record.offset}"
                             processed[TopicPartition(record.topic, record.partition)] = record.offset + 1
                         }
@@ -97,6 +112,8 @@ class SessionExpiryTest {
             recordArmFact("session.$name.heard", heard.joinToString(" "))
             recordArmFact("session.$name.seen", seen.joinToString(";"))
             recordArmFact("session.$name.strays", strays.toString())
+            recordArmFact("session.$name.firsts", firsts.joinToString(" "))
+            recordArmFact("session.$name.committed", committed.joinToString(" "))
         }
 
     @Suppress("ktlint:kapkan:wall-clock", "orders events from members in separate processes against the freeze")

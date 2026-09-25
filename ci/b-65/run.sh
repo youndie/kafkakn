@@ -106,6 +106,31 @@ print(sum(1 for k, _, t in re.findall(r"([-+!])(\[[^\]]*\])@(\d+)", sys.argv[1])
     printf '  the broker, during the freeze: %s\n' "${removed:-nothing}"
     grep -qi "expir\|session" <<< "$removed" || bad "the broker's log does not name a session expiry for $topic during the freeze"
 
+    # Where the frozen member started reading after it came back, against what the taker had committed for the
+    # same partitions when it gave them back: the group's commit. Earlier than that is work done twice by
+    # choice of the client, not because the lost member could not commit.
+    local resumed_from
+    resumed_from=$(python3 - "$(fact "$frozen" "$frozen" firsts)" "$(fact "$taker" "$taker" committed)" "$resumed" <<'PY'
+import sys
+firsts, commits, resumed = sys.argv[1].split(), sys.argv[2].split(), int(sys.argv[3])
+back = {}
+for f in firsts:
+    po, t = f.split("@")
+    p, o = map(int, po.split(":"))
+    if int(t) >= resumed and p not in back:
+        back[p] = o
+given = {}
+for c in commits:
+    po, t = c.split("@")
+    p, o = map(int, po.split(":"))
+    if int(t) <= max(resumed + 2000, resumed):
+        given[p] = o
+print(" ".join("%d:%s/%s" % (p, back[p], given.get(p, "-")) for p in sorted(back)))
+PY
+)
+    printf '  the frozen member came back reading from / the group had committed: %s\n' "$resumed_from"
+    echo "$resumed_from" > "build/b-65-$frozen-resumed-from.txt"
+
     local strays_jvm strays_native
     strays_jvm=$(fact jvm jvm strays)
     strays_native=$(fact linuxX64 linuxX64 strays)
