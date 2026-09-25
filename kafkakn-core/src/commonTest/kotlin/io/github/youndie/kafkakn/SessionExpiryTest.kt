@@ -36,7 +36,7 @@ class SessionExpiryTest {
             val seen = mutableListOf<String>()
             val held = mutableSetOf<Int>()
             val processed = mutableMapOf<TopicPartition, Long>()
-            var strays = 0
+            val strays = mutableListOf<String>()
             // Where each assignment started reading: "p:o@t" for the first record of each partition after an
             // onAssigned at wall time t. And what each revocation committed: "p:o@t". Together they say whether a
             // member that comes back starts from the group's commit or from its own old position.
@@ -94,7 +94,11 @@ class SessionExpiryTest {
                         for (record in consumer.poll(POLL)) {
                             // A record of a partition this member does not hold, by its own listener's account:
                             // one fetched before the loss and handed over after it.
-                            if (record.partition !in held) strays++
+                            if (record.partition !in
+                                held
+                            ) {
+                                strays += "${record.partition}:${record.offset}@${wallClock()}"
+                            }
                             unread.remove(record.partition)?.let { at ->
                                 firsts +=
                                     "${record.partition}:${record.offset}@$at"
@@ -115,7 +119,8 @@ class SessionExpiryTest {
             }
             recordArmFact("session.$name.heard", heard.joinToString(" "))
             recordArmFact("session.$name.seen", seen.joinToString(";"))
-            recordArmFact("session.$name.strays", strays.toString())
+            recordArmFact("session.$name.strays", strays.size.toString())
+            recordArmFact("session.$name.stray.records", strays.joinToString(" "))
             recordArmFact("session.$name.firsts", firsts.joinToString(" "))
             recordArmFact("session.$name.committed", committed.joinToString(" "))
         }
