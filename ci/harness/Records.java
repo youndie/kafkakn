@@ -8,6 +8,7 @@
 //
 //   java -cp <kafka-clients.jar>:<slf4j-api.jar> Records.java write <bootstrap> <topic>
 //   java -cp ...                                   Records.java dump  <bootstrap> <topic>
+//   java -cp ...                                   Records.java trickle <bootstrap> <topic> <partitions> <count> <interval-ms>
 //
 // The dump format is the one ConsumerTest records, one record per line:
 //   <offset>/<timestamp>/<key>/<value>/<header>,<header>...   with bytes as x<hex>, null as ~
@@ -36,6 +37,7 @@ public class Records {
         switch (args[0]) {
             case "write" -> write(args[1], args[2]);
             case "dump" -> dump(args[1], args[2]);
+            case "trickle" -> trickle(args[1], args[2], Integer.parseInt(args[3]), Integer.parseInt(args[4]), Long.parseLong(args[5]));
             default -> throw new IllegalArgumentException(args[0]);
         }
     }
@@ -70,6 +72,22 @@ public class Records {
             }
         }
         System.out.println("wrote " + COUNT);
+    }
+
+    /**
+     * B-37: records arriving WHILE a group forms, splits and hands partitions over. Written all at once,
+     * whichever member joined first would read everything before the second arrived, and a split would
+     * never meet a record. Record i goes to partition i % partitions, value "t:<i>".
+     */
+    static void trickle(String bootstrap, String topic, int partitions, int count, long intervalMs) throws Exception {
+        Map<String, Object> config = Map.of("bootstrap.servers", bootstrap, "acks", "all");
+        try (var producer = new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer())) {
+            for (int i = 0; i < count; i++) {
+                producer.send(new ProducerRecord<>(topic, i % partitions, null, text("t" + i), text("t:" + i))).get();
+                Thread.sleep(intervalMs);
+            }
+        }
+        System.out.println("trickled " + count);
     }
 
     static String bytes(byte[] b) {

@@ -1,0 +1,37 @@
+=== environment ===
+2026-09-25T02:11:48+02:00
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+
+=== one group per arm: two members, one leaves the way a crash would ===
+  jvmTest        exit=0, trickled 480
+  jvm       leaving held [2,3]; staying held [0,1]|[0,1,2,3]; 0 seen twice
+  jvm       abandoned uncommitted by the leaving member: 2:51
+  jvm       480 records on the broker, 480 seen by the group, 0 lost
+  jvm       committed/end per partition: 0:120/120 1:120/120 2:120/120 3:120/120
+  jvm       every abandoned record was delivered again, to the member that stayed
+  linuxX64Test   exit=0, trickled 480
+  linuxX64  leaving held [0,1,2,3]|[0,1]; staying held []|[2,3]|[0,1,2,3]; 0 seen twice
+  linuxX64  abandoned uncommitted by the leaving member: 1:107
+  linuxX64  480 records on the broker, 479 seen by the group, 1 lost
+    linuxX64: LOST 1 records:
+1:107
+  linuxX64  committed/end per partition: 0:120/120 1:120/120 2:120/120 3:120/120
+    linuxX64: abandoned 1:107 was never delivered again
+  linuxX64       every abandoned record was delivered again, to the member that stayed
+
+=== one group, one member on each arm, at the same time ===
+  jvm member exit=0, native member exit=0, trickled 600
+  jvm       held [0,1,2,3]|[0,1]|[0,1,2,3]
+  linuxX64  held []|[2,3]
+  mixed     600 records on the broker, 599 seen by the group, 1 lost
+    mixed: LOST 1 records:
+2:69
+  mixed     committed/end per partition: 0:150/150 1:150/150 2:150/150 3:150/150
+    mixed: abandoned 2:69 was never delivered again
+  mixed     the native member abandoned 2:69; the JVM member was given it again
+
+B-37: RED

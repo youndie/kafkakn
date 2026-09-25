@@ -34,6 +34,8 @@ internal class JvmKafkaConsumer(
         }
     }
 
+    private val namesAGroup = config.namesAGroup()
+
     private val properties = translateForJava(config.withContractDefaults())
 
     init {
@@ -69,12 +71,39 @@ internal class JvmKafkaConsumer(
 
     override suspend fun assign(partitions: List<TopicPartition>) {
         withContext(lane) { delegate.assign(partitions.map { it.apache() }) }
+        subscribed = false
     }
+
+    /** Whether [subscribe] was the last of the two ways to get partitions. */
+    @Volatile
+    private var subscribed = false
+
+    override suspend fun subscribe(topics: List<String>) {
+        requireGroup(namesAGroup, "subscribe")
+        // No rebalance listener: with auto-commit off and nothing to flush on revocation, the Java
+        // client's own handling is the at-least-once the contract promises - a revoked partition
+        // resumes elsewhere from its last commit.
+        withContext(lane) { delegate.subscribe(topics) }
+        subscribed = true
+    }
+
+    override suspend fun commit() {
+        requireGroup(namesAGroup, "commit")
+        // commitSync with no arguments: the positions after everything `poll` has returned, for every
+        // partition held. It waits for the coordinator, on the lane.
+        withContext(lane) { delegate.commitSync() }
+    }
+
+    override suspend fun assignment(): List<TopicPartition> =
+        withContext(lane) {
+            delegate.assignment().map { TopicPartition(it.topic(), it.partition()) }.sortedWith(PARTITION_ORDER)
+        }
 
     override suspend fun seek(
         partition: TopicPartition,
         to: SeekTo,
     ) {
+        check(!subscribed) { "seek is refused under a subscription, on both arms: the group decides positions" }
         withContext(lane) {
             val apache = partition.apache()
             when (to) {

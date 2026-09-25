@@ -21,7 +21,30 @@ public interface KafkaConsumer {
     /** Reads exactly these partitions from now on, replacing any earlier assignment. */
     public suspend fun assign(partitions: List<TopicPartition>)
 
-    /** Moves where [partition] is read from next. The partition must be assigned. */
+    /**
+     * Joins the consumer's group and reads [topics], with the partitions shared among the group's
+     * members and handed over when one leaves ([B-37](../../../../../../../docs/backlog/B-37-consumer-groups.md)).
+     * Needs a `group.id` the caller named. A consumer does one or the other: [assign] or this.
+     *
+     * **At-least-once, and only with [commit].** Auto-commit is off on both arms (consumer-contract
+     * §3), so a partition handed to another member resumes from the last offset committed for it:
+     * records returned but not committed are delivered again, and none is skipped.
+     */
+    public suspend fun subscribe(topics: List<String>)
+
+    /**
+     * Commits, synchronously, the position after every record [poll] has returned — for every partition
+     * this consumer holds. Needs a `group.id` the caller named.
+     */
+    public suspend fun commit()
+
+    /** The partitions this consumer holds now: its [assign]ment, or its share of a group. */
+    public suspend fun assignment(): List<TopicPartition>
+
+    /**
+     * Moves where [partition] is read from next. The partition must be [assign]ed; under a
+     * subscription the group decides positions, and a seek is refused on both arms for now.
+     */
     public suspend fun seek(
         partition: TopicPartition,
         to: SeekTo,
@@ -59,6 +82,20 @@ public class ConsumerConfig(
     override fun toString(): String = "ConsumerConfig(${properties.keys.sorted()})"
 }
 
+/**
+ * Whether the caller named a group. `subscribe` and `commit` need one on both arms; the native arm's
+ * private `kafkakn-assign-*` id (B-36) exists only so librdkafka will `assign`, and must never be the
+ * group a subscription joins or a commit lands in.
+ */
+internal fun ConsumerConfig.namesAGroup(): Boolean = !properties["group.id"].isNullOrEmpty()
+
+internal fun requireGroup(
+    named: Boolean,
+    call: String,
+) {
+    check(named) { "$call needs a group.id: set one in ConsumerConfig. assign() and poll() work without it" }
+}
+
 /** The defaults consumer-contract §3 sets on both arms, under whatever the caller wrote. */
 internal fun ConsumerConfig.withContractDefaults(): Map<String, String> = CONTRACT_DEFAULTS + properties
 
@@ -74,6 +111,9 @@ private val CONTRACT_DEFAULTS =
         // Corruption surfaces as an error rather than as bytes.
         "check.crcs" to "true",
     )
+
+/** Topic, then partition: the order [KafkaConsumer.assignment] returns on both arms. */
+internal val PARTITION_ORDER: Comparator<TopicPartition> = compareBy({ it.topic }, { it.partition })
 
 /** A partition of a topic. */
 public data class TopicPartition(

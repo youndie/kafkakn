@@ -186,7 +186,7 @@ let those through, and the tests that would hold the two arms to one answer for 
 | explicit partition, timestamp | `rd_kafka_produceva` fields | `ProducerRecord(topic, partition, timestamp, key, value, headers)` | partition since [B-27](../backlog/B-27-a-record-can-name-its-partition.md), timestamp since [B-28](../backlog/B-28-a-record-carries-its-timestamp.md) |
 | topic metadata | `rd_kafka_metadata` | `Producer.partitionsFor(topic)` | `partitionsFor` since [B-29](../backlog/B-29-topic-metadata.md) — §2.22 |
 | consumer, assign and poll | `rd_kafka_assign`, `rd_kafka_consumer_poll`, `rd_kafka_seek_partitions`, `rd_kafka_offsets_for_times`, `rd_kafka_query_watermark_offsets` | `Consumer.assign`, `poll`, `seek`, `offsetsForTimes`, `endOffsets` | assign, seek and poll since [B-36](../backlog/B-36-assign-and-poll.md) — §2.25 |
-| consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | absent — D2 |
+| consumer groups | `rd_kafka_subscribe`, `rd_kafka_incremental_assign`, `rd_kafka_commit` | `Consumer.subscribe` (+ rebalance listener), `commitSync` | subscribe and commit since [B-37](../backlog/B-37-consumer-groups.md) — §2.26 |
 | administration | `rd_kafka_CreateTopics`, `DeleteTopics`, `CreatePartitions`, `DescribeCluster`, `ListOffsets`, `DescribeConsumerGroups` | `org.apache.kafka.clients.admin.Admin` | create, delete and describe topics, describe the cluster since [B-34](../backlog/B-34-a-minimal-admin.md); the rest is not planned |
 | compression | `gzip`, `snappy`, `lz4`, `zstd`, all compiled into the bundle | the same four; `zstd-jni`, `lz4-java`, `snappy-java` resolve at runtime | named portable in the contract and never measured until [B-26](../backlog/B-26-compression-was-never-measured.md): **all four, both arms, stored as asked** |
 | SASL | `PLAIN`, `SCRAM` and `OAUTHBEARER` compiled in; GSSAPI **not** (`--disable-gssapi`); OIDC **not** (`--disable-curl`) | all of them | `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512` since [B-32](../backlog/B-32-sasl-plain-and-scram.md) — §2.21; OAUTHBEARER is B-33 |
@@ -1044,6 +1044,35 @@ by re-assigning).
 **And one about the fixture.** Records stamped in 2023, so that a seek to a time has one right
 answer, were deleted by the broker within minutes: time-based retention reads the records' time. The
 consumer's topic is created with `retention.ms=-1`.
+
+### 2.26 One group, one member on each arm — and a loss check that was blind at first
+
+[B-37](../backlog/B-37-consumer-groups.md). D2 kept groups out as the hard part; what the measurement
+found hard was the test, not the arms.
+
+**The mixed group formed on the first run.** A JVM member and a native member in one classic group, in
+two processes at once, split four partitions and handed them over when the native one left: 600 of 600
+records, commits at the log end as `kafka-consumer-groups.sh` reads them. The two defaults' only shared
+assignor is `range`, and the split had range's shape — read from the shape, not from the broker.
+
+**The loss check's first version could not see the loss it was for.** The leaving member abandons one
+batch uncommitted, the way a crash would; the first version counted that batch as *seen*, so the
+group's union covered it whether or not anyone received it again. Moved out of `seen`, the batch can
+only be covered by redelivery — and a native `close()` made to commit first then lost one record in
+the native group and one in the mixed one, and the run went red. The same lesson as §2.22 and §2.25,
+in a third shape: what the check counted included the thing it was checking.
+
+**When the member that stays may stop was the hardest question, and it was answered wrong twice.**
+A fixed run time made the result depend on how fast Gradle started: the same run passed, and then
+"lost" 465 records when the JVM member left before the writer finished. "Nothing for five seconds"
+stopped a member that had joined before the writer started: 565 "lost". Neither was the consumer
+losing anything — each was the fixture leaving early — and both read exactly like the failure the
+test exists to find. What holds is data: a member stays until it holds every partition and the last
+record of each has been seen by the group as its own process knows it.
+
+**Records arrive while the group forms.** Written all at once, whichever member joined first read
+everything before the second arrived, and a split would never meet a record; the third party writes a
+record every 40 ms instead.
 
 ## 4. Risks, with the machinery that would catch them
 

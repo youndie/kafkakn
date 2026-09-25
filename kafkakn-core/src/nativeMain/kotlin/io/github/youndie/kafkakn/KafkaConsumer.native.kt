@@ -27,8 +27,11 @@ import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
+import rdkafka.RD_KAFKA_RESP_ERR__NO_OFFSET
 import rdkafka.RD_KAFKA_RESP_ERR__PARTITION_EOF
 import rdkafka.rd_kafka_assign
+import rdkafka.rd_kafka_assignment
+import rdkafka.rd_kafka_commit
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_consumer_close
@@ -45,6 +48,7 @@ import rdkafka.rd_kafka_message_timestamp
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_offsets_for_times
 import rdkafka.rd_kafka_poll_set_consumer
+import rdkafka.rd_kafka_subscribe
 import rdkafka.rd_kafka_t
 import rdkafka.rd_kafka_topic_name
 import rdkafka.rd_kafka_topic_partition_list_add
@@ -103,6 +107,8 @@ internal class NativeKafkaConsumer(
      * nothing and commits nothing, and `ci/b-36/run.sh` asks `kafka-consumer-groups.sh --list` to confirm
      * the cluster never saw it. A caller who names a group keeps theirs.
      */
+    private val namesAGroup = config.namesAGroup()
+
     private val properties =
         config.withContractDefaults().let { settled ->
             if ("group.id" in settled) settled else settled + ("group.id" to "kafkakn-assign-${randomToken()}")
@@ -149,6 +155,60 @@ internal class NativeKafkaConsumer(
         }
     }
 
+    /** Whether [subscribe] was the last of the two ways to get partitions. */
+    private var subscribed = false
+
+    override suspend fun subscribe(topics: List<String>) {
+        requireGroup(namesAGroup, "subscribe")
+        serial.withLock {
+            // No rebalance callback: librdkafka then assigns and revokes by itself, eager or
+            // incremental as the group's protocol requires, and with auto-commit off a revoked
+            // partition resumes elsewhere from its last commit - the at-least-once the contract promises.
+            withPartitionList(topics.map { TopicPartition(it, 0) to OFFSET_INVALID }, anyPartition = true) { list ->
+                val err = rd_kafka_subscribe(handle, list)
+                if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    throw KafkaConsumeException("subscribe: ${rd_kafka_err2str(err)?.toKString()}")
+                }
+            }
+            subscribed = true
+        }
+    }
+
+    override suspend fun commit() {
+        requireGroup(namesAGroup, "commit")
+        serial.withLock {
+            // NULL offsets: the stored ones, which `enable.auto.offset.store` fills as each record is
+            // handed out - the position after everything `poll` returned, as the Java client's
+            // commitSync(). Synchronous, so it waits for the coordinator, on a thread that exists for it.
+            val err = withContext(Dispatchers.IO) { rd_kafka_commit(handle, null, 0) }
+            // Nothing handed out since the last commit is not a failure; the Java client says nothing.
+            if (err != RD_KAFKA_RESP_ERR_NO_ERROR && err != RD_KAFKA_RESP_ERR__NO_OFFSET) {
+                throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()}")
+            }
+        }
+    }
+
+    override suspend fun assignment(): List<TopicPartition> =
+        serial.withLock {
+            memScoped {
+                val held = alloc<CPointerVar<rd_kafka_topic_partition_list_t>>()
+                val err = rd_kafka_assignment(handle, held.ptr)
+                if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    throw KafkaConsumeException("assignment: ${rd_kafka_err2str(err)?.toKString()}")
+                }
+                val list = held.value ?: return@memScoped emptyList()
+                try {
+                    (0 until list.pointed.cnt)
+                        .map { index ->
+                            val entry = list.pointed.elems!![index]
+                            TopicPartition(entry.topic!!.toKString(), entry.partition)
+                        }.sortedWith(PARTITION_ORDER)
+                } finally {
+                    rd_kafka_topic_partition_list_destroy(list)
+                }
+            }
+        }
+
     /**
      * A seek is an ASSIGNMENT here, not `rd_kafka_seek_partitions`, and that was measured rather than
      * chosen. librdkafka's header says a seek "must only be performed for already assigned/consumed
@@ -164,6 +224,7 @@ internal class NativeKafkaConsumer(
         partition: TopicPartition,
         to: SeekTo,
     ) {
+        check(!subscribed) { "seek is refused under a subscription, on both arms: the group decides positions" }
         serial.withLock {
             require(partition in assigned) { "seek: $partition is not assigned (assigned: $assigned)" }
             val offset =
@@ -283,14 +344,17 @@ internal class NativeKafkaConsumer(
     /** A partition list for one call, with each entry's offset set, freed however the call ends. */
     private fun <T> withPartitionList(
         entries: List<Pair<TopicPartition, Long>>,
+        anyPartition: Boolean = false,
         use: (CPointer<rd_kafka_topic_partition_list_t>) -> T,
     ): T {
         val list =
             rd_kafka_topic_partition_list_new(entries.size) ?: error("rd_kafka_topic_partition_list_new returned null")
         try {
             for ((partition, offset) in entries) {
+                // A subscription names topics, not partitions: librdkafka's "unassigned", -1.
+                val number = if (anyPartition) PARTITION_UNASSIGNED else partition.partition
                 val entry =
-                    rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)
+                    rd_kafka_topic_partition_list_add(list, partition.topic, number)
                         ?: error("list add failed")
                 entry.pointed.offset = offset
             }
@@ -312,5 +376,6 @@ internal class NativeKafkaConsumer(
         const val OFFSET_BEGINNING = -2L
         const val OFFSET_END = -1L
         const val OFFSET_INVALID = -1001L
+        const val PARTITION_UNASSIGNED = -1
     }
 }

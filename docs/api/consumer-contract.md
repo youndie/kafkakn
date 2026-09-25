@@ -12,7 +12,7 @@ contract_source:
 # The consumer contract
 
 **Assign, seek and poll are built and measured** ([B-36](../backlog/B-36-assign-and-poll.md),
-2026-09-24); groups are not. This document began as [B-35](../backlog/B-35-the-consumer-designed-first.md):
+2026-09-24), and so are groups ([B-37](../backlog/B-37-consumer-groups.md), 2026-09-25). This document began as [B-35](../backlog/B-35-the-consumer-designed-first.md):
 the consumer designed before any of it is written, because the questions that decide its shape are
 questions about the two clients underneath, and none of them is answered by writing a `poll` loop.
 Every promise below is ***target*** until the item named beside it measures it; the facts it rests
@@ -71,8 +71,11 @@ half of it twice ([research §2.3, §2.13](../research/research-architecture.md)
 ## 2. Shape: an explicit `poll` first, a `Flow` built on it later
 
 ```kotlin
-interface KafkaConsumer {                                   // B-36
+interface KafkaConsumer {                                   // B-36, B-37
     suspend fun assign(partitions: List<TopicPartition>)   // B-36
+    suspend fun subscribe(topics: List<String>)             // B-37
+    suspend fun commit()                                    // B-37
+    suspend fun assignment(): List<TopicPartition>          // B-37
     suspend fun seek(partition: TopicPartition, to: SeekTo) // B-36: beginning, end, offset, timestamp
     suspend fun poll(timeout: Duration): List<ConsumerRecord>
     suspend fun close()
@@ -100,8 +103,39 @@ class ConsumerRecord(                                       // B-36
   its group — on both arms, with nothing in the `Flow`'s signature to say so. With an explicit
   `poll`, the time between calls is visible in the caller's code. The rejected alternative is the
   `Flow` as the first and only shape.
-- **Groups come second** ([B-37](../backlog/B-37-consumer-groups.md)): `subscribe`, `commit`, and the
-  rebalance callbacks, which run inside `poll` on both arms and therefore on the lane of §1.
+- **Groups** ([B-37](../backlog/B-37-consumer-groups.md)): `subscribe(topics)`, `commit()` and
+  `assignment()`. No rebalance callback is offered and none is installed: with auto-commit off, each
+  client's own handling is the promise — a partition handed over resumes from its last commit.
+  `commit()` is synchronous and commits the position after everything `poll` returned, for every
+  partition held: `commitSync()` on the JVM, `rd_kafka_commit(rk, NULL, sync)` on native, whose stored
+  offsets are exactly that.
+- **`subscribe` and `commit` need a `group.id` the caller named**, on both arms. The native arm's
+  private `kafkakn-assign-*` id exists only so librdkafka will `assign`; a subscription joining it, or a
+  commit landing in it, would be a group nobody asked for.
+- **A seek under a subscription is refused on both arms**, for now: the native arm seeks by
+  re-assigning, which a subscription does not allow, and a seek only one arm could honour is the shape
+  the configuration rule refuses.
+
+### At-least-once, measured for loss
+
+**Measured 2026-09-25, `ci/b-37/run.sh`**, with records written by a third party *while* the group
+formed:
+
+- a group of two members on each arm split four partitions ([0,1] and [2,3]), the leaving member
+  left the way a crash would — one batch read and never committed — and the staying one ended with all
+  four: 800 of 800 records seen, the abandoned record delivered again, commits at the log end for
+  every partition, read by `kafka-consumer-groups.sh --describe`;
+- **one group with a member on each arm**, in two processes at once: it formed, split ([0,1] to the
+  JVM member, [2,3] to the native one), and when the native member left without committing its last
+  batch the JVM member was given that batch and all four partitions: 600 of 600, commits at the log end;
+- the check is for loss, and it is not blind: the abandoned batch is **not** counted as seen by the
+  member that dropped it, so only redelivery can cover it. With the native `close()` made to commit
+  first — a plausible "commit on close" — one record was lost in the native group and one in the mixed
+  one, and the run went red.
+
+The two arms' default assignment strategies differ (§3) and share `range`; the split observed is
+range's shape. That is a reading of the shape, not a reading of the broker's own record of the
+strategy.
 
 ### Two things librdkafka needs that the design did not know
 
@@ -184,8 +218,7 @@ client's own semantics, and the contract says which.
 
 ## 5. What the first consumer will not do
 
-- **Group coordination** — `subscribe`, rebalances, `commit` — until [B-37](../backlog/B-37-consumer-groups.md).
-  [B-36](../backlog/B-36-assign-and-poll.md) is assign and poll only.
+- **Rebalance callbacks**, and a seek under a subscription (§2).
 - **Auto-commit by default**, on either arm (§3).
 - **A `Flow` as the primary shape** (§2).
 - **The `consumer` group protocol** (KIP-848), static membership, cooperative rebalancing chosen on
