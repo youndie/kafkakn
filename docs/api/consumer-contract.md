@@ -165,6 +165,89 @@ Found by B-36, and each is the native arm doing more so that both arms mean the 
   after `assign`. So the native arm seeks by **re-assigning**, with the partition moved and every other
   one at the next offset this side has handed out.
 
+## 2a. Rebalances: a listener that runs inside `poll`
+
+**Built and measured**, [B-50](../backlog/B-50-a-rebalance-listener.md). This section was written, and put
+to the owner, before any of the code; the owner chose this shape over suspending callbacks and events
+returned from `poll`. What was measured is at the end of the section.
+
+**What the two clients do, read rather than assumed.**
+
+| | kafka-clients 4.3.1 | librdkafka 2.13.0 |
+|---|---|---|
+| the hook | `subscribe(topics, ConsumerRebalanceListener)`: `onPartitionsRevoked`, `onPartitionsAssigned`, and `onPartitionsLost`, whose default calls `onPartitionsRevoked` (`javap -c`) | `rd_kafka_conf_set_rebalance_cb`: one callback, told `ASSIGN` or `REVOKE`, and it **must** apply the change itself (`rd_kafka_assign`, or `rd_kafka_incremental_assign` under cooperative) |
+| where it runs | inside `poll`, on the thread calling it (§1) | inside `rd_kafka_consumer_poll`, on its caller's thread (§1). **That is our polling coroutine's thread, not one of librdkafka's.** |
+| lost versus revoked | a separate callback, `onPartitionsLost` | `rd_kafka_assignment_lost(rk)`, read inside a `REVOKE` |
+| may commit inside | yes: `commitSync` on the polling thread, which the listener is already on | yes: `rd_kafka_commit`, synchronous |
+
+**The constraint that decides the shape.** The callback fires while `poll` is running, so the consumer
+is held: by the lane on the JVM, by the lock on native. A listener that calls the kafkakn consumer's own
+suspending methods (`commit`, `seek`) would wait for the `poll` that is waiting for it: a deadlock on
+both arms. Whatever the listener may do inside the callback has to be done directly on the client, by
+the call that is already running.
+
+**The design.**
+
+```kotlin
+suspend fun subscribe(topics: List<String>, listener: RebalanceListener)   // B-50
+
+interface RebalanceListener {
+    /** Called inside poll, before these partitions leave this member. Commit what was processed here. */
+    fun onRevoked(partitions: List<TopicPartition>, scope: RebalanceScope) {}
+    /** Called inside poll, after these partitions arrived, before any of their records is returned. */
+    fun onAssigned(partitions: List<TopicPartition>) {}
+    /** Called instead of onRevoked when the member was removed from the group: a commit would be refused. */
+    fun onLost(partitions: List<TopicPartition>) {}
+}
+
+interface RebalanceScope {
+    /** Commits synchronously, directly on the client, inside the callback. B-48's meaning. */
+    fun commit(offsets: Map<TopicPartition, Long>)
+}
+```
+
+- **Plain functions, not `suspend`.** They run inside `poll`, on the thread that polls, and they must
+  return before the rebalance can finish, within the group's rebalance timeout. A suspending callback
+  would have to be driven by `runBlocking` inside the client's callback. That hides the same wait
+  behind a signature that promises it does not block.
+- **`RebalanceScope` is the only door back into the client.** It commits on the JVM with `commitSync`
+  on the lane's current thread, and on native with `rd_kafka_commit`, both inside the running call. The
+  consumer itself must not be called from a callback. Doing so throws, on both arms, rather than
+  deadlocking.
+- **Lost is not revoked.** `onLost` has no scope, because a member that was removed can no longer
+  commit. On native it is the `REVOKE` for which `rd_kafka_assignment_lost` is true. On the JVM it is
+  `onPartitionsLost`, overridden so that it is not routed to `onRevoked`.
+- **Order, under the eager protocol both arms use by default:** every partition held is revoked, then
+  the new set is assigned. `onRevoked` sees what is about to go, `onAssigned` what arrived. Cooperative
+  rebalancing changes that, and is [B-55](../backlog/B-55-cooperative-rebalancing.md).
+- **Native applies the assignment itself.** Once a `rebalance_cb` is set, librdkafka no longer assigns
+  on its own: the callback calls `rd_kafka_assign` with the new list, or with `NULL` on a revoke, after
+  the listener has returned. Forgetting it leaves the member holding nothing, silently.
+
+**Measured (`ci/b-50/run.sh`, and `RebalanceListenerTest` on both arms).**
+- **The handover.** A group with one member on each arm, in both directions. Each member commits
+  **only** in `onRevoked`, and the leaver leaves after processing 50 records: 1200 records, 0 lost,
+  0 processed twice. The group's commits reach every partition's end. The eager sequence is visible in
+  the stayer's events: `+[0,1,2,3] -[0,1,2,3] +[0,1] -[0,1] +[0,1,2,3] -[0,1,2,3]`.
+- **The scope is what makes it hold.** With either arm's scope made to commit nothing, the same run
+  finds 50 to 93 records processed twice. When the mutated arm is the leaver, exactly its 50.
+- **Re-entry is refused, not deadlocked.** On both arms, a call to the consumer from `onAssigned` throws
+  `IllegalStateException` with this section's reasoning. With the guard removed, the call deadlocks by
+  suspending, on the JVM's lane and on native's lock. An unbounded test then hung the run, measured
+  twice, so the test bounds the call and fails by name.
+- **No empty lists.** A lone member of a one-partition topic sees exactly `+[0]` and, on `close`,
+  `-[0]`, on both arms.
+- **Not measured:** `onLost`. It needs a member removed for missing `session.timeout.ms`, which no run
+  here arranges yet. The mapping (`onPartitionsLost` overridden; `rd_kafka_assignment_lost` inside
+  `REVOKE`) is read from each client, not observed.
+
+**Rejected alternatives.**
+- *Suspending callbacks.* See above: a blocking wait wearing a `suspend` signature, and a deadlock the
+  moment the listener calls the consumer.
+- *Rebalances as events returned from `poll`.* It is the cleanest API, but it cannot support the reason
+  for the item: by the time a caller reads "revoked", the partitions are gone, and a commit made then
+  lands after another member took over.
+
 ## 3. Defaults: every key this contract names, read from both artefacts
 
 **Read at:** `ConsumerConfig.configDef().defaultValues()` executed against `kafka-clients-4.3.1.jar`

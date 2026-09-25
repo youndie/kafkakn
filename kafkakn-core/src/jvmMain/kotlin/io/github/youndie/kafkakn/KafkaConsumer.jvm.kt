@@ -11,6 +11,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.apache.kafka.clients.consumer.ConsumerConfig.configNames
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.errors.WakeupException
@@ -70,7 +71,19 @@ internal class JvmKafkaConsumer(
     /** Where a `poll` runs, so that its caller can stop waiting for it — see [poll]. */
     private val polls = CoroutineScope(SupervisorJob() + lane)
 
+    /**
+     * Whether this thread is inside a rebalance callback right now (consumer-contract §2a). The callback
+     * runs on the lane's thread, inside `poll` or `close`; a call to this consumer from there would wait
+     * on the lane the callback is holding. Per thread, so a call from any other coroutine still queues.
+     */
+    private val inCallback = ThreadLocal.withInitial { false }
+
+    private fun enter(call: String) {
+        if (inCallback.get()) refuseReentry(call)
+    }
+
     override suspend fun assign(partitions: List<TopicPartition>) {
+        enter("assign")
         withContext(lane) { delegate.assign(partitions.map { it.apache() }) }
         subscribed = false
     }
@@ -80,6 +93,7 @@ internal class JvmKafkaConsumer(
     private var subscribed = false
 
     override suspend fun subscribe(topics: List<String>) {
+        enter("subscribe")
         requireGroup(namesAGroup, "subscribe")
         // No rebalance listener: with auto-commit off and nothing to flush on revocation, the Java
         // client's own handling is the at-least-once the contract promises - a revoked partition
@@ -88,7 +102,58 @@ internal class JvmKafkaConsumer(
         subscribed = true
     }
 
+    override suspend fun subscribe(
+        topics: List<String>,
+        listener: RebalanceListener,
+    ) {
+        enter("subscribe")
+        requireGroup(namesAGroup, "subscribe")
+        withContext(lane) { delegate.subscribe(topics, bridge(listener)) }
+        subscribed = true
+    }
+
+    /**
+     * The Java listener, calling ours. Each callback runs on the thread inside `poll` or `close`, which
+     * is already on the lane, so the scope commits with `commitSync` directly: going through the lane
+     * again is the deadlock §2a is about. `onPartitionsLost` is overridden, so it does not fall through
+     * to `onPartitionsRevoked` as its default would. Empty lists are not passed on (§2a).
+     */
+    private fun bridge(listener: RebalanceListener): ConsumerRebalanceListener {
+        val scope =
+            object : RebalanceScope {
+                override fun commit(offsets: Map<TopicPartition, Long>) {
+                    requireCommittable(offsets)
+                    if (offsets.isEmpty()) return
+                    delegate.commitSync(offsets.entries.associate { it.key.apache() to OffsetAndMetadata(it.value) })
+                }
+            }
+        return object : ConsumerRebalanceListener {
+            override fun onPartitionsRevoked(partitions: Collection<ApachePartition>) =
+                inside(partitions) { listener.onRevoked(it, scope) }
+
+            override fun onPartitionsAssigned(partitions: Collection<ApachePartition>) =
+                inside(partitions, listener::onAssigned)
+
+            override fun onPartitionsLost(partitions: Collection<ApachePartition>) =
+                inside(partitions, listener::onLost)
+        }
+    }
+
+    private fun inside(
+        partitions: Collection<ApachePartition>,
+        call: (List<TopicPartition>) -> Unit,
+    ) {
+        if (partitions.isEmpty()) return
+        inCallback.set(true)
+        try {
+            call(partitions.map { TopicPartition(it.topic(), it.partition()) }.sortedWith(PARTITION_ORDER))
+        } finally {
+            inCallback.set(false)
+        }
+    }
+
     override suspend fun commit() {
+        enter("commit")
         requireGroup(namesAGroup, "commit")
         // commitSync with no arguments: the positions after everything `poll` has returned, for every
         // partition held. It waits for the coordinator, on the lane.
@@ -96,6 +161,7 @@ internal class JvmKafkaConsumer(
     }
 
     override suspend fun commit(offsets: Map<TopicPartition, Long>) {
+        enter("commit")
         requireGroup(namesAGroup, "commit")
         requireCommittable(offsets)
         if (offsets.isEmpty()) return
@@ -106,19 +172,23 @@ internal class JvmKafkaConsumer(
     }
 
     override suspend fun groupMetadata(): ConsumerGroupMetadata {
+        enter("groupMetadata")
         requireGroup(namesAGroup, "groupMetadata")
         return JvmGroupMetadata(withContext(lane) { delegate.groupMetadata() })
     }
 
-    override suspend fun assignment(): List<TopicPartition> =
-        withContext(lane) {
+    override suspend fun assignment(): List<TopicPartition> {
+        enter("assignment")
+        return withContext(lane) {
             delegate.assignment().map { TopicPartition(it.topic(), it.partition()) }.sortedWith(PARTITION_ORDER)
         }
+    }
 
     override suspend fun seek(
         partition: TopicPartition,
         to: SeekTo,
     ) {
+        enter("seek")
         check(!subscribed) { "seek is refused under a subscription, on both arms: the group decides positions" }
         withContext(lane) {
             val apache = partition.apache()
@@ -161,6 +231,7 @@ internal class JvmKafkaConsumer(
      * cancellation, and that `poll` simply runs again.
      */
     override suspend fun poll(timeout: Duration): List<ConsumerRecord> {
+        enter("poll")
         val call = polls.async { pollOnLane(timeout) }
         try {
             return call.await()
@@ -184,6 +255,7 @@ internal class JvmKafkaConsumer(
     }
 
     override suspend fun close() {
+        enter("close")
         withContext(lane) { delegate.close() }
         polls.cancel()
     }

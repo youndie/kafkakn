@@ -1,7 +1,7 @@
 ---
 id: B-50
 title: "A rebalance listener: say which partitions arrive and which leave"
-status: open
+status: done
 priority: P1
 size: L
 stage: stage-11-everyday-gaps
@@ -43,3 +43,58 @@ Both clients have the hook, and they are shaped differently:
   against the broker's consumer.
 - Anchors: `docs/api/consumer-contract.md`, `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaConsumer.kt`,
   `ci/b-37/run.sh`.
+
+## Design review (2026-09-25, the owner)
+
+The contract section (§2a) was written first and put to the owner interactively, with three shapes:
+- plain callbacks with a commit scope;
+- suspending callbacks;
+- rebalances as events returned from `poll`.
+
+**Chosen: plain callbacks with `RebalanceScope`**, as §2a describes. The code follows the section, not
+the other way round.
+
+## Iteration 1 (2026-09-25): built and green; one mutant left unfinished when the build box went down
+
+- **Built as §2a designs it:**
+  - `subscribe(topics, listener)`, with `RebalanceListener` (`onRevoked` with a `RebalanceScope`,
+    `onAssigned`, `onLost`) as plain functions;
+  - a per-thread re-entry guard that refuses a call to the consumer from inside a callback;
+  - no callback with an empty list.
+
+  Native always installs a `rebalance_cb`, which applies the assignment itself, eager or incremental.
+  A listener's exception is kept and rethrown by the `poll` or `close` the callback ran inside.
+- **Green, measured on the Linux box (`ci/b-50/run.sh`):** in a group with one member on each arm, in
+  both directions, where each member commits only in `onRevoked`, 1200 records gave 0 lost and 0
+  processed twice. The group's commits reach every partition's end, the member that left revoked last,
+  and the one that stayed was finally assigned `[0,1,2,3]`. Also green on both arms: re-entry is refused,
+  with the contract's message, and a lone member sees exactly `+[0] -[0]`.
+- **Mutants:**
+  - a native scope that commits nothing: 137 and 188 duplicates, red;
+  - a JVM scope that commits nothing: 136 and 142 duplicates, red.
+- **Stopped at:** the third mutant, native's re-entry guard disabled, which should hang and fail
+  `calling_the_consumer_from_inside_a_callback_throws_instead_of_deadlocking`. The build box went down
+  during that run ("Host is down"). The mutant was reverted on the Mac.
+- **Next:** rerun that mutant, and the full `ci/b-50/run.sh` once more on the committed code. Then
+  update the contract's §2a from *target* to measured, and close.
+
+## Iteration 2 (2026-09-25): finished once the box was back
+
+- **The unfinished mutant hung rather than failed.** With native's re-entry guard removed, the re-entry
+  test never finished. Two copies of the test binary were found deadlocked, one of them since before the
+  outage. The call deadlocks by *suspending*, on native's lock and on the JVM's lane, so the test now
+  bounds it with `withTimeoutOrNull`. With either arm's guard removed, it fails by name in seconds
+  (`calling_the_consumer_from_inside_a_callback_throws_instead_of_deadlocking`).
+- **The first final run went red on its own vacuity check.** The native leaver, on a fixed fifteen
+  seconds, held its share too briefly to process anything, so its revocation committed nothing. B-37's
+  lesson again: the leaver now leaves after processing 50 records, which is data, not time.
+- **Final run, on the committed code:** both directions green, 0 lost, 0 duplicated; the leavers
+  committed `2:25;3:25` and `0:30;1:30` on revocation. The scope mutants were run again under the new
+  rule and are caught by 50 to 93 duplicates. ktlint passes.
+- **AC:**
+  - the contract section was written and reviewed before the code (above);
+  - the listeners report the partitions gained, and the partitions given up before stopping;
+  - committing in the revocation callback loses nothing and duplicates nothing, counted against the
+    broker.
+
+  `onLost` is not exercised, and the contract says so.
