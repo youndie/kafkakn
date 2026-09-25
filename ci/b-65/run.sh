@@ -83,6 +83,8 @@ round() { # <frozen-arm> <taker-arm>
     theard=$(fact "$taker" "$taker" heard)
     printf '  %-9s (frozen) heard: %s\n' "$frozen" "$fheard"
     printf '  %-9s (taker)  heard: %s\n' "$taker" "$theard"
+    # Cut at the freeze, not at the resume: a frozen process makes no events, and the first one it makes on
+    # SIGCONT can carry a time a millisecond before the runner's own "resumed" (measured: onLost 1 ms early).
     # The frozen member's first two events after it resumed, without their times: the shape compared across the
     # rounds. Only two: what follows is the end of the run (the other member leaving first hands it everything),
     # which differs by which member finishes first, not by arm.
@@ -91,7 +93,7 @@ round() { # <frozen-arm> <taker-arm>
 import re, sys
 resumed = int(sys.argv[2])
 events = re.findall(r"([-+!])(\[[^\]]*\])@(\d+)", sys.argv[1])
-print(" ".join([k for k, _, t in events if int(t) >= resumed][:2]))' "$fheard" "$resumed")
+print(" ".join([k for k, _, t in events if int(t) >= resumed][:2]))' "$fheard" "$stopped")
     echo "$after" > "build/b-65-$frozen-shape.txt"
     printf '  the frozen member after it resumed: %s\n' "$after"
     case "$after" in "! +"*) ;; *) bad "$frozen: after resuming it did not hear onLost and then onAssigned: '$after'" ;; esac
@@ -119,7 +121,7 @@ back = {}
 for f in firsts:
     po, t = f.split("@")
     p, o = map(int, po.split(":"))
-    if int(t) >= resumed and p not in back:
+    if int(t) >= resumed - 1000 and p not in back:
         back[p] = o
 given = {}
 for c in commits:

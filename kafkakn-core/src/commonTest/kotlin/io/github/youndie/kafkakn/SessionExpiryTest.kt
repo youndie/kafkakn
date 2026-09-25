@@ -62,6 +62,10 @@ class SessionExpiryTest {
                         scope.commit(committing)
                         committing.forEach { (partition, offset) -> committed += "${partition.partition}:$offset@$at" }
                         held -= partitions.map { it.partition }.toSet()
+                        // Committed and gone: kept, it would be committed again on a later revocation of the same
+                        // partition, over whatever its owner in between committed. It did, once: the stale 187 of a
+                        // member given the partitions back at the end overwrote the other member's 300.
+                        processed.keys.removeAll { it in partitions }
                     }
 
                     override fun onLost(partitions: List<TopicPartition>) {
