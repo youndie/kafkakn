@@ -1,7 +1,7 @@
 ---
 id: B-47
 title: "A producer can write a tombstone: a record whose value is null"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-11-everyday-gaps

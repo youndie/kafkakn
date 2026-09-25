@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-47](docs/backlog/B-47-a-producer-can-write-a-tombstone.md) `[ ]` | A producer can write a tombstone: a record whose value is null | P1 | S | - |
+| [B-47](docs/backlog/B-47-a-producer-can-write-a-tombstone.md) `[~]` | A producer can write a tombstone: a record whose value is null | P1 | S | - |
 | [B-48](docs/backlog/B-48-commit-explicit-offsets.md) `[ ]` | Commit named offsets, not only everything poll returned | P1 | S | - |
 | [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[ ]` | A rebalance listener: say which partitions arrive and which leave | P1 | L | B-48 |
 | [B-46](docs/backlog/B-46-feature-documents-for-what-was-built-after-the-producer.md) `[ ]` | Feature documents for consuming, exactly-once and administration | P2 | M | B-45 |
