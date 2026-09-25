@@ -30,6 +30,7 @@ describes the cluster. On both arms, and checked with the broker's own tools
   broker holds exactly those.
 - Creating a topic that exists fails with one kafkakn exception on both arms, `TopicExistsException`.
 - No call holds the caller's dispatcher while the cluster answers.
+- A topic's configuration is changed incrementally only: a key not named is never reset.
 - A group with an active member is never moved or deleted: the broker refuses, and both arms throw
   `GroupNotEmptyException`.
 - A group's lag is the caller's subtraction, the partition's latest offset minus the group's commit: the
@@ -112,8 +113,21 @@ describes the cluster. On both arms, and checked with the broker's own tools
 * **Automated:** `AdminGroupOffsetsTest.an_empty_groups_offsets_and_then_the_group_are_deleted`, and
   `ci/b-60/run.sh`.
 
+### Scenario: A topic's configuration is described, changed incrementally, and returned to its default
+* **Given:** a topic created with `retention.ms` set.
+* **When:** `max.message.bytes` is set on it, and then `retention.ms` is deleted.
+* **Then:** the topic's configuration changes as follows:
+  - the set key reads its new value with source `TOPIC`;
+  - the key set at creation is left alone by the first change;
+  - the deleted key returns to its default with source `DEFAULT`;
+  - every key, value and source is what `kafka-configs.sh --describe --all` reports.
+
+  An unknown key, or a value the broker cannot read, is refused with `IllegalArgumentException` on both
+  arms. The valid half of such a call is not applied.
+* **Automated:** `AdminConfigsTest` on both arms, held against the broker's tool by `ci/b-61/run.sh`.
+
 ## 5. Out of scope
 
-Topic configuration on an existing topic ([B-61](../backlog/B-61-topic-configs.md)), adding partitions
+Broker configuration, which is an operator's tool, not a service's. Adding partitions
 ([B-62](../backlog/B-62-create-partitions.md)) and deleting records ([B-63](../backlog/B-63-delete-records.md))
 are the rest of stage 13. ACLs are not planned.

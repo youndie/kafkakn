@@ -521,6 +521,8 @@ interface KafkaAdmin {
     suspend fun alterConsumerGroupOffsets(groupId: String, offsets: Map<TopicPartition, Long>)          // B-60
     suspend fun deleteConsumerGroupOffsets(groupId: String, partitions: List<TopicPartition>)          // B-60
     suspend fun deleteConsumerGroups(groupIds: List<String>)                                          // B-60
+    suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> // B-61
+    suspend fun alterTopicConfigs(name: String, set: Map<String, String>, delete: List<String>)      // B-61
     suspend fun close()
 }
 ```
@@ -603,6 +605,29 @@ member of the controller quorum; on the fixture both arms reported node 1.
   - the distribution's console consumer, joining the moved group, starts exactly at the moved offset;
   - a deleted group is absent from `--list`, next to a control group that is listed.
 
+**A topic's configuration ([B-61](../backlog/B-61-topic-configs.md)).**
+- `describeTopicConfigs(names)` returns every key the broker reports for each topic, in alphabetical
+  order. Each key has its value (null when the broker calls it sensitive) and its source:
+  - `TOPIC`: set on the topic;
+  - `BROKER`: the broker's dynamic, dynamic-default and static sources, which are one here;
+  - `DEFAULT`;
+  - `UNKNOWN`.
+- `alterTopicConfigs(name, set, delete)` is **incremental only**. The keys in `set` take their values, the
+  keys in `delete` return to what the topic would have without them, and every other key is left alone.
+  Both clients' non-incremental `alterConfigs` resets every key not named, and it is deliberately not
+  offered.
+- **What the broker refuses is refused with `IllegalArgumentException` on both arms, and nothing is
+  changed.** That covers an unknown key and a value it cannot read (`INVALID_CONFIG`, 40). A call that
+  pairs a bad value with a good one applies neither. The Java client's `InvalidConfigurationException` is
+  the cause on the JVM. A topic that does not exist is each client's own failure: recorded, not promised.
+- **A change is visible shortly after the call returns, not at that moment.** The controller accepts it,
+  and the broker's view of the topic follows. A describe made at once showed the old value once on the
+  native arm, and it is a race on either arm. Measured: visible after 7 to 110 ms. A caller who reads
+  back what they set waits for it.
+- *Measured* (`ci/b-61/run.sh`): on each arm's topic, after a set and a delete, all 33 keys, with their
+  values and sources, are what `kafka-configs.sh --describe --all` reports. The tool gives no source of its
+  own, only synonyms, and a key with none is one nobody set: the default, as both clients report it.
+
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
 the same rule that keeps a producer from being checked by its own consumer.
@@ -619,6 +644,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
 | an admin client creates a topic that exists | `TopicExistsException`, on both arms |
 | an admin client alters or deletes the offsets of a group with an active member, or deletes the group | `GroupNotEmptyException`, on both arms |
+| an admin client sets a topic configuration key the broker does not know, or a value it cannot read | `IllegalArgumentException`, on both arms, and nothing is changed |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | producer closed | `send` throws `IllegalStateException` |
 
