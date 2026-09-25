@@ -21,7 +21,8 @@ A Kotlin service — on the JVM or compiled to a single native binary — hands 
 gets back where it landed. That is the whole feature. Everything else in this repository exists to
 make this one call honest on both platforms.
 
-**`status: draft`: nothing here is built.** Every scenario below is *target*.
+**Built and measured on both arms.** A scenario with an `**Automated:**` line names the test and the
+harness script that check it; one without is checked by hand.
 
 ## 2. Business rules
 
@@ -32,8 +33,6 @@ make this one call honest on both platforms.
 - Configuration keys are Kafka's own names ([producer-contract](../api/producer-contract.md)).
 
 ## 3. Scenarios (BDD / test cases)
-
-Every one is **target**: nothing is built.
 
 ### Scenario: A record with no key reaches the topic
 * **Given:** a producer against the test broker with `acks=all`, and a topic with 3 partitions.

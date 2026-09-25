@@ -93,38 +93,6 @@ public interface KafkaProducer {
 public expect fun kafkaProducer(config: ProducerConfig): KafkaProducer
 
 /**
- * The stub both arms return until they are implemented.
- *
- * Shared between the two actuals on purpose: while neither exists, replacing one arm's factory is
- * then a visible, isolated change rather than an edit that leaves the other arm looking the same
- * but meaning something different.
- */
-internal object UnimplementedProducer : KafkaProducer {
-    override suspend fun send(record: ProducerRecord): RecordMetadata = TODO("no producer yet")
-
-    override suspend fun partitionsFor(topic: String): List<PartitionInfo> = TODO("no producer yet")
-
-    override suspend fun initTransactions(): Unit = TODO("no producer yet")
-
-    override suspend fun beginTransaction(): Unit = TODO("no producer yet")
-
-    override suspend fun sendOffsetsToTransaction(
-        offsets: Map<TopicPartition, Long>,
-        group: ConsumerGroupMetadata,
-    ): Unit = TODO("no producer yet")
-
-    override suspend fun commitTransaction(): Unit = TODO("no producer yet")
-
-    override suspend fun abortTransaction(): Unit = TODO("no producer yet")
-
-    override suspend fun metrics(): ProducerMetrics = TODO("no producer yet")
-
-    override suspend fun flush(): Unit = TODO("no producer yet")
-
-    override suspend fun close(): Unit = TODO("no producer yet")
-}
-
-/**
  * One partition of a topic, as the cluster described it.
  *
  * Node ids rather than nodes: both clients describe a broker by id, host and port, and the id is the

@@ -32,6 +32,8 @@ gate: guard
 	$(PY) scripts/common_is_platform_free.py
 	$(PY) scripts/no_delivery_counters.py --selftest
 	$(PY) scripts/no_delivery_counters.py
+	$(PY) scripts/no_todo_in_main.py --selftest
+	$(PY) scripts/no_todo_in_main.py
 
 # The subject has to exist before any verdict about it means anything. Each script below prints
 # "nothing checked" and exits zero on an empty tree, so without this a deleted docs/ is a green run.
@@ -41,9 +43,8 @@ guard:
 	  test "$$n" -gt 0 || { echo "no backlog items - the index check would pass vacuously"; exit 1; }; \
 	  echo "guard: docs/ present, $$n backlog items"
 
-# Non-blocking, read by a person. Anchors point at code that does not exist yet - nothing is
-# implemented - so the NOT FOUND list is expected to be long until stage 0 closes. That is the one
-# legitimate exception; when the code exists, an entry there is a defect.
+# Non-blocking, read by a person. The code exists, so an entry in the NOT FOUND list is a defect: an
+# anchor that rotted when something was renamed.
 report:
 	$(PY) scripts/bdd_report.py
 	$(PY) scripts/code_anchors.py --repos .
