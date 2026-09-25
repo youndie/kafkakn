@@ -303,6 +303,7 @@ It is not in the gate, and no claim is made about it until it is.
 Amended 2026-09-25 ([§2.28](#228-h5-settled-linuxarm64-costs-build-code-three-traps-and-a-higher-glibc-floor)):
 `linuxArm64` is now built and run on arm64 hardware, declared only on request (`-Pkafkakn.linuxArm64`),
 and not published. Its binaries need glibc 2.17, the same as x64 ([B-44](../backlog/B-44-arm64-glibc-floor.md)).
+The owner decided the same day that it stays that way: neither published nor run in CI.
 
 **D7 — snapshots to reposilite only.** `reposilite.kotlin.website/snapshots`, group
 `io.github.youndie.kafkakn` — the **project's** namespace rather than the account's, so every
