@@ -115,6 +115,12 @@ Because the session exists, `git`, `make` and the documentation scripts in this 
 `LOCAL=1` prefix: they belong on the Mac, and git on the replica is meaningless anyway — the session
 is `--ignore-vcs` and there is no `.git` over there.
 
+**A Mac runs the native arm too** ([B-40](docs/backlog/B-40-macos-for-contributors.md)).
+`macosArm64` is declared only on a Mac, from a bundle `ci/librdkafka/build-macos.sh` builds there, and
+`ci/b-40/run.sh` runs the native suite on the Mac against the broker on the Linux box, through a
+tunnel, then diffs it against the JVM arm there. It is a contributor's loop; `linuxX64` stays the
+target that is built, measured and published.
+
 ## Read the file back instead of believing the edit
 
 Three separate no-ops happened in one item on 2026-09-17 and each was reported as done: a shell that

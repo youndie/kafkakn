@@ -3,6 +3,7 @@
 package io.github.youndie.kafkakn
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.toKString
 import platform.posix.fclose
 import platform.posix.fopen
@@ -10,7 +11,14 @@ import platform.posix.fputs
 import platform.posix.getenv
 import platform.posix.mkdir
 
-internal actual val armName: String = "linuxX64"
+/**
+ * The native target this binary was built for: `linuxX64` on the Linux box, `macosArm64` on a
+ * contributor's Mac (B-40). Named rather than assumed, because the arm's name is the file its
+ * observations go to and the stamp its records carry.
+ */
+@OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+internal actual val armName: String =
+    if (Platform.osFamily == OsFamily.MACOSX) "macosArm64" else "linuxX64"
 
 internal actual fun recordObservation(
     key: String,
@@ -29,7 +37,7 @@ private fun append(
 ) {
     // 0x1FF is 0777; the process umask narrows it. mkdir failing because the directory already
     // exists is the ordinary case and is ignored deliberately.
-    mkdir("build/observations", 0x1FFu)
+    mkdir("build/observations", 0x1FF.convert())
     val file = fopen("build/observations/$name", "a") ?: return
     fputs("$key=$value\n", file)
     fclose(file)

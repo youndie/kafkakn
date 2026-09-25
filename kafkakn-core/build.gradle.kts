@@ -24,33 +24,51 @@ val bundle: String =
     (findProperty("kafkakn.bundle") as String?)
         ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}"
 
+// The macosArm64 bundle (B-40), built on a Mac by ci/librdkafka/build-macos.sh. Its own path, with the
+// architecture in it: an architecture-less path is how one bundle would overwrite the other.
+val macosBundle: String =
+    (findProperty("kafkakn.bundle.macosArm64") as String?)
+        ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}-macosArm64"
+
+// macosArm64 is a CONTRIBUTOR'S target, declared only on a Mac (B-40): the native suite on the machine
+// people edit on, not a platform this library ships. On the Linux box - where publishing happens - the
+// target does not exist at all, so no publication of it can be produced there by accident.
+val onMac: Boolean = System.getProperty("os.name").startsWith("Mac")
+
+/** The cinterop and its archives for one native target, from that target's own bundle. */
+fun org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget.rdkafka(bundleDir: String) {
+    if (!kafkaC) return
+    compilations.getByName("main").cinterops.create("rdkafka") {
+        definitionFile.set(file("src/nativeInterop/cinterop/rdkafka.def"))
+        includeDirs("$bundleDir/include")
+        // Where the archives named in the .def are found. cinterop copies them INTO the klib, so a
+        // consumer links against the published artefact and nothing else - which is what B-13 found
+        // this project could not do.
+        extraOpts("-libraryPath", "$bundleDir/lib", "-libraryPath", "$bundleDir/lib64")
+    }
+    // The test that links against the C: on each native target's own test source set. Only present when
+    // the C bundle is: with -Pkafkakn.noKafkaC this directory is not a source root, so the Kafka-free
+    // binary genuinely contains none of it.
+    compilations
+        .getByName("test")
+        .defaultSourceSet.kotlin
+        .srcDir("src/nativeTestCinterop/kotlin")
+    // NO linkerOpts, and their absence is the check. The archives travel inside the cinterop klib
+    // (`staticLibraries` in rdkafka.def), so this project's own test binaries link exactly the way a
+    // stranger's binary does. While they were named here, the suite linked and the published artefact
+    // did not - and nothing in the gate could tell.
+}
+
 kotlin {
     jvm()
-    linuxX64 {
-        if (kafkaC) {
-            compilations.getByName("main").cinterops.create("rdkafka") {
-                definitionFile.set(file("src/nativeInterop/cinterop/rdkafka.def"))
-                includeDirs("$bundle/include")
-                // Where the archives named in the .def are found. cinterop copies them INTO the
-                // klib, so a consumer links against the published artefact and nothing else - which
-                // is what B-13 found this project could not do.
-                extraOpts("-libraryPath", "$bundle/lib", "-libraryPath", "$bundle/lib64")
-            }
-            // NO linkerOpts, and their absence is the check. The archives now travel inside the
-            // cinterop klib (`staticLibraries` in rdkafka.def), so this project's own test binaries
-            // link exactly the way a stranger's binary does. While they were named here, the suite
-            // linked and the published artefact did not - and nothing in the gate could tell.
-        }
+    linuxX64 { rdkafka(bundle) }
+    if (onMac) {
+        macosArm64 { rdkafka(macosBundle) }
     }
     // linuxArm64 is designed for and not declared (research D6). Adding it is a line here and a
     // build-matrix row; nothing in common code names a target, so it stays that way.
 
     sourceSets {
-        if (kafkaC) {
-            // Only present when the C bundle is: with -Pkafkakn.noKafkaC this directory is not a
-            // source root, so the Kafka-free binary genuinely contains none of it.
-            named("linuxX64Test") { kotlin.srcDir("src/linuxX64TestCinterop/kotlin") }
-        }
         commonMain.dependencies {
             // api, not implementation: the public surface is suspend functions, so a consumer needs
             // coroutines on its own compile classpath to call them at all.

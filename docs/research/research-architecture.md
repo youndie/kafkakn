@@ -1080,6 +1080,27 @@ record of each has been seen by the group as its own process knows it.
 everything before the second arrived, and a split would never meet a record; the third party writes a
 record every 40 ms instead.
 
+### 2.27 macosArm64, for contributors: one script, one Gradle block, and the tests had to move
+
+[B-40](../backlog/B-40-macos-for-contributors.md). The native suite now runs on a Mac against the same
+broker and agrees with the JVM arm: 92 tests, no failures, 17 observations compared, measured
+2026-09-25 with `ci/b-40/run.sh`.
+
+**What it cost, the item H5 asks about for arm64.** A second native target on a second OS took:
+- a bundle script of its own (`ci/librdkafka/build-macos.sh`): no glibc floor, so no image; OpenSSL
+  configured `darwin64-arm64-cc`; the same source tarballs, copied from the Linux box's cache;
+- a bundle path with the architecture in it — the finding B-39 read, paid here;
+- the cinterop declaration made a function both targets call;
+- the native test actuals moved from `linuxX64Test` to `nativeTest`, with `armName` read from the
+  platform, and one `mkdir` mode converted (`mode_t` is `UShort` on macOS).
+
+No production code changed. So "no code" holds for the library and not for its build or its tests.
+
+**What was checked rather than assumed.** `otool -L` on the Mac test binary lists no librdkafka or
+OpenSSL library: both are linked statically, as on Linux. It does list the system `libz.1.dylib`, yet
+`deflateInit2_` and `inflate` are defined inside the binary, so kafkakn's zlib is the bundle's. What
+pulls the dylib in — Kotlin/Native's own macOS link set, most likely — was not traced.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement

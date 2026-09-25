@@ -161,7 +161,7 @@ is surface, not implementation.
 | **Admin beyond topics and the cluster** | not planned — ACLs, configuration changes on existing topics and consumer-group administration are out; creating, deleting and describing topics and describing the cluster are in since [B-34](docs/backlog/B-34-a-minimal-admin.md) |
 | **Rebalance callbacks, `Flow`, the KIP-848 group protocol** | not yet. A consumer that assigns and seeks ([B-36](docs/backlog/B-36-assign-and-poll.md)) and joins groups with manual commits ([B-37](docs/backlog/B-37-consumer-groups.md)) is in, built to a contract designed first ([B-35](docs/backlog/B-35-the-consumer-designed-first.md)) — and a group with one member on each arm is measured |
 | **`linuxArm64`** | designed for and not built — [B-39](docs/backlog/B-39-linux-arm64.md) settles whether it costs a matrix row and no code |
-| **macOS** | for contributors first, so the native arm runs without the Linux box — [B-40](docs/backlog/B-40-macos-for-contributors.md) |
+| **macOS as a shipped target** | not published. `macosArm64` exists for contributors since [B-40](docs/backlog/B-40-macos-for-contributors.md), declared only on a Mac: the native suite runs there against the broker and agrees with the JVM arm (92 tests, 17 observations, measured 2026-09-25). No `macosX64`, no Windows, no `musl` |
 | **Schema Registry, Streams, Windows, `musl`** | not planned. The first two are in neither client underneath, so they are not a gap between kafkakn and what it wraps |
 
 ## Documentation
