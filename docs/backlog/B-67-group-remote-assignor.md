@@ -1,7 +1,7 @@
 ---
 id: B-67
 title: "group.remote.assignor under the KIP-848 protocol, measured"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-14-unmeasured-promises
