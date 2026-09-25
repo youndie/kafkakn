@@ -113,10 +113,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (10)
+## Open (11)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
+| [B-64](docs/backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md) `[ ]` | After an eviction, the native poll throws where the JVM's rejoins | P1 | S | - |
 | [B-54](docs/backlog/B-54-a-flow-over-poll.md) `[~]` | A Flow of records, built on poll | P2 | S | - |
 | [B-55](docs/backlog/B-55-cooperative-rebalancing.md) `[ ]` | Cooperative rebalancing: partitions move without stopping the whole group | P2 | L | B-50 |
 | [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[ ]` | List and describe consumer groups | P2 | M | - |
