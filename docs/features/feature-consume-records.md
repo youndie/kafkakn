@@ -139,8 +139,8 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Then:** the twenty records arrive in order, a cancelled collector stops within milliseconds, and the
   consumer reads again afterwards, on both arms.
 * **Automated:** `RecordsFlowTest` on both arms, by `ci/b-54/run.sh`. A collector slower than
-  `max.poll.interval.ms` is reported to the listener as lost on both arms. What the next poll does differs,
-  and is printed there: B-64.
+  `max.poll.interval.ms` is reported to the listener as lost, rejoins at the next poll and reads again from
+  the committed offset, the same way on both arms (B-64).
 
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.

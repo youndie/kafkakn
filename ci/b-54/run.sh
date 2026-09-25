@@ -2,8 +2,8 @@
 # B-54: the Flow over poll on both arms: records in order, a prompt cancellation, and what a collector
 # slower than max.poll.interval.ms sees.
 #
-# The eviction is printed per arm rather than compared: the arms differ there, measured, and B-64 exists to
-# make them agree. Until it does, this is where the difference is visible on every run.
+# The eviction's outcome is compared across the arms since B-64: until then the JVM rejoined at the next
+# poll and native threw, and this script only printed the two. It still prints each arm's listener events.
 #
 #   ci/b-54/run.sh
 set -uo pipefail
@@ -30,7 +30,7 @@ for task in jvmTest linuxX64Test; do
     printf '  %-14s exit=%s\n' "$task" "$code"
     [ "$code" -eq 0 ] || { grep -E "FAILED|AssertionError|expected|invisible" "build/b-54-$task.out" | head -10; echo "  THE SUITE FAILED on $task"; exit 1; }
 done
-MIN_OBSERVATIONS=1 bash ci/harness/compare-arms.sh "$OBS/jvm.txt" "$OBS/linuxX64.txt" || exit 1
+MIN_OBSERVATIONS=2 bash ci/harness/compare-arms.sh "$OBS/jvm.txt" "$OBS/linuxX64.txt" || exit 1
 
 echo
 echo "=== a collector slower than max.poll.interval.ms, per arm ==="
@@ -43,5 +43,5 @@ for arm in jvm linuxX64; do
 done
 
 echo
-echo "B-54: the Flow reads in order and cancels promptly on both arms; the eviction is reported to the listener"
-echo "      on both, and what the next poll does is printed above (B-64)"
+echo "B-54: the Flow reads in order and cancels promptly on both arms, and a slow collector's eviction is"
+echo "      reported as lost, rejoined and read again the same way on both (B-64)"

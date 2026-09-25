@@ -117,12 +117,14 @@ class ConsumerRecord(                                       // B-36
   (10 s against 6 s):
   - it keeps receiving the rest of the batch already in hand, from a partition it no longer holds;
   - both arms report the partition to the listener as lost (`onLost`);
-  - **then they part, at the next `poll`.** The JVM rejoins silently, is assigned the partition again, and,
-    with nothing committed, reads from the start again. Native throws `KafkaConsumeException: … Maximum
-    application poll interval (max.poll.interval.ms) exceeded`.
+  - the next `poll` rejoins: the listener sees the partition assigned again, and with nothing committed
+    the records come again from the start.
 
-  The native arm is the one that disagrees with the reference, and
-  [B-64](../backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md) makes it rejoin.
+  Until [B-64](../backlog/B-64-native-poll-throws-where-the-jvm-rejoins.md) the arms parted at that `poll`:
+  native threw `KafkaConsumeException: … Maximum application poll interval (max.poll.interval.ms)
+  exceeded`, because it treated librdkafka's `__MAX_POLL_EXCEEDED` event as a failure. It now skips the
+  event, as it skips end-of-partition, and rejoins as the reference does. Measured: `+[0] ![0] +[0] -[0]`
+  and the same offsets on both arms.
 - **The `Flow` came later, as an extension over `poll`, not instead of it.** A cold `Flow` makes the
   collector's pace the poll's pace, and a collector slower than `max.poll.interval.ms` is evicted from
   its group — on both arms, with nothing in the `Flow`'s signature to say so. With an explicit

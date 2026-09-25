@@ -33,6 +33,7 @@ import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS
+import rdkafka.RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED
 import rdkafka.RD_KAFKA_RESP_ERR__NO_OFFSET
 import rdkafka.RD_KAFKA_RESP_ERR__PARTITION_EOF
 import rdkafka.RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS
@@ -582,6 +583,10 @@ internal class NativeKafkaConsumer(
     private fun read(message: CPointer<rd_kafka_message_t>): ConsumerRecord? {
         val m = message.pointed
         if (m.err == RD_KAFKA_RESP_ERR__PARTITION_EOF) return null
+        // An event, not a failure (B-64): this member stopped polling for longer than max.poll.interval.ms
+        // and was removed from its group. The listener has been told, with onLost, and the next poll
+        // rejoins, which is what the Java client does. Thrown, it made the two arms part at exactly this poll.
+        if (m.err == RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED) return null
         if (m.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
             throw KafkaConsumeException("poll: ${rd_kafka_err2str(m.err)?.toKString()}")
         }
