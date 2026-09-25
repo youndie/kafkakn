@@ -82,6 +82,22 @@ class AdminGroupsTest {
         }
 
     /**
+     * Each client's spelling of a state, into one. The live tests only meet one-word states (Stable, Empty,
+     * Dead); the rebalancing ones are two words, spelled `PreparingRebalance` by librdkafka and
+     * `PREPARING_REBALANCE` by the Java client, and are too brief to catch on a broker.
+     */
+    @Test
+    fun both_clients_spellings_of_a_state_read_as_one() {
+        assertEquals(GroupState.PREPARING_REBALANCE, GroupState.named("PreparingRebalance"))
+        assertEquals(GroupState.PREPARING_REBALANCE, GroupState.named("PREPARING_REBALANCE"))
+        assertEquals(GroupState.COMPLETING_REBALANCE, GroupState.named("CompletingRebalance"))
+        assertEquals(GroupState.STABLE, GroupState.named("Stable"))
+        // A state only one client knows (the new protocol's Assigning) reads UNKNOWN rather than failing.
+        assertEquals(GroupState.UNKNOWN, GroupState.named("Assigning"))
+        assertEquals(GroupState.UNKNOWN, GroupState.named(null))
+    }
+
+    /**
      * A group whose member is not kafkakn: the distribution's console consumer, started by `ci/b-58/run.sh`,
      * which names the group through the environment and holds this description against
      * `kafka-consumer-groups.sh --describe --members --verbose`.
