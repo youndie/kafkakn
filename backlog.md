@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-39](docs/backlog/B-39-linux-arm64.md) `[?]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
+| [B-39](docs/backlog/B-39-linux-arm64.md) `[~]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
 
 ## Closed (42)
 

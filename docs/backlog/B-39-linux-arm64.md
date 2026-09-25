@@ -1,7 +1,7 @@
 ---
 id: B-39
 title: "linuxArm64: settle H5 — does a second native target cost a matrix row and no code?"
-status: question
+status: wip
 priority: P2
 size: M
 stage: stage-9-targets
@@ -67,3 +67,20 @@ system-level change to the owner's machine, and the loop does not make it on its
    and close the item as `dropped`.
 
 Until then the loop moves on to the next pickable item.
+
+## Decision (2026-09-25, the owner): real arm64, on the Mac's Docker
+
+Asked interactively. Emulation was chosen first, and the registration then ran on the Mac rather than
+on the build box. That showed what the four options had missed: Docker Desktop on the Mac **is** an
+arm64 Linux host (`docker info`: `aarch64`, kernel `6.12.54-linuxkit`, 4 CPUs, 8 GB). This is option 2,
+available all along, with no change to any host. The owner chose it over emulation on WSL.
+
+So the item proceeds as follows:
+
+- The `linuxArm64` Kotlin side is cross-compiled on the build box, as every other native build is.
+- The C bundle is built in `manylinux2014_aarch64` on the Mac's Docker. It is the one arm64 build, and
+  the build box cannot run it without the emulation this decision avoids.
+- The test binary runs in an arm64 container on the Mac, against the broker on the build box, through
+  the same tunnel `ci/b-40/run.sh` uses.
+
+The write-up says **real arm64 hardware (Apple silicon), in a linuxkit VM**, not emulation.
