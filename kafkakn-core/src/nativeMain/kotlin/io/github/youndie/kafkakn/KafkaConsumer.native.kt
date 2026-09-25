@@ -264,6 +264,7 @@ internal class NativeKafkaConsumer(
             val err = withContext(Dispatchers.IO) { rd_kafka_commit(handle, null, 0) }
             // Nothing handed out since the last commit is not a failure; the Java client says nothing.
             if (err != RD_KAFKA_RESP_ERR_NO_ERROR && err != RD_KAFKA_RESP_ERR__NO_OFFSET) {
+                fencedCommit(handle, err)?.let { throw it }
                 throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()}")
             }
         }
@@ -968,9 +969,35 @@ private fun commitNow(
                 }
             }
         if (err != RD_KAFKA_RESP_ERR_NO_ERROR || refused.isNotEmpty()) {
+            fencedCommit(rk, err)?.let { throw it }
             throw KafkaConsumeException("commit: ${rd_kafka_err2str(err)?.toKString()} $refused")
         }
     } finally {
         rd_kafka_topic_partition_list_destroy(list)
+    }
+}
+
+/**
+ * A commit refused because another member took this one's `group.instance.id` (B-66), as the one exception
+ * both arms throw for it. Two roads, measured: the first commit after the fencing is refused with
+ * `FENCED_INSTANCE_ID` itself, and every later one meets the consumer's fatal state as `_FATAL`, whose reason
+ * only `rd_kafka_fatal_error` knows.
+ */
+private fun fencedCommit(
+    rk: CPointer<rd_kafka_t>,
+    err: rd_kafka_resp_err_t,
+): ConsumerFencedException? {
+    val fenced =
+        err == RD_KAFKA_RESP_ERR_FENCED_INSTANCE_ID ||
+            (
+                err == RD_KAFKA_RESP_ERR__FATAL &&
+                    rd_kafka_fatal_error(rk, null, 0u) == RD_KAFKA_RESP_ERR_FENCED_INSTANCE_ID
+            )
+    return if (fenced) {
+        ConsumerFencedException(
+            "commit: fenced by a member with the same group.instance.id: ${rd_kafka_err2str(err)?.toKString()}",
+        )
+    } else {
+        null
     }
 }

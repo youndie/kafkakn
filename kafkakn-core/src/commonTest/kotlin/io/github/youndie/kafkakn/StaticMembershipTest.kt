@@ -92,6 +92,74 @@ class StaticMembershipTest {
         }
 
     /**
+     * [B-66](../../../../../../../docs/backlog/B-66-a-fenced-static-members-commit.md): a fenced member's commit.
+     * The first member reads and commits, the second takes its `group.instance.id` and commits its own offsets,
+     * and the first, not knowing, commits what it processed: both forms of `commit`, before its `poll` has told
+     * it anything. The broker must refuse both, the same way on both arms, and the group's offsets must stay the
+     * second member's; `ci/b-66/run.sh` reads them with `kafka-consumer-groups.sh --describe` too.
+     */
+    @Test
+    fun a_fenced_members_commit_is_refused_and_changes_nothing() =
+        runTest(timeout = 3.minutes) {
+            withContext(Dispatchers.Default) {
+                val topic = twoPartitionTopic("kafkakn-fenced-commit")
+                val group = topic
+                val p0 = TopicPartition(topic, 0)
+                val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to bootstrap))
+                try {
+                    repeat(RECORDS) { producer.send(ProducerRecord(topic, "$it".encodeToByteArray(), partition = 0)) }
+                } finally {
+                    producer.close()
+                }
+                val first = member(group, "$group-same")
+                val second = member(group, "$group-same")
+                try {
+                    first.subscribe(listOf(topic))
+                    val read = mutableListOf<Long>()
+                    val until = TimeSource.Monotonic.markNow() + ASSIGNED_WITHIN
+                    while (read.size < RECORDS && until.hasNotPassedNow()) read += first.poll(POLL).map { it.offset }
+                    first.commit(mapOf(p0 to FIRST_COMMITTED))
+                    second.subscribe(listOf(topic))
+                    pollUntilAssigned(second)
+                    second.commit(mapOf(p0 to SECOND_COMMITTED))
+
+                    val explicit = outcome { first.commit(mapOf(p0 to FENCED_WOULD_COMMIT)) }
+                    val positions = outcome { first.commit() }
+                    recordArmFact("static.fenced.commit.explicit.said", explicit)
+                    recordArmFact("static.fenced.commit.positions.said", positions)
+                    recordArmFact("static.fenced.commit.group", group)
+                    recordObservation("static.fenced.commit.explicit", explicit.substringBefore(":"))
+                    recordObservation("static.fenced.commit.positions", positions.substringBefore(":"))
+
+                    val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to bootstrap))
+                    val held =
+                        try {
+                            admin.listConsumerGroupOffsets(group)
+                        } finally {
+                            admin.close()
+                        }
+                    recordObservation(
+                        "static.fenced.commit.group.offsets",
+                        held.entries.joinToString { "${it.key.partition}:${it.value}" },
+                    )
+                    assertEquals(
+                        mapOf(p0 to SECOND_COMMITTED),
+                        held,
+                        "the group's offsets, after the fenced member's commits",
+                    )
+                    assertEquals(
+                        listOf("threw ConsumerFencedException", "threw ConsumerFencedException"),
+                        listOf(explicit, positions).map { it.substringBefore(":") },
+                        "both forms of commit on a fenced member",
+                    )
+                } finally {
+                    closeQuietly(first)
+                    closeQuietly(second)
+                }
+            }
+        }
+
+    /**
      * One member of a mixed group, asked for through the environment (as B-55's are): `ci/b-56/run.sh` starts
      * a stayer on one arm and a restarter on the other, and holds the stayer's events against the restarter's
      * window. Both are static.
@@ -309,6 +377,10 @@ class StaticMembershipTest {
 
     private companion object {
         const val PARTITIONS = 2
+        const val RECORDS = 10
+        const val FIRST_COMMITTED = 4L
+        const val SECOND_COMMITTED = 6L
+        const val FENCED_WOULD_COMMIT = 9L
         val POLL = 200.milliseconds
         val ASSIGNED_WITHIN = 30.seconds
         val SETTLE = 5.seconds
