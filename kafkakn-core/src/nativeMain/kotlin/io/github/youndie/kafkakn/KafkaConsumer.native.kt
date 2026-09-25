@@ -209,7 +209,8 @@ internal class NativeKafkaConsumer(
                         if (entry.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
                             null
                         } else {
-                            "${entry.topic?.toKString()}-${entry.partition}: ${rd_kafka_err2str(entry.err)?.toKString()}"
+                            val why = rd_kafka_err2str(entry.err)?.toKString()
+                            "${entry.topic?.toKString()}-${entry.partition}: $why"
                         }
                     }
                 if (err != RD_KAFKA_RESP_ERR_NO_ERROR || refused.isNotEmpty()) {

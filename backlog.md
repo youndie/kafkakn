@@ -113,11 +113,10 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (17)
+## Open (16)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-48](docs/backlog/B-48-commit-explicit-offsets.md) `[~]` | Commit named offsets, not only everything poll returned | P1 | S | - |
 | [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[ ]` | A rebalance listener: say which partitions arrive and which leave | P1 | L | B-48 |
 | [B-46](docs/backlog/B-46-feature-documents-for-what-was-built-after-the-producer.md) `[ ]` | Feature documents for consuming, exactly-once and administration | P2 | M | B-45 |
 | [B-49](docs/backlog/B-49-committed-and-position.md) `[ ]` | Read back committed offsets and the current position | P2 | S | B-48 |
@@ -135,7 +134,7 @@ verdict.
 | [B-62](docs/backlog/B-62-create-partitions.md) `[ ]` | Add partitions to an existing topic | P3 | S | - |
 | [B-63](docs/backlog/B-63-delete-records.md) `[ ]` | Delete records before an offset | P3 | S | - |
 
-## Closed (46)
+## Closed (47)
 
 **It builds, and a test can fail**
 
@@ -218,6 +217,7 @@ verdict.
 **What a caller reaches for next**
 
 - [B-47](docs/backlog/B-47-a-producer-can-write-a-tombstone.md) `[x]` - A producer can write a tombstone: a record whose value is null
+- [B-48](docs/backlog/B-48-commit-explicit-offsets.md) `[x]` - Commit named offsets, not only everything poll returned
 
 <!-- END INDEX -->
 

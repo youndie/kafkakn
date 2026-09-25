@@ -101,9 +101,8 @@ internal class JvmKafkaConsumer(
         if (offsets.isEmpty()) return
         // commitSync(Map): the offsets as given, each the next one to read, which is also what
         // OffsetAndMetadata means. No metadata string: nothing here needs one (B-48).
-        withContext(lane) {
-            delegate.commitSync(offsets.entries.associate { (partition, offset) -> partition.apache() to OffsetAndMetadata(offset) })
-        }
+        val apache = offsets.entries.associate { it.key.apache() to OffsetAndMetadata(it.value) }
+        withContext(lane) { delegate.commitSync(apache) }
     }
 
     override suspend fun groupMetadata(): ConsumerGroupMetadata {

@@ -68,6 +68,8 @@ class CommitOffsetsTest {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (refused: Exception) {
+                            // Kept, so a refusal says what it was: the observation below is only the verdict.
+                            recordArmFact("commit.unheld.refusal", "${refused::class.simpleName}: ${refused.message}")
                             "refused"
                         }
                     }
