@@ -42,8 +42,9 @@ that requires one, and both arms answering it.
 - SASL `PLAIN`, `SCRAM-SHA-256` and `SCRAM-SHA-512`, over plaintext or TLS: `sasl.mechanism`,
   `sasl.username`, `sasl.password` ([B-32](../backlog/B-32-sasl-plain-and-scram.md)). The mechanism
   is required with a SASL protocol, and the username and password come together — both refused at
-  construction on both arms. OAUTHBEARER is [B-33](../backlog/B-33-sasl-oauthbearer.md); GSSAPI is
-  not in the native bundle and is not offered.
+  construction on both arms. OAUTHBEARER takes a token the caller supplies through an
+  `OAuthBearerTokenProvider` ([B-33](../backlog/B-33-sasl-oauthbearer.md)); GSSAPI is not in the
+  native bundle and is not offered.
 
 ## 3. Scenarios (BDD / test cases)
 
@@ -159,6 +160,17 @@ that requires one, and both arms answering it.
   Authentication failure: … SASL authentication error: Authentication failed: Invalid username or
   password"*, after `message.timeout.ms`.
 
+### Scenario: OAUTHBEARER with the caller's tokens connects, refreshes, and fails in the provider's words
+* **Given:** the SASL listener with OAUTHBEARER, validated by Kafka's unsecured validator and set to
+  re-authenticate every ten seconds; the broker's own tools connect with an unsigned token first.
+* **When:** a producer is given a provider of unsigned tokens; separately, one whose tokens live twelve
+  seconds sends for thirty; and one whose provider throws.
+* **Then:** 50/50 records arrive; the short-lived tokens are replaced through the provider without the
+  caller doing anything and every send succeeds; the throwing provider's words are in what the caller
+  reads.
+* **Automated:** `OAuthBearerTest`, counted by `ci/b-33/run.sh`. Measured on each arm: four tokens in
+  thirty seconds; the no-refresh mutant stalled once the broker refused the expired token.
+
 ### Scenario: An incomplete SASL configuration is refused at construction, and names the key
 * **Given:** a SASL protocol with no `sasl.mechanism`; a username without its password or the
   reverse; credentials for `GSSAPI` or for no mechanism.
@@ -250,4 +262,5 @@ that requires one, and both arms answering it.
 | the SASL rules both arms enforce | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/SaslKeys.kt` |
 | the SASL scenarios | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/SaslTest.kt` |
 | the run that measured SASL | `ci/b-32/run.sh` |
+| the OAUTHBEARER bridges, and the run that measured them | `kafkakn-core/src/jvmMain/kotlin/io/github/youndie/kafkakn/OAuthBearer.jvm.kt`, `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/OAuthBearer.native.kt`, `ci/b-33/run.sh` |
 | the rule on the key's form, and the run that measured it | `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KeyFiles.kt`, `ci/b-42/run.sh` |

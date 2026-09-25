@@ -32,7 +32,19 @@ internal fun ProducerConfig.checkSaslKeys() {
     // on one arm and a Kerberos attempt on the other. So the default is not taken at all.
     require(protocol !in SASL_PROTOCOLS || mechanism != null) {
         "$SASL_MECHANISM must be set when security.protocol is $protocol: both clients default to " +
-            "GSSAPI, which this library cannot offer on both arms. Name PLAIN, SCRAM-SHA-256 or SCRAM-SHA-512"
+            "GSSAPI, which this library cannot offer on both arms. Name PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 or OAUTHBEARER"
+    }
+    // OAUTHBEARER and a token provider come together (B-33). A provider is the only way either arm
+    // gets a token here, so the mechanism without one is a connection that can never authenticate;
+    // and a provider for any other mechanism would be a function nothing ever calls.
+    val oauth = mechanism?.uppercase() == OAUTHBEARER
+    require(oauth == (oauthBearerTokenProvider != null)) {
+        if (oauth) {
+            "$SASL_MECHANISM=$OAUTHBEARER needs an OAuthBearerTokenProvider in ProducerConfig: the " +
+                "library does not fetch tokens itself, on either arm"
+        } else {
+            "an OAuthBearerTokenProvider is for $SASL_MECHANISM=$OAUTHBEARER, and $SASL_MECHANISM is ${mechanism ?: "not set"}"
+        }
     }
     val hasUser = SASL_USERNAME in properties
     val hasPassword = SASL_PASSWORD_KEY in properties

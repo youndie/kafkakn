@@ -1,7 +1,7 @@
 ---
 id: B-33
 title: "SASL OAUTHBEARER with a token the caller supplies"
-status: open
+status: done
 priority: P3
 size: M
 stage: stage-6-real-deployments
@@ -31,3 +31,31 @@ OAUTHBEARER provider and **not** the OIDC token fetcher, because the bundle is b
 - AC: a token that expires is refreshed through the provider without the caller doing anything, and a
   test watches it happen.
 - Anchors: `kafkakn-core/src/nativeInterop/cinterop/rdkafka.def`, `ci/librdkafka/build.sh`.
+
+## Findings (2026-09-25)
+
+**Measured, `ci/b-33/run.sh`, both arms.**
+- 50/50 records with the caller's tokens, counted over plaintext.
+- Twelve-second tokens, thirty seconds of sending against a broker that re-authenticates every ten:
+  four tokens issued on each arm and every send succeeded.
+- A provider that throws is visible in its own words: at construction on the JVM, and at the first
+  send on native, through the error callback.
+
+**The JVM bridge, and what it cost to read.** The Java client instantiates its login handler by
+class name, so the provider is registered under an id carried in the JAAS options. Throwing out of
+the handler lost the provider's words: *"An internal error occurred while retrieving token from
+callback handler"*, measured, then read in `OAuthBearerLoginModule.identifyToken`. They come through
+`OAuthBearerTokenCallback.error` instead.
+
+**The broker fixture.** OAUTHBEARER in the shared `KafkaServer` JAAS section stopped the broker from
+starting (*"Must supply exactly 1 non-null JAAS mechanism configuration"*). It is now configured on
+the plaintext SASL listener alone. The JAAS file is written on every run, because a file only the full
+certificate generation wrote would never change on a box whose certificates are still valid.
+
+**Watched red.** The native bridge was made to overstate each token's life by an hour. Nothing was
+refreshed, the broker refused the expired token at re-authentication, and the sends stalled until the
+test's own timeout (`logs/b-33/`). On the JVM, the exception path above was the red for the
+"visible" criterion.
+
+**Scope.** Only the producer takes a provider. OAUTHBEARER on a consumer or an admin client is refused
+at construction. Wiring either is a new item if it is wanted.

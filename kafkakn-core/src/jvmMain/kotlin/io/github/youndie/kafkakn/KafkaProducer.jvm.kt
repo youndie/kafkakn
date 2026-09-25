@@ -185,7 +185,18 @@ internal class JvmKafkaProducer(
         config.checkSaslKeys()
     }
 
-    private val properties = translateForJava(config.properties)
+    /** The id this producer's OAUTHBEARER provider is registered under, if it has one (B-33). */
+    private val oauthProvider = config.oauthBearerTokenProvider?.let { OAuthBearerProviders.register(it) }
+
+    private val properties =
+        translateForJava(config.properties).let { translated ->
+            if (oauthProvider == null) return@let translated
+            require("sasl.jaas.config" !in translated && "sasl.login.callback.handler.class" !in translated) {
+                "an OAuthBearerTokenProvider and sasl.jaas.config or sasl.login.callback.handler.class are two " +
+                    "answers to where the token comes from; pass one"
+            }
+            translated + OAuthBearerProviders.properties(oauthProvider)
+        }
 
     init {
         // A key nobody honours fails HERE, not silently. kafka-clients logs unknown configuration at
@@ -203,13 +214,20 @@ internal class JvmKafkaProducer(
     }
 
     private val delegate =
-        org.apache.kafka.clients.producer.KafkaProducer<ByteArray, ByteArray>(
-            Properties().apply {
-                properties.forEach { (key, value) -> setProperty(key, value) }
-            },
-            ByteArraySerializer(),
-            ByteArraySerializer(),
-        )
+        try {
+            org.apache.kafka.clients.producer.KafkaProducer<ByteArray, ByteArray>(
+                Properties().apply {
+                    properties.forEach { (key, value) -> setProperty(key, value) }
+                },
+                ByteArraySerializer(),
+                ByteArraySerializer(),
+            )
+        } catch (refused: Exception) {
+            // The Java client logs in while it constructs: a provider that throws surfaces HERE, and a
+            // producer that never existed must not leave its provider registered.
+            oauthProvider?.let { OAuthBearerProviders.unregister(it) }
+            throw refused
+        }
 
     /**
      * Bridges the client's callback into a suspension.
@@ -318,5 +336,6 @@ internal class JvmKafkaProducer(
     override suspend fun close() {
         // `close` flushes first, so it inherits the same wait.
         withContext(Dispatchers.IO) { delegate.close() }
+        oauthProvider?.let { OAuthBearerProviders.unregister(it) }
     }
 }

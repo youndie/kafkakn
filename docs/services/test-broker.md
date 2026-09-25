@@ -31,6 +31,7 @@ is invisible to it. The cost is that the suite needs Docker; that is accepted.
 | topic | 3 partitions, replication factor 1 |
 | listeners | `PLAINTEXT` on 9092, `SSL` on 9094, `MTLS` on 9095 — SSL that requires a client certificate ([B-31](../backlog/B-31-client-certificates.md)) — and `SASL_PLAINTEXT` on 9096, `SASL_SSL` on 9097 ([B-32](../backlog/B-32-sasl-plain-and-scram.md)); all always up |
 | SASL users | `alice` for PLAIN and both SCRAM digests; `quoted` for PLAIN, with a password holding a double quote and a backslash |
+| OAUTHBEARER | on `SASL_PLAINTEXT` only, unsecured validator (unsigned JWTs), re-authentication every 10 s ([B-33](../backlog/B-33-sasl-oauthbearer.md)) |
 | server keystore | PKCS12; the clients read a PEM CA |
 | auto-create | **off**, so a test against a topic that does not exist fails instead of quietly succeeding |
 
@@ -84,6 +85,10 @@ be wrong in both directions at once.
   named there. SCRAM credentials live in the metadata log, which a recreated container does not have,
   so `broker.sh up` creates them every time — one mechanism per call, because both in one
   `--add-config` is refused. `broker.sh sasl-selftest` asks for a refusal before an acceptance.
+- **OAUTHBEARER must be configured on its listener alone.** In the shared `KafkaServer` JAAS section
+  beside PLAIN and SCRAM the broker refused to start: *"Must supply exactly 1 non-null JAAS mechanism
+  configuration (size was 3)"*. It is `listener.name.sasl_plaintext.oauthbearer.sasl.jaas.config`, with
+  the mechanism enabled on that listener only.
 - **Regenerating the certificates under a running broker breaks it silently.** The broker loads its
   keystore once, at startup; new certificates leave it presenting one no client trusts, and the
   symptom is an SSL handshake failure that looks exactly like a misconfigured client. Measured, and

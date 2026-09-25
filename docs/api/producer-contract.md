@@ -195,7 +195,7 @@ callback ([research §2.9](../research/research-architecture.md)).
 | Key | Meaning | On native | On the JVM |
 |---|---|---|---|
 | `security.protocol` | `SASL_PLAINTEXT` or `SASL_SSL` | librdkafka's own key | the Java client's own key |
-| `sasl.mechanism` | `PLAIN`, `SCRAM-SHA-256` or `SCRAM-SHA-512` — **required** with a SASL protocol | an alias librdkafka accepts for its `sasl.mechanisms` | the Java client's own key |
+| `sasl.mechanism` | `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512` or `OAUTHBEARER` — **required** with a SASL protocol | an alias librdkafka accepts for its `sasl.mechanisms` | the Java client's own key |
 | `sasl.username`, `sasl.password` | the credentials of those three mechanisms — **together** or not at all | librdkafka's own keys | **built into `sasl.jaas.config`**, the only place the Java client takes credentials |
 
 Since [B-32](../backlog/B-32-sasl-plain-and-scram.md). The spelling is librdkafka's for the credentials
@@ -224,6 +224,38 @@ rule existed:
   sasl.password must be set"*; the JVM arm had not heard of either key;
 - credentials for a mechanism that takes none, or for no mechanism at all — librdkafka would drop
   them, and the JVM arm has no login module to put them in.
+
+**OAUTHBEARER takes a token the caller supplies** ([B-33](../backlog/B-33-sasl-oauthbearer.md)):
+`sasl.mechanism=OAUTHBEARER` and an `OAuthBearerTokenProvider` in `ProducerConfig` — a suspending
+function returning `OAuthBearerToken(value, principal, expiresAtMillis, extensions)` — come together
+or not at all, refused at construction on both arms. It is the only shape both arms can honour: the
+native bundle carries the mechanism and not librdkafka's OIDC fetcher, which needs curl. The library
+asks for a token when it needs one and again at about eighty per cent of each token's life, on both
+arms: `ExpiringCredentialRefreshingLogin` on the JVM, the refresh callback on native.
+
+- **On the JVM the provider is found, not handed over.** The Java client instantiates its login
+  callback handler by class name, so the producer registers its provider under a fresh id and writes the
+  id into `sasl.jaas.config` as `kafkakn.provider`; kafkakn's handler reads it back in `configure`.
+  A caller who also writes `sasl.jaas.config` or `sasl.login.callback.handler.class` is refused: two
+  answers to where the token comes from.
+- **On native the refresh callback runs inside `rd_kafka_poll`** — the producer's pump — and cannot
+  suspend, so it starts a coroutine that asks the provider and answers with
+  `rd_kafka_oauthbearer_set_token`.
+- **A provider that throws reaches the caller in its own words.** On the JVM that took the documented
+  channel: an exception out of the handler is replaced by *"An internal error occurred while retrieving
+  token from callback handler"* (`OAuthBearerLoginModule.identifyToken`, 4.3.1, measured before it was
+  read), while `OAuthBearerTokenCallback.error` becomes the `LoginException`'s message. The JVM arm fails
+  at construction — the Java client logs in there; the native arm at the first `send`, after
+  `message.timeout.ms`, with *"Failed to acquire SASL OAUTHBEARER token: …"* and the provider's words.
+  The words travel; the exception object does not, on either arm.
+- **Measured 2026-09-25**, `ci/b-33/run.sh`: 50/50 records with the caller's tokens on each arm; with
+  twelve-second tokens and a broker that re-authenticates OAUTHBEARER connections every ten seconds,
+  four tokens were issued in thirty seconds of sending on each arm, every send succeeding. With the
+  native bridge made to overstate each token's life by an hour, nothing was refreshed, the broker
+  refused the expired token at re-authentication, and the sends stalled until the test's timeout.
+
+Only the producer takes a provider so far; `sasl.mechanism=OAUTHBEARER` on a consumer or an admin client
+is refused at construction.
 
 A wrong password makes `send` throw, and the message **names authentication**. As for an
 unverifiable peer, the native arm reports it through the error callback — measured, *"… SASL

@@ -9,6 +9,7 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
+import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.convert
@@ -49,6 +50,8 @@ import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_conf_set_dr_msg_cb
 import rdkafka.rd_kafka_conf_set_error_cb
+import rdkafka.rd_kafka_conf_set_oauthbearer_token_refresh_cb
+import rdkafka.rd_kafka_conf_set_opaque
 import rdkafka.rd_kafka_destroy
 import rdkafka.rd_kafka_err2str
 import rdkafka.rd_kafka_error_code
@@ -289,6 +292,14 @@ internal class NativeKafkaProducer(
         config.checkSaslKeys()
     }
 
+    /**
+     * The OAUTHBEARER bridge (B-33), before the handle because the handle's configuration names it: its
+     * own scope, since the pump's is declared after the handle, and a [StableRef] librdkafka hands back
+     * to the refresh callback as the opaque.
+     */
+    private val oauthScope = CoroutineScope(Dispatchers.Default)
+    private val oauth = config.oauthBearerTokenProvider?.let { StableRef.create(OAuthBearerBridge(it, oauthScope)) }
+
     private val handle: CPointer<rd_kafka_t> =
         memScoped {
             val conf = rd_kafka_conf_new() ?: error("rd_kafka_conf_new returned null")
@@ -328,6 +339,11 @@ internal class NativeKafkaProducer(
             }
             rd_kafka_conf_set_dr_msg_cb(conf, deliveryReport)
             rd_kafka_conf_set_error_cb(conf, errorReport)
+            oauth?.let {
+                // The refresh callback runs inside rd_kafka_poll - the pump - and finds the bridge here.
+                rd_kafka_conf_set_opaque(conf, it.asCPointer())
+                rd_kafka_conf_set_oauthbearer_token_refresh_cb(conf, oauthBearerRefresh)
+            }
             rd_kafka_new(rd_kafka_type_t.RD_KAFKA_PRODUCER, conf, errstr, ERRSTR.convert())
                 ?: error("rd_kafka_new failed: ${errstr.toKString()}")
         }
@@ -689,7 +705,10 @@ internal class NativeKafkaProducer(
     override suspend fun close() {
         flush()
         pump.cancel()
+        oauthScope.cancel()
         rd_kafka_destroy(handle)
+        // After the handle: librdkafka may call the refresh callback until it is destroyed.
+        oauth?.dispose()
     }
 
     private companion object {

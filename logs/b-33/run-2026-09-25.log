@@ -1,0 +1,25 @@
+=== environment ===
+2026-09-25T04:13:00+02:00
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-oauth-1790302380	TopicId: KX5bYJg1S1mk9gcIUYkrOg	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+  sasl-selftest: wrong passwords refused (PLAIN, SCRAM-SHA-256); PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 over TLS and OAUTHBEARER connect
+
+=== both arms ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+=== records sent with the caller's tokens, counted over plaintext ===
+  jvm       50/50
+  linuxX64  50/50
+
+=== refresh, and a provider that throws ===
+  jvm       4 tokens issued over 115 sends in thirty seconds
+  jvm       the provider threw, and the caller read: KafkaException: Failed to construct kafka producer <- KafkaException: Failed to create new NetworkClient <- KafkaException: javax.security.auth.login.LoginException: OAUTHBEARER token provider failed: the identity provid
+  linuxX64  4 tokens issued over 115 sends in thirty seconds
+  linuxX64  the provider threw, and the caller read: KafkaProduceException: kafkakn-oauth-1790302380: Local: Message timed out; last broker error: Local: Authentication failure: Failed to acquire SASL OAUTHBEARER token: OAUTHBEARER token provider failed: the identity provi
+
+B-33: both arms authenticate with the caller's tokens, refresh them, and show the provider's own failure

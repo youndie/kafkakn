@@ -141,7 +141,9 @@ case "${1:-}" in
     done
     api "$SASL_SSL_BOOTSTRAP" client-sasl-ssl-scram512.properties \
         || { echo "sasl-selftest: SCRAM-SHA-512 over TLS was refused - the fixture is broken" >&2; exit 1; }
-    echo "  sasl-selftest: wrong passwords refused (PLAIN, SCRAM-SHA-256); PLAIN, SCRAM-SHA-256 and SCRAM-SHA-512 over TLS connect"
+    api "$SASL_BOOTSTRAP" client-sasl-oauthbearer.properties \
+        || { echo "sasl-selftest: OAUTHBEARER with an unsigned token was refused - the fixture is broken" >&2; exit 1; }
+    echo "  sasl-selftest: wrong passwords refused (PLAIN, SCRAM-SHA-256); PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 over TLS and OAUTHBEARER connect"
     ;;
   mtls-selftest)
     # B-31's listener, asked the same question first: can it say NO? A listener that was configured

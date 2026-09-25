@@ -13,6 +13,11 @@ package io.github.youndie.kafkakn
  */
 public class ProducerConfig(
     public val properties: Map<String, String>,
+    /**
+     * The caller's source of SASL/OAUTHBEARER tokens, required when `sasl.mechanism` is `OAUTHBEARER`
+     * and refused otherwise ([OAuthBearerTokenProvider], B-33).
+     */
+    public val oauthBearerTokenProvider: OAuthBearerTokenProvider? = null,
 ) {
     public constructor(vararg pairs: Pair<String, String>) : this(pairs.toMap())
 
