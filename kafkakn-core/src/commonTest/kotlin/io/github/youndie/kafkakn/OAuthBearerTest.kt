@@ -11,6 +11,7 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Clock
@@ -103,6 +104,28 @@ class OAuthBearerTest {
             recordArmFact("oauth.refresh.sent", sent.toString())
             assertTrue(issued.load() >= 2, "one token in thirty seconds of twelve-second tokens: nothing refreshed")
         }
+
+    @Test
+    fun a_consumer_or_an_admin_client_refuses_oauthbearer_for_now() {
+        // Only the producer takes a provider; the other two have nowhere to put one, and a mechanism with
+        // no token source is a connection that can never authenticate - refused, not attempted.
+        val oauth =
+            mapOf(
+                "bootstrap.servers" to saslBootstrap,
+                "security.protocol" to "SASL_PLAINTEXT",
+                "sasl.mechanism" to "OAUTHBEARER",
+            )
+        val consumer =
+            assertFailsWith<IllegalArgumentException> {
+                kafkaConsumer(
+                    ConsumerConfig(oauth + ("group.id" to "g")),
+                )
+            }
+        val admin = assertFailsWith<IllegalArgumentException> { kafkaAdmin(AdminConfig(oauth)) }
+        for (refused in listOf(consumer, admin)) {
+            assertTrue(refused.message.orEmpty().contains("OAuthBearerTokenProvider"), refused.message)
+        }
+    }
 
     private class NoTokenForYou : RuntimeException(WORDS) {
         companion object {

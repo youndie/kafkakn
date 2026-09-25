@@ -97,17 +97,16 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (5)
+## Open (4)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-39](docs/backlog/B-39-linux-arm64.md) `[?]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
-| [B-33](docs/backlog/B-33-sasl-oauthbearer.md) `[~]` | SASL OAUTHBEARER with a token the caller supplies | P3 | M | B-32 |
 | [B-38](docs/backlog/B-38-exactly-once-read-process-write.md) `[ ]` | Exactly-once read-process-write: offsets committed inside the producer's transaction | P3 | L | B-30, B-37 |
 | [B-40](docs/backlog/B-40-macos-for-contributors.md) `[ ]` | macOS, so a contributor can run the native arm without the Linux box | P3 | M | - |
 | [B-41](docs/backlog/B-41-metrics-an-operator-can-read.md) `[ ]` | Metrics an operator can read — without the library counting its own successes | P3 | M | - |
 
-## Closed (38)
+## Closed (39)
 
 **It builds, and a test can fail**
 
@@ -162,6 +161,7 @@ verdict.
 
 - [B-31](docs/backlog/B-31-client-certificates.md) `[x]` - Client certificates: a broker that asks who is connecting gets an answer
 - [B-32](docs/backlog/B-32-sasl-plain-and-scram.md) `[x]` - SASL PLAIN and SCRAM: most managed Kafka will not talk to a client without them
+- [B-33](docs/backlog/B-33-sasl-oauthbearer.md) `[x]` - SASL OAUTHBEARER with a token the caller supplies
 - [B-42](docs/backlog/B-42-a-pkcs1-key-works-on-one-arm.md) `[x]` - A PKCS#1 client key: read in the source as working on one arm only
 
 **It can manage what it writes to**
