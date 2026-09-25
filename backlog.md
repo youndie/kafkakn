@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[ ]` | List and describe consumer groups | P2 | M | - |
+| [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md) `[~]` | List and describe consumer groups | P2 | M | - |
 | [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md) `[ ]` | A consumer group's committed offsets and its lag, read by the admin client | P2 | M | B-58 |
 | [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md) `[ ]` | Reset a group's offsets, delete them, and delete a group | P2 | M | B-59 |
 | [B-56](docs/backlog/B-56-static-membership.md) `[ ]` | Static membership: a member that restarts keeps its partitions | P3 | M | - |

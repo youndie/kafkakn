@@ -1,7 +1,7 @@
 ---
 id: B-58
 title: "List and describe consumer groups"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-13-admin
