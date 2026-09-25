@@ -1,7 +1,7 @@
 ---
 id: B-55
 title: "Cooperative rebalancing: partitions move without stopping the whole group"
-status: open
+status: wip
 priority: P2
 size: L
 stage: stage-12-group-protocols
