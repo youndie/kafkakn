@@ -108,6 +108,14 @@ The contract is [consumer-contract](../api/consumer-contract.md).
   arms agree on every one, and `committed` is what `kafka-consumer-groups.sh` shows.
 * **Automated:** `PositionTest` on both arms, compared by `ci/b-49/run.sh`.
 
+### Scenario: A member seeks within what its group gave it
+* **Given:** a lone member of a new group, given the consumer fixture's one partition.
+* **When:** it reads everything and seeks to 7; or its listener seeks to 12 as the partition arrives; or it
+  seeks a partition the group did not give it.
+* **Then:** the next record is 7 in the first case, and the first record it is given is 12 in the second.
+  The third is refused with `IllegalStateException`. The two arms agree.
+* **Automated:** `GroupSeekTest` on both arms, compared by `ci/b-51/run.sh`.
+
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.
 * **When:** one member processes 50 records and leaves, in both directions.
@@ -124,6 +132,5 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 
 ## 5. Out of scope
 
-Seeking under a subscription (refused on both arms; [B-51](../backlog/B-51-seek-under-a-subscription.md)),
-pause and resume, consumer lag, a `Flow` over `poll`, cooperative rebalancing, static membership and
+Pause and resume, consumer lag, a `Flow` over `poll`, cooperative rebalancing, static membership and
 KIP-848: each is its own item in stages 11 and 12. `onLost` is mapped on both arms but not exercised.
