@@ -1,7 +1,7 @@
 ---
 id: B-51
 title: "Seek under a subscription, within the partitions the group gave"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-11-everyday-gaps

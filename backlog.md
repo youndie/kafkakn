@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[ ]` | Seek under a subscription, within the partitions the group gave | P2 | M | B-50 |
+| [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[~]` | Seek under a subscription, within the partitions the group gave | P2 | M | B-50 |
 | [B-52](docs/backlog/B-52-pause-and-resume.md) `[ ]` | Pause and resume partitions without leaving the group | P2 | M | - |
 | [B-53](docs/backlog/B-53-consumer-lag-in-metrics.md) `[ ]` | Consumer metrics, lag first | P2 | M | - |
 | [B-54](docs/backlog/B-54-a-flow-over-poll.md) `[ ]` | A Flow of records, built on poll | P2 | S | - |
