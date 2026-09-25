@@ -133,6 +133,15 @@ The contract is [consumer-contract](../api/consumer-contract.md).
   everything is read.
 * **Automated:** `ConsumerLagTest` on both arms, against the broker's tool in `ci/b-53/run.sh`.
 
+### Scenario: Records as a Flow, cancelled promptly
+* **Given:** a consumer on the fixture.
+* **When:** a caller collects `records()`, or cancels a collector waiting at the end of the partition.
+* **Then:** the twenty records arrive in order, a cancelled collector stops within milliseconds, and the
+  consumer reads again afterwards, on both arms.
+* **Automated:** `RecordsFlowTest` on both arms, by `ci/b-54/run.sh`. A collector slower than
+  `max.poll.interval.ms` is reported to the listener as lost on both arms. What the next poll does differs,
+  and is printed there: B-64.
+
 ### Scenario: A member that commits on revocation hands over without loss or duplicates
 * **Given:** a group with one member on each arm, each committing only in its revocation callback.
 * **When:** one member processes 50 records and leaves, in both directions.
@@ -149,5 +158,5 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 
 ## 5. Out of scope
 
-A `Flow` over `poll`, cooperative rebalancing, static membership and
+Cooperative rebalancing, static membership and
 KIP-848: each is its own item in stages 11 and 12. `onLost` is mapped on both arms but not exercised.
