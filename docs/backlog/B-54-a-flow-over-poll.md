@@ -1,7 +1,7 @@
 ---
 id: B-54
 title: "A Flow of records, built on poll"
-status: wip
+status: done
 priority: P2
 size: S
 stage: stage-11-everyday-gaps
@@ -27,3 +27,24 @@ because the collector was slower than `max.poll.interval.ms`.
   cancellation promise of [B-36](B-36-assign-and-poll.md)).
 - AC: a deliberately slow collector's eviction is observed and documented, not hidden.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/`, `docs/api/consumer-contract.md`.
+
+## Findings (2026-09-25)
+
+- **AC: N records in order.** The fixture's twenty come back in order, on both arms.
+- **AC: cancellation.** A cancelled collector stops in under 20 ms on both arms, and the consumer reads
+  again afterwards. The test bounds the wait and launches the collector in a scope of its own, so a
+  collector that does not stop fails by name instead of hanging the run.
+- **AC: the slow collector's eviction, observed and documented.** Stalled 10 s against a 6 s
+  `max.poll.interval.ms`, the collector:
+  - keeps receiving the rest of the batch it holds, from a partition that is already lost;
+  - sees `onLost` in the listener, on both arms;
+  - **then the arms part.** The JVM rejoins at the next `poll` and re-reads from the start (nothing was
+    committed). Native throws "Maximum application poll interval exceeded".
+
+  Both are in the contract. The native arm disagrees with the reference, so this is filed as
+  [B-64](B-64-native-poll-throws-where-the-jvm-rejoins.md), P1, rather than widening this item.
+- **Mutants:**
+  - emitting only the first record of each batch is killed by `collecting_returns_the_records_in_order`;
+  - swallowing cancellation inside the flow is caught, but **not by name**. The cancelled collector then
+    spins on `poll` until the test JVM runs out of memory, and the run dies with an `OutOfMemoryError`
+    rather than reporting a failure. It counts as detected, not as a named kill.
