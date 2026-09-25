@@ -1,7 +1,7 @@
 ---
 id: B-44
 title: "linuxArm64 binaries need glibc 2.25 because one weak OpenSSL symbol is bound"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-9-targets
@@ -31,3 +31,9 @@ loader enforces it.
 - AC: the floor `ci/b-39/run.sh` pins is what the documents state. If it is lowered, the binary starts
   on `manylinux2014_aarch64`, and the downstream build still produces to the broker from there.
 - Anchors: `ci/b-39/run.sh`, `ci/librdkafka/inside.sh`.
+
+## Decision (2026-09-25, the owner): lower it to 2.17
+
+Asked interactively, with three options: lower it, accept 2.25, or later. Lowered, for parity with x64.
+The acceptance above is the one that counts: the binary starts on `manylinux2014_aarch64` and produces
+to the broker from there.

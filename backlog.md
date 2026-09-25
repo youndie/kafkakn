@@ -101,7 +101,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-44](docs/backlog/B-44-arm64-glibc-floor.md) `[ ]` | linuxArm64 binaries need glibc 2.25 because one weak OpenSSL symbol is bound | P3 | S | - |
+| [B-44](docs/backlog/B-44-arm64-glibc-floor.md) `[~]` | linuxArm64 binaries need glibc 2.25 because one weak OpenSSL symbol is bound | P3 | S | - |
 
 ## Closed (43)
 
