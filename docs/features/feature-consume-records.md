@@ -191,9 +191,11 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Then:** nothing is lost or processed twice against the broker, commits reach every end, and nobody gives
   up everything mid-stream. The broker lists the group as a consumer-protocol group. A lone member on each
   arm reads every record once, its listener hears `+[0] -[0]`, and explicit commits read back. The classic
-  protocol's own keys are refused at construction with `IllegalArgumentException`.
+  protocol's own keys are refused at construction with `IllegalArgumentException`. A member that names the
+  broker's `range` assignor with `group.remote.assignor` runs it, as the broker's tool reads a live group, and
+  an assignor the broker does not offer is refused at the first `poll` with `IllegalArgumentException`.
 * **Automated:** `ConsumerProtocolTest` on both arms, and `CooperativeTest`'s member under the new protocol;
-  run and counted by `ci/b-57/run.sh`.
+  run and counted by `ci/b-57/run.sh`; the assignor read by `ci/b-67/run.sh`.
 
 ### Scenario: A member whose session expires hears onLost and comes back from the group's commit
 * **Given:** a group of one member on each arm, each committing only on revocation, while records are written.

@@ -1,7 +1,7 @@
 ---
 id: B-67
 title: "group.remote.assignor under the KIP-848 protocol, measured"
-status: wip
+status: done
 priority: P3
 size: S
 stage: stage-14-unmeasured-promises
@@ -26,3 +26,23 @@ library points the caller at a key it has not measured.
   in the contract where it cannot be.
 - Anchors: `docs/api/consumer-contract.md`,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/ConsumerProtocolTest.kt`.
+
+## Findings (2026-09-25)
+
+- **AC: with a named assignor the broker knows, the broker's tool shows it as the group's
+  ASSIGNMENT-STRATEGY, on both arms.** `ci/b-67/run.sh` names each arm's group, holds its member for 15 s,
+  and reads `kafka-consumer-groups.sh --describe --state` meanwhile: `range (Stable, 1 member)` on both
+  arms. The admin client's description agrees, and so do the arms.
+- **Found in the reading, not the product: an empty group shows the broker's default.** The first run read
+  the tool after the member had left and saw `uniform`, which made the run red. B-57 had also seen `uniform`
+  on its empty group. The contract now says to read a live group.
+- **AC: a name the broker does not know is refused the same way on both arms.** Measured raw first:
+  - the JVM threw `UnsupportedAssignorException` (*"Supported assignors: uniform, range"*);
+  - native threw `KafkaConsumeException` from a fatal `UNSUPPORTED_ASSIGNOR` (112).
+
+  Both now throw `IllegalArgumentException` at the first `poll`: the caller's argument, refused by the
+  broker, as B-61 treats a refused configuration.
+- **Mutants:** all four killed, each by name:
+  - each arm's mapping switched off: killed by the refusal test;
+  - `group.remote.assignor` dropped before it reaches each client: native was killed by both tests; the
+    JVM by the refusal test, which then read `done`, and by the named test.
