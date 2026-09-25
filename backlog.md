@@ -129,7 +129,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-65](docs/backlog/B-65-onlost-when-the-session-expires.md) `[ ]` | onLost when a member's session expires, measured on both arms | P2 | S | - |
+| [B-65](docs/backlog/B-65-onlost-when-the-session-expires.md) `[~]` | onLost when a member's session expires, measured on both arms | P2 | S | - |
 | [B-66](docs/backlog/B-66-a-fenced-static-members-commit.md) `[ ]` | What a fenced static member's commit does, on both arms | P2 | S | - |
 | [B-67](docs/backlog/B-67-group-remote-assignor.md) `[ ]` | group.remote.assignor under the KIP-848 protocol, measured | P3 | S | B-57 |
 

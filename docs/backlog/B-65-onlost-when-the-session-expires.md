@@ -1,7 +1,7 @@
 ---
 id: B-65
 title: "onLost when a member's session expires, measured on both arms"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-14-unmeasured-promises
