@@ -117,7 +117,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[ ]` | A rebalance listener: say which partitions arrive and which leave | P1 | L | B-48 |
+| [B-50](docs/backlog/B-50-a-rebalance-listener.md) `[~]` | A rebalance listener: say which partitions arrive and which leave | P1 | L | B-48 |
 | [B-46](docs/backlog/B-46-feature-documents-for-what-was-built-after-the-producer.md) `[ ]` | Feature documents for consuming, exactly-once and administration | P2 | M | B-45 |
 | [B-49](docs/backlog/B-49-committed-and-position.md) `[ ]` | Read back committed offsets and the current position | P2 | S | B-48 |
 | [B-51](docs/backlog/B-51-seek-under-a-subscription.md) `[ ]` | Seek under a subscription, within the partitions the group gave | P2 | M | B-50 |

@@ -1,7 +1,7 @@
 ---
 id: B-50
 title: "A rebalance listener: say which partitions arrive and which leave"
-status: open
+status: wip
 priority: P1
 size: L
 stage: stage-11-everyday-gaps
