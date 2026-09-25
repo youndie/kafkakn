@@ -74,6 +74,11 @@ kotlin {
             // coroutines on its own compile classpath to call them at all.
             api(wip.kotlinx.coroutines.core)
         }
+        nativeMain.dependencies {
+            // The native arm's metrics come from librdkafka's statistics, a JSON document (B-41); a
+            // parser of our own for it would be the kind of code this arm exists not to carry.
+            implementation(wip.kotlinx.serialization.json)
+        }
         jvmMain.dependencies {
             // The reference implementation. This arm delegates to it and adds as little as possible.
             implementation(libs.kafka.clients)

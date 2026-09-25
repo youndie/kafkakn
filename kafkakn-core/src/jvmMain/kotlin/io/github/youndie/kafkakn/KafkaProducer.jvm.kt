@@ -345,6 +345,28 @@ internal class JvmKafkaProducer(
             }
         }
 
+    /**
+     * From the Java client's own `metrics()`, group `producer-metrics` (B-41): the buffer's total minus
+     * what is available, `requests-in-flight`, `request-latency-avg` and `connection-count`. A value the
+     * client reports as NaN — a latency before any request — is null here, as it is on native.
+     */
+    override suspend fun metrics(): ProducerMetrics {
+        val values =
+            delegate
+                .metrics()
+                .filterKeys { it.group() == "producer-metrics" }
+                .mapKeys { it.key.name() }
+                .mapValues { (it.value.metricValue() as? Number)?.toDouble()?.takeUnless(Double::isNaN) }
+        val total = values["buffer-total-bytes"]
+        val available = values["buffer-available-bytes"]
+        return ProducerMetrics(
+            bufferedBytes = if (total != null && available != null) (total - available).toLong() else null,
+            requestsInFlight = values["requests-in-flight"]?.toInt(),
+            brokerRoundTripMillis = values["request-latency-avg"],
+            openConnections = values["connection-count"]?.toInt(),
+        )
+    }
+
     override suspend fun flush() {
         // Blocking too, and for longer: it waits for every record in flight.
         withContext(Dispatchers.IO) { delegate.flush() }

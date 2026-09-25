@@ -33,6 +33,7 @@ interface KafkaProducer {
     suspend fun sendOffsetsToTransaction(offsets: Map<TopicPartition, Long>, group: ConsumerGroupMetadata)   // B-38
     suspend fun commitTransaction()
     suspend fun abortTransaction()
+    suspend fun metrics(): ProducerMetrics                         // B-41
     suspend fun flush()
     suspend fun close()
 }
@@ -350,6 +351,36 @@ the same `transactional.id`. On each arm, under `read_committed` every input rec
 **exactly once** (300 of 300, 300 distinct); under `read_uncommitted` the aborted attempts showed (8 on
 the JVM, 16 on native) — exactly the sizes of the batches the stops abandoned. With the native call made
 to add no offsets, the output held 395 records for 300 inputs.
+
+### `metrics`
+
+`suspend fun metrics(): ProducerMetrics` — the machinery, never an outcome
+([B-41](../backlog/B-41-metrics-an-operator-can-read.md)). A count of successes is the number that read
+"complete success" while a quarter of the input was lost, and `scripts/no_delivery_counters.py` still
+refuses one (its self-test still flags `deliveredCount`). Four values, each read from the arm's own
+client, null where that source has not said:
+
+| metric | JVM reads | native reads |
+|---|---|---|
+| `bufferedBytes` | `buffer-total-bytes` − `buffer-available-bytes` | `msg_size` |
+| `requestsInFlight` | `requests-in-flight` | Σ brokers' `waitresp_cnt` |
+| `brokerRoundTripMillis` | `request-latency-avg` | mean of brokers' `rtt.avg` (µs → ms) |
+| `openConnections` | `connection-count` | brokers in state `UP` |
+
+The native arm turns librdkafka's statistics on at one second unless the caller set
+`statistics.interval.ms`; librdkafka's own default is off, and with it there would be no metrics.
+
+**Same names, not quite the same measurements — measured 2026-09-25, `ci/b-41/run.sh`, one load, two
+runs:**
+
+| | JVM | native | the difference, and its tolerance |
+|---|---|---|---|
+| after `flush`: bytes, requests | 0, 0 | 0, 0 | none: exactly zero on both |
+| under load: max bytes buffered | 245 760, 245 760 | 153 600, 163 840 | both above zero; the peaks are the clients' own batching |
+| under load: round trip | 2.63, 9.92 ms | 2.13, 1.96 ms | within a factor of ten — the two runs gave ratios of 1.2 and 5.1, so a tighter bound would be a coin toss, and ten is what separates "the same order" from a defect |
+| at rest / after: round trip | 6.0 / 2.62, 15.0 / 9.68 ms | null / null | librdkafka's `rtt` covers the last statistics interval only, and an idle one has none; the Java client averages over its thirty-second window |
+| under load: max requests in flight | 5 | 0 | the Java value is read live, librdkafka's once a second at emission — not compared |
+| open connections | 2 | 1 | one broker; the Java client appears to keep its bootstrap socket open beside the broker's, librdkafka does not — inferred from the counts, not traced. Tolerance: native ≤ JVM ≤ native + 1 |
 
 ### `flush`
 

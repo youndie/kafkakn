@@ -1,7 +1,7 @@
 ---
 id: B-41
 title: "Metrics an operator can read — without the library counting its own successes"
-status: wip
+status: done
 priority: P3
 size: M
 stage: stage-6-real-deployments
@@ -30,3 +30,29 @@ document every `statistics.interval.ms` through `rd_kafka_conf_set_stats_cb` on 
 - AC: `scripts/no_delivery_counters.py` still passes, and its self-test still fails the counter it
   exists to refuse.
 - Anchors: `scripts/no_delivery_counters.py`, `docs/api/producer-contract.md`.
+
+## Findings (2026-09-25)
+
+**What may be exposed was decided first.** Four measures of machinery: buffered bytes, requests in
+flight, broker round trip, open connections. No count of outcomes. `no_delivery_counters.py` passes, and
+its self-test still flags `deliveredCount`.
+
+**Measured under one load, `ci/b-41/run.sh`.** The table is in
+[producer-contract](../api/producer-contract.md) `metrics`.
+- After `flush` both arms read exactly zero bytes and zero requests.
+- Under load both buffered bytes, and their round trips agreed within a factor of 1.2 in one run and
+  5.1 in the next. The stated tolerance is ten.
+
+Three differences are written down as the arms', each with its reason:
+- the round trip at rest: librdkafka's covers its last statistics interval only;
+- requests in flight under load: librdkafka's is sampled once a second;
+- open connections, 2 against 1 for one broker: the Java client's bootstrap socket, inferred from the
+  counts and not traced.
+
+**Changed by measurement.** The first definitions were a round trip compared after `flush` and a
+"connected brokers" count that excluded librdkafka's bootstrap entry. The first run refuted both; the
+contract now says what each reading is.
+
+**On native the statistics are on by default** (one second) unless the caller sets
+`statistics.interval.ms`. The JSON is parsed with `kotlinx-serialization-json`, now a dependency of the
+native arm only.

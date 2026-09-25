@@ -72,6 +72,9 @@ public interface KafkaProducer {
     /** Aborts: none of the transaction's records become visible to `read_committed` readers. */
     public suspend fun abortTransaction()
 
+    /** The producer's machinery now: buffered bytes, requests in flight, broker round trip, connections ([ProducerMetrics]). */
+    public suspend fun metrics(): ProducerMetrics
+
     /** Returns when every record handed to [send] has been acknowledged or has failed. */
     public suspend fun flush()
 
@@ -113,6 +116,8 @@ internal object UnimplementedProducer : KafkaProducer {
     override suspend fun commitTransaction(): Unit = TODO("no producer yet")
 
     override suspend fun abortTransaction(): Unit = TODO("no producer yet")
+
+    override suspend fun metrics(): ProducerMetrics = TODO("no producer yet")
 
     override suspend fun flush(): Unit = TODO("no producer yet")
 
