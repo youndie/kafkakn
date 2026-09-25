@@ -107,6 +107,24 @@ class AdminConfigsTest {
                             }
                         recordObservation("configs.refused.$what", compared)
                     }
+                    // A sentinel change, waited for: changes reach the broker in order, so once it is visible any
+                    // half of a refused call that had been applied would be visible too. Read at once, a wrongly
+                    // applied change still on its way would pass for one refused.
+                    admin.alterTopicConfigs(topic, set = mapOf("segment.jitter.ms" to "1"))
+                    val started = TimeSource.Monotonic.markNow()
+                    while (admin
+                            .describeTopicConfigs(
+                                listOf(topic),
+                            ).getValue(topic)
+                            .getValue("segment.jitter.ms")
+                            .value !=
+                        "1"
+                    ) {
+                        check(
+                            started.elapsedNow() < VISIBLE_WITHIN,
+                        ) { "the sentinel was not visible after $VISIBLE_WITHIN" }
+                        delay(RETRY)
+                    }
                     val after = watched(admin, topic)
                     recordObservation("configs.refused.after", after.render())
                     assertEquals(
