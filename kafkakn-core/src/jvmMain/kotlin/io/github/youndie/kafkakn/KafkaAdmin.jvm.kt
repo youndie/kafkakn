@@ -6,12 +6,17 @@ import kotlinx.coroutines.withContext
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.ListGroupsOptions
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.KafkaFuture
+import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.errors.GroupIdNotFoundException
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException
+import org.apache.kafka.common.errors.UnknownMemberIdException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
 import org.apache.kafka.clients.admin.OffsetSpec as ApacheOffsetSpec
 import org.apache.kafka.common.TopicPartition as ApacheTopicPartition
+import org.apache.kafka.common.errors.GroupNotEmptyException as ApacheGroupNotEmptyException
 import org.apache.kafka.common.errors.TopicExistsException as ApacheTopicExistsException
 
 /** The JVM arm of the admin client: `Admin`, delegated to, as the producer is. */
@@ -180,6 +185,58 @@ internal class JvmKafkaAdmin(
                 .takeIf { it >= 0 }
         }
     }
+
+    override suspend fun alterConsumerGroupOffsets(
+        groupId: String,
+        offsets: Map<TopicPartition, Long>,
+    ) {
+        requireCommittable(offsets)
+        val moved = offsets.entries.associate { (partition, offset) -> partition.java() to OffsetAndMetadata(offset) }
+        refusedWhileActive("alterConsumerGroupOffsets") {
+            answer("alterConsumerGroupOffsets") { delegate.alterConsumerGroupOffsets(groupId, moved).all() }
+        }
+    }
+
+    override suspend fun deleteConsumerGroupOffsets(
+        groupId: String,
+        partitions: List<TopicPartition>,
+    ) {
+        refusedWhileActive("deleteConsumerGroupOffsets") {
+            answer("deleteConsumerGroupOffsets") {
+                delegate.deleteConsumerGroupOffsets(groupId, partitions.map { it.java() }.toSet()).all()
+            }
+        }
+    }
+
+    override suspend fun deleteConsumerGroups(groupIds: List<String>) {
+        refusedWhileActive("deleteConsumerGroups") {
+            answer("deleteConsumerGroups") { delegate.deleteConsumerGroups(groupIds).all() }
+        }
+    }
+
+    /**
+     * The broker's refusal to touch a group that has an active member, in the one type both arms throw (B-60).
+     * It says so three ways: `UNKNOWN_MEMBER_ID` to an altered offset (the admin commits as no member, and a
+     * group with members accepts commits only from them), `GROUP_SUBSCRIBED_TO_TOPIC` to a deleted one, and
+     * `NON_EMPTY_GROUP` to a deleted group.
+     */
+    private suspend fun <T> refusedWhileActive(
+        what: String,
+        call: suspend () -> T,
+    ): T =
+        try {
+            call()
+        } catch (refused: ApiException) {
+            if (refused is UnknownMemberIdException ||
+                refused is GroupSubscribedToTopicException ||
+                refused is ApacheGroupNotEmptyException
+            ) {
+                throw GroupNotEmptyException("$what: ${refused.message}", refused)
+            }
+            throw refused
+        }
+
+    private fun TopicPartition.java() = ApacheTopicPartition(topic, partition)
 
     override suspend fun close() {
         // `close` waits for pending requests; on a thread that exists for waiting.
