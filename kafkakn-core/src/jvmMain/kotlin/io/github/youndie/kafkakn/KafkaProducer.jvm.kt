@@ -315,6 +315,23 @@ internal class JvmKafkaProducer(
 
     override suspend fun beginTransaction() = transactional { delegate.beginTransaction() }
 
+    override suspend fun sendOffsetsToTransaction(
+        offsets: Map<TopicPartition, Long>,
+        group: ConsumerGroupMetadata,
+    ) {
+        val apache =
+            (group as? JvmGroupMetadata)?.apache
+                ?: throw IllegalArgumentException("group metadata from another arm or another library: $group")
+        val positions =
+            offsets.entries.associate { (partition, next) ->
+                org.apache.kafka.common
+                    .TopicPartition(partition.topic, partition.partition) to
+                    org.apache.kafka.clients.consumer
+                        .OffsetAndMetadata(next)
+            }
+        transactional { delegate.sendOffsetsToTransaction(positions, apache) }
+    }
+
     override suspend fun commitTransaction() = transactional { delegate.commitTransaction() }
 
     override suspend fun abortTransaction() = transactional { delegate.abortTransaction() }

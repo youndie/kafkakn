@@ -38,6 +38,14 @@ public interface KafkaConsumer {
      */
     public suspend fun commit()
 
+    /**
+     * What a transactional producer needs to commit this consumer's progress inside its transaction —
+     * [KafkaProducer.sendOffsetsToTransaction] ([B-38](../../../../../../../docs/backlog/B-38-exactly-once-read-process-write.md)).
+     * Opaque, taken fresh for each transaction, and good only for a producer on the same arm in the
+     * same process. Needs a `group.id` the caller named.
+     */
+    public suspend fun groupMetadata(): ConsumerGroupMetadata
+
     /** The partitions this consumer holds now: its [assign]ment, or its share of a group. */
     public suspend fun assignment(): List<TopicPartition>
 
@@ -172,4 +180,14 @@ public class ConsumerRecord(
     override fun toString(): String =
         "ConsumerRecord($topic-$partition@$offset, key=${key?.size ?: "null"} bytes, " +
             "value=${value?.size ?: "null"} bytes, headers=${headers.size})"
+}
+
+/**
+ * A consumer's group membership as its client describes it: group id, generation, member id. Opaque on
+ * purpose — each arm carries its own client's object, and nothing here reads it apart from handing it
+ * to [KafkaProducer.sendOffsetsToTransaction].
+ */
+public abstract class ConsumerGroupMetadata internal constructor() {
+    /** The group the progress belongs to. */
+    public abstract val groupId: String
 }

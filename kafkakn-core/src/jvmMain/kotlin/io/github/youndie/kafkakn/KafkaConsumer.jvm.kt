@@ -94,6 +94,11 @@ internal class JvmKafkaConsumer(
         withContext(lane) { delegate.commitSync() }
     }
 
+    override suspend fun groupMetadata(): ConsumerGroupMetadata {
+        requireGroup(namesAGroup, "groupMetadata")
+        return JvmGroupMetadata(withContext(lane) { delegate.groupMetadata() })
+    }
+
     override suspend fun assignment(): List<TopicPartition> =
         withContext(lane) {
             delegate.assignment().map { TopicPartition(it.topic(), it.partition()) }.sortedWith(PARTITION_ORDER)
@@ -184,4 +189,11 @@ internal class JvmKafkaConsumer(
             value = value(),
             headers = headers().map { RecordHeader(it.key(), it.value()) },
         )
+}
+
+/** The Java consumer's own group metadata, carried to the producer untouched (B-38). */
+internal class JvmGroupMetadata(
+    val apache: org.apache.kafka.clients.consumer.ConsumerGroupMetadata,
+) : ConsumerGroupMetadata() {
+    override val groupId: String get() = apache.groupId()
 }
