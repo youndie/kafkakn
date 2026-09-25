@@ -1,0 +1,35 @@
+=== environment ===
+2026-09-25T05:39:46+02:00
+
+=== the gate that keeps a success count out, and its self-test ===
+public surface: 11 files, 0 delivery counters
+  sample with a counter -> flagged ['deliveredCount']
+  sample without one, that names one in a comment -> flagged []
+selftest: PASS
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+Topic: kafkakn-metrics-1790307586	TopicId: _nf1cD68TCK4tm_YuHcQbA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+
+=== both arms, under one load ===
+  jvmTest        exit=0
+  linuxX64Test   exit=0
+
+  metric                             jvm                linuxX64          
+  rest.bufferedBytes                 0                  0                 
+  rest.requestsInFlight              0                  0                 
+  rest.brokerRoundTripMillis         15.0               null              
+  rest.openConnections               2                  1                 
+  load.maxBufferedBytes              245760             163840            
+  load.maxRequestsInFlight           5                  0                 
+  load.brokerRoundTripMillis         9.920554272517322  1.955             
+  after.bufferedBytes                0                  0                 
+  after.requestsInFlight             0                  0                 
+  after.brokerRoundTripMillis        9.677678571428572  null              
+  after.openConnections              2                  1                 
+
+  round trip: jvm 9.92 ms, native 1.96 ms, ratio 5.1 (tolerance 10)
+
+B-41: both arms read the same machinery within the stated tolerance, and no success count exists

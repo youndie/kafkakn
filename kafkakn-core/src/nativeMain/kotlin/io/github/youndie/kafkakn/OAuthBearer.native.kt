@@ -82,9 +82,9 @@ internal class OAuthBearerBridge(
     }
 }
 
-/** librdkafka's refresh callback: find the bridge through the opaque, and let it fetch. */
+/** librdkafka's refresh callback: find the bridge through the handle's context, and let it fetch. */
 internal val oauthBearerRefresh =
     staticCFunction<CPointer<rd_kafka_t>?, CPointer<ByteVar>?, COpaquePointer?, Unit> { handle, _, opaque ->
-        val bridge = opaque?.asStableRef<OAuthBearerBridge>()?.get() ?: return@staticCFunction
+        val bridge = opaque?.asStableRef<HandleContext>()?.get()?.oauth ?: return@staticCFunction
         bridge.refresh(handle ?: return@staticCFunction)
     }

@@ -52,6 +52,7 @@ import rdkafka.rd_kafka_conf_set_dr_msg_cb
 import rdkafka.rd_kafka_conf_set_error_cb
 import rdkafka.rd_kafka_conf_set_oauthbearer_token_refresh_cb
 import rdkafka.rd_kafka_conf_set_opaque
+import rdkafka.rd_kafka_conf_set_stats_cb
 import rdkafka.rd_kafka_consumer_group_metadata_destroy
 import rdkafka.rd_kafka_consumer_group_metadata_read
 import rdkafka.rd_kafka_consumer_group_metadata_t
@@ -305,7 +306,10 @@ internal class NativeKafkaProducer(
      * to the refresh callback as the opaque.
      */
     private val oauthScope = CoroutineScope(Dispatchers.Default)
-    private val oauth = config.oauthBearerTokenProvider?.let { StableRef.create(OAuthBearerBridge(it, oauthScope)) }
+
+    /** The handle's opaque: the OAUTHBEARER bridge if there is one, and the latest statistics (B-41). */
+    private val context =
+        StableRef.create(HandleContext(config.oauthBearerTokenProvider?.let { OAuthBearerBridge(it, oauthScope) }))
 
     private val handle: CPointer<rd_kafka_t> =
         memScoped {
@@ -324,6 +328,9 @@ internal class NativeKafkaProducer(
                 buildMap {
                     put("partitioner", partitionerFor(config))
                     idempotenceFor(config)?.let { put("enable.idempotence", it) }
+                    // Statistics once a second, unless the caller chose: without them the native arm has
+                    // no metrics at all - librdkafka's default interval is 0, off (B-41).
+                    if ("statistics.interval.ms" !in config.properties) put("statistics.interval.ms", STATISTICS_MS)
                 }
             (config.properties + defaults).forEach { (key, value) ->
                 // librdkafka reports an unknown key here, so this arm refuses it at construction too -
@@ -346,11 +353,10 @@ internal class NativeKafkaProducer(
             }
             rd_kafka_conf_set_dr_msg_cb(conf, deliveryReport)
             rd_kafka_conf_set_error_cb(conf, errorReport)
-            oauth?.let {
-                // The refresh callback runs inside rd_kafka_poll - the pump - and finds the bridge here.
-                rd_kafka_conf_set_opaque(conf, it.asCPointer())
-                rd_kafka_conf_set_oauthbearer_token_refresh_cb(conf, oauthBearerRefresh)
-            }
+            // Callbacks that run inside rd_kafka_poll - the pump - find this producer's state here.
+            rd_kafka_conf_set_opaque(conf, context.asCPointer())
+            rd_kafka_conf_set_stats_cb(conf, statisticsReport)
+            if (context.get().oauth != null) rd_kafka_conf_set_oauthbearer_token_refresh_cb(conf, oauthBearerRefresh)
             rd_kafka_new(rd_kafka_type_t.RD_KAFKA_PRODUCER, conf, errstr, ERRSTR.convert())
                 ?: error("rd_kafka_new failed: ${errstr.toKString()}")
         }
@@ -728,6 +734,9 @@ internal class NativeKafkaProducer(
         }
     }
 
+    /** From the latest statistics document librdkafka emitted, parsed now (B-41). */
+    override suspend fun metrics(): ProducerMetrics = metricsFrom(context.get().statistics.value)
+
     override suspend fun flush() {
         // rd_kafka_flush returns an ERROR CODE, not a count. Reading it as "how many are left" is
         // how a sibling measurement printed -185, which is a timeout wearing a quantity's clothes.
@@ -752,7 +761,7 @@ internal class NativeKafkaProducer(
         oauthScope.cancel()
         rd_kafka_destroy(handle)
         // After the handle: librdkafka may call the refresh callback until it is destroyed.
-        oauth?.dispose()
+        context.dispose()
     }
 
     private companion object {
@@ -761,6 +770,7 @@ internal class NativeKafkaProducer(
         /** Longer than any value librdkafka keeps for a single key; a longer one reads as absent. */
         const val CONFIG_VALUE_MAX = 512
         const val FLUSH_MS = 30_000
+        const val STATISTICS_MS = "1000"
 
         /** librdkafka's own default for `socket.timeout.ms`, for a value that somehow reads as absent. */
         const val DEFAULT_SOCKET_TIMEOUT_MS = 60_000

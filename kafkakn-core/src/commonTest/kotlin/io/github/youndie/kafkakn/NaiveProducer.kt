@@ -61,6 +61,8 @@ internal class NaiveProducer(
 
     override suspend fun abortTransaction() = delegate.abortTransaction()
 
+    override suspend fun metrics() = delegate.metrics()
+
     override suspend fun flush() = delegate.flush()
 
     override suspend fun close() = delegate.close()
