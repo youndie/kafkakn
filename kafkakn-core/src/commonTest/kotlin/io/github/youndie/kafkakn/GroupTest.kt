@@ -34,14 +34,26 @@ class GroupTest {
         runTest(timeout = TIMEOUT) {
             val topic = testEnv("KAFKAKN_GROUP_TOPIC") ?: consumeTopic
             val partitions = testEnv("KAFKAKN_GROUP_PARTITIONS")?.toInt() ?: 1
-            val runFor = testEnv("KAFKAKN_GROUP_RUN_MS")?.toLong()?.milliseconds ?: DEFAULT_RUN
+            val leaveAfter = testEnv("KAFKAKN_GROUP_LEAVE_MS")?.toLong()?.milliseconds ?: DEFAULT_LEAVE
+            // Records per partition once the writer is done: the staying member stays until it has seen
+            // the last of every partition, not for a fixed time. A fixed time made the result depend on
+            // how fast Gradle started - measured: the same run passed once and lost 465 records the next.
+            val end = testEnv("KAFKAKN_GROUP_END")?.toLong() ?: CONSUME_COUNT.toLong()
             val group = "kafkakn-group-$armName-${randomSuffix()}"
             val leaving = MemberLog()
             val staying = MemberLog()
             withContext(Dispatchers.Default) {
                 coroutineScope {
-                    launch { runMember(group, topic, runFor / 3, abandonLastBatch = true, leaving) }
-                    launch { runMember(group, topic, runFor, abandonLastBatch = false, staying) }
+                    launch { runMember(group, topic, leaving, leaveAfter = leaveAfter) }
+                    launch {
+                        runMember(
+                            group,
+                            topic,
+                            staying,
+                            stayUntilEnd = partitions to end,
+                            together = listOf(leaving, staying),
+                        )
+                    }
                 }
             }
             val seen = leaving.seen + staying.seen
@@ -52,13 +64,10 @@ class GroupTest {
             recordArmFact("group.leaving.held", leaving.history())
             recordArmFact("group.staying.held", staying.history())
 
-            assertTrue(
-                leaving.held.any { it.isNotEmpty() },
-                "the leaving member never held a partition: ${leaving.history()}",
-            )
             assertEquals(partitions, staying.held.last().size, "after the handover: ${staying.history()}")
             if (partitions > 1) {
-                // The split: at some moment the leaving member held some of the partitions, not all.
+                // The split: at some moment the leaving member held some of the partitions, not all. With
+                // one partition there is nothing to split, and whichever member asked first keeps it.
                 assertTrue(
                     leaving.held.any { it.isNotEmpty() && it.size < partitions },
                     "the group never split: ${leaving.history()} / ${staying.history()}",
@@ -81,14 +90,15 @@ class GroupTest {
                 return@runTest
             }
             val log = MemberLog()
+            val topic = testEnv("KAFKAKN_MIXED_TOPIC") ?: error("KAFKAKN_MIXED_TOPIC")
             withContext(Dispatchers.Default) {
-                runMember(
-                    group = group,
-                    topic = testEnv("KAFKAKN_MIXED_TOPIC") ?: error("KAFKAKN_MIXED_TOPIC"),
-                    runFor = testEnv("KAFKAKN_MIXED_RUN_MS")!!.toLong().milliseconds,
-                    abandonLastBatch = testEnv("KAFKAKN_MIXED_LEAVES") == "true",
-                    log = log,
-                )
+                val leave = testEnv("KAFKAKN_MIXED_LEAVE_MS")?.toLong()?.milliseconds
+                if (leave != null) {
+                    runMember(group, topic, log, leaveAfter = leave)
+                } else {
+                    val partitions = testEnv("KAFKAKN_MIXED_PARTITIONS")!!.toInt()
+                    runMember(group, topic, log, stayUntilEnd = partitions to testEnv("KAFKAKN_MIXED_END")!!.toLong())
+                }
             }
             recordArmFact("group.mixed", "member")
             recordArmFact("group.mixed.seen", log.seen.distinct().joinToString(";"))
@@ -143,15 +153,26 @@ class GroupTest {
         val held = mutableListOf<List<TopicPartition>>()
         val abandoned = mutableListOf<String>()
 
+        fun holdsAll(partitions: Int): Boolean = held.lastOrNull()?.size == partitions
+
         fun history() = held.joinToString("|") { taken -> taken.joinToString(",", "[", "]") { "${it.partition}" } }
     }
 
+    /**
+     * One member: subscribe, and poll-record-commit until it leaves.
+     *
+     * A member given [leaveAfter] leaves then, the way a crash would: one more batch read and never
+     * committed, kept apart from what it saw. A member given [stayUntilEnd] — partitions to records per
+     * partition — stays until it holds every partition and has seen the last record of each, with
+     * [STAY_AT_MOST] as the bound past which the test fails rather than waits.
+     */
     private suspend fun runMember(
         group: String,
         topic: String,
-        runFor: Duration,
-        abandonLastBatch: Boolean,
         log: MemberLog,
+        leaveAfter: Duration? = null,
+        stayUntilEnd: Pair<Int, Long>? = null,
+        together: List<MemberLog> = listOf(log),
     ) {
         val consumer =
             kafkaConsumer(
@@ -165,14 +186,22 @@ class GroupTest {
             )
         try {
             consumer.subscribe(listOf(topic))
-            val deadline = TimeSource.Monotonic.markNow() + runFor
-            while (deadline.hasNotPassedNow()) {
+            val started = TimeSource.Monotonic.markNow()
+            while (true) {
+                if (leaveAfter != null && started.elapsedNow() >= leaveAfter) break
+                // Done when this member holds every partition and the last record of each has been
+                // seen by the group as this process knows it - `together`. Two stop rules were tried and
+                // measured wrong first: a fixed time (Gradle started faster once and the stayer left
+                // before the writer finished: 465 lost), and "no record for five seconds" (the stayer
+                // joined before the writer started, heard nothing, and left: 565 lost).
+                if (stayUntilEnd != null && log.holdsAll(stayUntilEnd.first) && together.sawTheEnd(stayUntilEnd)) break
+                check(started.elapsedNow() < STAY_AT_MOST) { "gave up after $STAY_AT_MOST: ${log.history()}" }
                 val batch = consumer.poll(POLL)
                 note(consumer, log)
                 log.seen += batch.map { "${it.partition}:${it.offset}" }
                 consumer.commit()
             }
-            if (abandonLastBatch) {
+            if (leaveAfter != null) {
                 // The crash: one more batch read - processed, as far as the caller is concerned - and
                 // never committed. Whoever takes these partitions must deliver it again.
                 val until = TimeSource.Monotonic.markNow() + LAST_BATCH_WAIT
@@ -193,6 +222,12 @@ class GroupTest {
         }
     }
 
+    /** The last record of every partition has been seen by one of these members. */
+    private fun List<MemberLog>.sawTheEnd(end: Pair<Int, Long>): Boolean {
+        val (partitions, records) = end
+        return (0 until partitions).all { partition -> any { "$partition:${records - 1}" in it.seen } }
+    }
+
     private suspend fun note(
         consumer: KafkaConsumer,
         log: MemberLog,
@@ -203,7 +238,9 @@ class GroupTest {
 
     private companion object {
         val TIMEOUT = 3.minutes
-        val DEFAULT_RUN = 12.seconds
+        val DEFAULT_LEAVE = 4.seconds
+        val STAY_AT_MOST = 2.minutes
+
         val POLL = 200.milliseconds
         val LAST_BATCH_WAIT = 5.seconds
     }

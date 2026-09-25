@@ -55,19 +55,30 @@ rm -rf "$OBS"
 
 echo
 echo "=== one group per arm: two members, one leaves the way a crash would ==="
+# Built first, and the native arm run as its test binary rather than through Gradle: the writer runs for
+# about forty seconds from the moment it starts, and a member that joins after it has finished has no
+# batch to abandon. Measured: with the native task compiling and linking inside the window, the leaving
+# native member found nothing left to read, and the crash had nothing to redeliver.
+./gradlew --console=plain :kafkakn-core:jvmTestClasses :kafkakn-core:linkDebugTestLinuxX64 > build/b-37-build.out 2>&1 \
+    || { tail -20 build/b-37-build.out; exit 1; }
 for arm in jvm linuxX64; do
-    task=${arm}Test
-    [ "$arm" = jvm ] || task=linuxX64Test
     topic=kafkakn-group-$arm-$STAMP
     PARTITIONS=$PARTITIONS bash "$H" topic "$topic" >/dev/null
-    bash "$H" records trickle "$topic" "$PARTITIONS" 480 40 > "build/b-37-$arm-trickle.out" &
+    export KAFKAKN_GROUP_TOPIC=$topic KAFKAKN_GROUP_PARTITIONS=$PARTITIONS KAFKAKN_GROUP_LEAVE_MS=10000 KAFKAKN_GROUP_END=200
+    bash "$H" records trickle "$topic" "$PARTITIONS" 800 40 > "build/b-37-$arm-trickle.out" &
     trickle=$!
-    KAFKAKN_GROUP_TOPIC=$topic KAFKAKN_GROUP_PARTITIONS=$PARTITIONS KAFKAKN_GROUP_RUN_MS=30000 \
-        ./gradlew --console=plain ":kafkakn-core:$task" --rerun --tests '*GroupTest.two_members*' > "build/b-37-$task.out" 2>&1
+    if [ "$arm" = jvm ]; then
+        ./gradlew --console=plain :kafkakn-core:jvmTest --rerun --tests '*GroupTest.two_members*' > "build/b-37-$arm.out" 2>&1
+    else
+        ( cd kafkakn-core && ./build/bin/linuxX64/debugTest/test.kexe \
+            --ktest_filter='io.github.youndie.kafkakn.GroupTest.two_members_share_the_partitions_hand_them_over_and_lose_nothing' ) \
+            > "build/b-37-$arm.out" 2>&1
+    fi
     code=$?
+    unset KAFKAKN_GROUP_TOPIC KAFKAKN_GROUP_PARTITIONS KAFKAKN_GROUP_LEAVE_MS KAFKAKN_GROUP_END
     wait "$trickle"
-    printf '  %-14s exit=%s, %s\n' "$task" "$code" "$(cat "build/b-37-$arm-trickle.out")"
-    [ "$code" -eq 0 ] || { tail -30 "build/b-37-$task.out"; echo "  THE SUITE FAILED on $task"; exit 1; }
+    printf '  %-9s exit=%s, %s\n' "$arm" "$code" "$(cat "build/b-37-$arm-trickle.out")"
+    [ "$code" -eq 0 ] || { tail -30 "build/b-37-$arm.out"; echo "  THE MEMBERS FAILED on $arm"; exit 1; }
     f="$OBS/$arm-local.txt"
     sed -n 's/^group\.seen=//p' "$f" | tail -1 > "build/b-37-$arm-seen.raw"
     abandoned=$(sed -n 's/^group\.abandoned=//p' "$f" | tail -1)
@@ -79,28 +90,32 @@ for arm in jvm linuxX64; do
     [ -n "$abandoned" ] || bad "$arm: the leaving member abandoned nothing - the crash had nothing to redeliver"
     printf '  %-9s abandoned uncommitted by the leaving member: %s\n' "$arm" "$abandoned"
     check "$arm" "$topic" "$(sed -n 's/^group\.id=//p' "$f" | tail -1)" "build/b-37-$arm-seen.raw"
+    missing=0
     for record in $(echo "$abandoned" | tr ';' ' '); do
-        grep -qx "$record" "build/b-37-$arm-seen.txt" || bad "$arm: abandoned $record was never delivered again"
+        grep -qx "$record" "build/b-37-$arm-seen.txt" || { bad "$arm: abandoned $record was never delivered again"; missing=1; }
     done
-    echo "  $arm       every abandoned record was delivered again, to the member that stayed"
+    # Said only when true: a summary line printed after a failure is the kind that gets read instead of it.
+    [ "$missing" -eq 1 ] || [ -z "$abandoned" ] || printf '  %-9s every abandoned record was delivered again, to the member that stayed\n' "$arm"
 done
 
 echo
 echo "=== one group, one member on each arm, at the same time ==="
-./gradlew --console=plain :kafkakn-core:linkDebugTestLinuxX64 > build/b-37-link.out 2>&1 || { tail -20 build/b-37-link.out; exit 1; }
 MIXED_TOPIC=kafkakn-mixed-$STAMP
 MIXED_GROUP=kafkakn-mixed-$STAMP
 PARTITIONS=$PARTITIONS bash "$H" topic "$MIXED_TOPIC" >/dev/null
 rm -rf "$OBS"
-# The JVM member first, for fifty seconds; the native one joins twenty seconds in, with the trickle, and
-# leaves fifteen seconds later without committing its last batch. The JVM member must end with all four.
-KAFKAKN_MIXED_GROUP=$MIXED_GROUP KAFKAKN_MIXED_TOPIC=$MIXED_TOPIC KAFKAKN_MIXED_RUN_MS=50000 KAFKAKN_MIXED_LEAVES=false \
+# The JVM member first; it stays until it holds all four partitions and has seen the last record of
+# each. The native one joins twenty seconds in, with the trickle, and leaves fifteen seconds later
+# without committing its last batch. Stopping the stayer on the data rather than a clock is measured
+# necessity: with fixed durations the same run passed once and lost 465 records the next, when Gradle
+# happened to start faster.
+KAFKAKN_MIXED_GROUP=$MIXED_GROUP KAFKAKN_MIXED_TOPIC=$MIXED_TOPIC KAFKAKN_MIXED_PARTITIONS=$PARTITIONS KAFKAKN_MIXED_END=150 \
     ./gradlew --console=plain :kafkakn-core:jvmTest --rerun --tests '*GroupTest.a_member_of_a_group*' > build/b-37-mixed-jvm.out 2>&1 &
 jvm=$!
 sleep 20
 bash "$H" records trickle "$MIXED_TOPIC" "$PARTITIONS" 600 40 > build/b-37-mixed-trickle.out &
 trickle=$!
-( cd kafkakn-core && KAFKAKN_MIXED_GROUP=$MIXED_GROUP KAFKAKN_MIXED_TOPIC=$MIXED_TOPIC KAFKAKN_MIXED_RUN_MS=15000 KAFKAKN_MIXED_LEAVES=true \
+( cd kafkakn-core && KAFKAKN_MIXED_GROUP=$MIXED_GROUP KAFKAKN_MIXED_TOPIC=$MIXED_TOPIC KAFKAKN_MIXED_LEAVE_MS=15000 \
     ./build/bin/linuxX64/debugTest/test.kexe \
     --ktest_filter='io.github.youndie.kafkakn.GroupTest.a_member_of_a_group_whose_other_member_is_the_other_arm' ) > build/b-37-mixed-native.out 2>&1
 native=$?
@@ -123,10 +138,11 @@ check mixed "$MIXED_TOPIC" "$MIXED_GROUP" build/b-37-mixed-seen.raw
 # The native member left the way a crash would; what it abandoned must have reached the JVM member.
 mixed_abandoned=$(sed -n 's/^group\.mixed\.abandoned=//p' "$OBS/linuxX64-local.txt" | tail -1)
 [ -n "$mixed_abandoned" ] || bad "mixed: the native member abandoned nothing - the crash had nothing to redeliver"
+missing=0
 for record in $(echo "$mixed_abandoned" | tr ';' ' '); do
-    grep -qx "$record" build/b-37-mixed-seen.txt || bad "mixed: abandoned $record was never delivered again"
+    grep -qx "$record" build/b-37-mixed-seen.txt || { bad "mixed: abandoned $record was never delivered again"; missing=1; }
 done
-echo "  mixed     the native member abandoned $mixed_abandoned; the JVM member was given it again"
+[ "$missing" -eq 1 ] || [ -z "$mixed_abandoned" ] || echo "  mixed     the native member abandoned $mixed_abandoned; the JVM member was given it again"
 
 echo
 [ "$fail" -eq 0 ] || { echo "B-37: RED"; exit 1; }

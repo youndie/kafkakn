@@ -1,0 +1,31 @@
+=== environment ===
+2026-09-25T02:59:09+02:00
+
+=== broker ===
+  certificates already in /home/youndie/.cache/kafkakn/tls, and the broker's is valid for another day - kept
+  broker answers on 127.0.0.1:9092
+  broker answers over TLS on 127.0.0.1:9094
+
+=== one group per arm: two members, one leaves the way a crash would ===
+  jvm       exit=0, trickled 800
+  jvm       leaving held []|[2,3]; staying held []|[0,1]|[0,1,2,3]; 0 seen twice
+  jvm       abandoned uncommitted by the leaving member: 2:0
+  jvm       800 records on the broker, 800 seen by the group, 0 lost
+  jvm       committed/end per partition: 0:200/200 1:200/200 2:200/200 3:200/200
+  jvm       every abandoned record was delivered again, to the member that stayed
+  linuxX64  exit=0, trickled 800
+  linuxX64  leaving held [0,1,2,3]|[2,3]; staying held []|[0,1]|[0,1,2,3]; 0 seen twice
+  linuxX64  abandoned uncommitted by the leaving member: 2:43
+  linuxX64  800 records on the broker, 800 seen by the group, 0 lost
+  linuxX64  committed/end per partition: 0:200/200 1:200/200 2:200/200 3:200/200
+  linuxX64  every abandoned record was delivered again, to the member that stayed
+
+=== one group, one member on each arm, at the same time ===
+  jvm member exit=0, native member exit=0, trickled 600
+  jvm       held [0,1,2,3]|[0,1]|[0,1,2,3]
+  linuxX64  held []|[2,3]
+  mixed     600 records on the broker, 600 seen by the group, 0 lost
+  mixed     committed/end per partition: 0:150/150 1:150/150 2:150/150 3:150/150
+  mixed     the native member abandoned 3:72; the JVM member was given it again
+
+B-37: groups split, hand over and lose nothing on each arm, and a group with one member per arm does the same
