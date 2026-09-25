@@ -300,6 +300,10 @@ native-specific decision is written so a second native target costs a build-matr
 redesign — no target name appears in common code, and the cinterop definition is target-agnostic.
 It is not in the gate, and no claim is made about it until it is.
 
+Amended 2026-09-25 ([§2.28](#228-h5-settled-linuxarm64-costs-build-code-three-traps-and-a-higher-glibc-floor)):
+`linuxArm64` is now built and run on arm64 hardware, declared only on request (`-Pkafkakn.linuxArm64`),
+and not published. Its binaries need glibc 2.25.
+
 **D7 — snapshots to reposilite only.** `reposilite.kotlin.website/snapshots`, group
 `io.github.youndie.kafkakn` — the **project's** namespace rather than the account's, so every
 artefact of this project sits under one directory. The repository is declared under a content filter
@@ -334,7 +338,7 @@ described in a way that identifies it. A reader can re-run any of them from what
 | H2 | ~~Per-message headers can be carried without `rd_kafka_producev` (§1.5)~~ — **settled 2026-09-17: `rd_kafka_produceva` takes the same fields as an array, see §2.10** | [B-10](../backlog/B-10-record-headers.md) `done` |
 | H3 | The old-glibc route (D4) survives a librdkafka bump without a new patch | re-checked at every bump; first at [B-03](../backlog/B-03-c-bundle-old-glibc.md) |
 | H4 | A suspending `send` over librdkafka's callback seam has no throughput cost worth reporting against the blocking shape | **not measured, deliberately — §2.4** |
-| H5 | `linuxArm64` costs a matrix row and no code (D6) — **questioned 2026-09-25: four places in the C-bundle build already assume x86_64; see B-39's first iteration. Running it waits on a decision** | [B-39](../backlog/B-39-linux-arm64.md) `question` |
+| H5 | ~~`linuxArm64` costs a matrix row and no code (D6)~~ — **settled 2026-09-25: no code in the library, but build code and three traps, and a glibc floor of 2.25; see §2.28** | [B-39](../backlog/B-39-linux-arm64.md) `done` |
 | H6 | ~~Without idempotence, a retried record whose acknowledgement was lost is written twice by the native arm and once by the JVM arm (§1.8)~~ — **settled 2026-09-24: yes, and systematically; see §2.19** | [B-25](../backlog/B-25-the-arms-disagree-on-idempotence.md) `done` |
 | H7 | ~~A consumer can be expressed as one `expect` surface both arms honour without leaking either client's threading model~~ — **settled 2026-09-24 for assign and poll: yes, see §2.25; groups are B-37's** | [B-36](../backlog/B-36-assign-and-poll.md) `done` |
 
@@ -1100,6 +1104,63 @@ No production code changed. So "no code" holds for the library and not for its b
 OpenSSL library: both are linked statically, as on Linux. It does list the system `libz.1.dylib`, yet
 `deflateInit2_` and `inflate` are defined inside the binary, so kafkakn's zlib is the bundle's. What
 pulls the dylib in — Kotlin/Native's own macOS link set, most likely — was not traced.
+
+### 2.28 H5, settled: linuxArm64 costs build code, three traps, and a higher glibc floor
+
+[B-39](../backlog/B-39-linux-arm64.md). `linuxArm64` is built, published to a repository on disk, linked
+by a downstream build from that artefact alone, and **run on arm64 hardware**: Docker Desktop on an
+Apple-silicon Mac, an aarch64 Linux VM (`linuxkit` 6.12), not emulation. Measured 2026-09-25 with
+`ci/b-39/run.sh`:
+- the native suite passes there, 93 of 93, against the broker on the Linux box;
+- the arms agree on all 17 observations;
+- the downstream binary produces 50 records, and the broker's own consumer reads back every record and
+  its header.
+
+The emulation route the item first asked about was never needed. The build box has no arm64 emulation
+registered, and registering it is a change to the host.
+
+**H5 said "a matrix row and no code". No code in the library holds; no code in the build does not.**
+What the second Linux target took:
+- an architecture parameter for the bundle (`KAFKAKN_ARCH`):
+  - the `manylinux2014` image for it;
+  - `linux-aarch64` for OpenSSL;
+  - a bundle path with the architecture in it;
+  - a refusal to build on a Docker of the other architecture;
+- the target, declared on request only (`-Pkafkakn.linuxArm64`). Its bundle needs an arm64 Docker, which
+  neither the build box nor CI has, so declaring it by default would stop every publish;
+- `kotlin.mpp.enableCInteropCommonization`. With two Linux targets `nativeMain` becomes a shared
+  compilation of its own, and without the commonizer it cannot see the bindings: `Unresolved reference
+  'rdkafka'` in `compileNativeMainKotlinMetadata`;
+- one `armName` branch in the test actuals.
+
+**Three traps, each found by a failure rather than by reading:**
+1. **Outline atomics.** `manylinux2014_aarch64`'s gcc 10 compiles atomics as calls to helpers in its
+   own libgcc (`__aarch64_ldadd4_acq_rel` and 100 more references across librdkafka, libssl and
+   libcrypto). Kotlin/Native's aarch64 toolchain links an older libgcc without them, and the link failed.
+   The fix is `-mno-outline-atomics`. `inside.sh` now refuses any archive that still expects the helpers,
+   and that guard rejected the first archives before the rebuild.
+2. **The cinterop did not know its archives were inputs.** They reach it through `extraOpts`
+   `-libraryPath`, which Gradle cannot see into. So after the bundle was rebuilt, the cinterop task stayed
+   up to date, and the klib went on carrying the old archives. The next link failed on the same symbols
+   the new bundle no longer had. The task now declares the archives as inputs. The same staleness was
+   possible on x64 whenever a bundle was rebuilt at an unchanged path.
+3. **The glibc floor is 2.25, not 2.17.** One symbol, `getentropy@GLIBC_2.25`, is a weak reference from
+   OpenSSL. It is bound because Kotlin/Native's aarch64 sysroot is glibc 2.25, where it exists; the x64
+   sysroot is 2.19, where it does not. lld leaves the version need unmarked as weak, so the loader
+   enforces it. On `manylinux2014_aarch64` (glibc 2.17) the binary stops with `version 'GLIBC_2.25' not
+   found`. `ci/b-39/run.sh` pins the number. Whether to lower it is [B-44](../backlog/B-44-arm64-glibc-floor.md).
+
+**Running across two machines exposed two assumptions in the suite, neither of them about arm64:**
+- **The log-append scenario read the broker's clock on the test's clock**, on the reasoning that the two
+  share a machine. With the test on the Mac and the broker on the Linux box they did not: the offset was
+  1.3 s the first time. An offset measured with bracketed readings did not survive either. The box's clock
+  moved from −2.7 s to −0.4 s against the Mac's within forty minutes, and by half a second within a
+  single suite. The scenario now brackets the record with two records the broker stamps itself, and
+  requires the bracket to be a present-day clock.
+- **The native observation writer dropped its output silently** when `build/` did not exist, which was
+  the case in the container's empty directory. The whole suite passed and wrote nothing. Only
+  `compare-arms.sh`, finding no file, said that the arm had not been compared. The writer now creates the
+  directory and fails when it cannot write.
 
 ## 4. Risks, with the machinery that would catch them
 

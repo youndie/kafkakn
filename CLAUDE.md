@@ -3,15 +3,16 @@
 A Kafka client for Kotlin Multiplatform — a producer, a consumer and a minimal admin client: one
 `expect` surface each, two actuals — librdkafka through cinterop on Kotlin/Native,
 `org.apache.kafka:kafka-clients` on the JVM. Targets `jvm` and `linuxX64` are mandatory; `macosArm64`
-exists for contributors on a Mac and is not published; `linuxArm64` is designed for and not built.
+exists for contributors on a Mac and is not published; `linuxArm64` is built and run on request
+(`-Pkafkakn.linuxArm64`, `ci/b-39/run.sh`) and not published.
 
-**State (2026-09-25): stages 0 to 9 are closed but one item.** The producer has parity with the clients
+**State (2026-09-25): stages 0 to 9 are closed but one item, B-44.** The producer has parity with the clients
 underneath — explicit partition, timestamp, metadata, idempotence by default, compression, transactions,
 TLS with client certificates, SASL PLAIN/SCRAM/OAUTHBEARER, metrics; the consumer assigns, seeks, joins
 groups and commits, with exactly-once read-process-write; the admin client creates, deletes and
 describes topics. Everything is measured against the broker's own tools, and the contracts in
-`docs/api/` say where the two arms differ. **B-39 (`linuxArm64`) is a `question` waiting for a person**:
-running an arm64 binary needs emulation registered on the build box or an arm64 host. This line used to
+`docs/api/` say where the two arms differ. `linuxArm64` runs on arm64 hardware (B-39), and B-44 asks
+whether its glibc floor of 2.25 should be lowered. This line used to
 say *nothing is implemented*, and said it for twenty-four closed items after it stopped being true; it
 is dated now so that its age is visible. Read before writing code — the obvious design is wrong in four
 documented ways.
@@ -125,6 +126,12 @@ is `--ignore-vcs` and there is no `.git` over there.
 `ci/b-40/run.sh` runs the native suite on the Mac against the broker on the Linux box, through a
 tunnel, then diffs it against the JVM arm there. It is a contributor's loop; `linuxX64` stays the
 target that is built, measured and published.
+
+**The Mac is also the arm64 host** ([B-39](docs/backlog/B-39-linux-arm64.md)). Docker Desktop there is
+an aarch64 Linux, so the `linuxArm64` C bundle is built on the Mac (`KAFKAKN_ARCH=aarch64
+ci/librdkafka/build.sh`) and the binaries run there in a stock `ubuntu:24.04` container. Kotlin is
+cross-compiled on the Linux box. `ci/b-39/run.sh`, run on the Mac, does all of it. The build box has no
+arm64 emulation, and the loop does not register any.
 
 ## Read the file back instead of believing the edit
 

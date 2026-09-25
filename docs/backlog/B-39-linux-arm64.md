@@ -1,7 +1,7 @@
 ---
 id: B-39
 title: "linuxArm64: settle H5 — does a second native target cost a matrix row and no code?"
-status: question
+status: done
 priority: P2
 size: M
 stage: stage-9-targets
@@ -67,3 +67,53 @@ system-level change to the owner's machine, and the loop does not make it on its
    and close the item as `dropped`.
 
 Until then the loop moves on to the next pickable item.
+
+## Decision (2026-09-25, the owner): real arm64, on the Mac's Docker
+
+Asked interactively. Emulation was chosen first, and the registration then ran on the Mac rather than
+on the build box. That showed what the four options had missed: Docker Desktop on the Mac **is** an
+arm64 Linux host (`docker info`: `aarch64`, kernel `6.12.54-linuxkit`, 4 CPUs, 8 GB). This is option 2,
+available all along, with no change to any host. The owner chose it over emulation on WSL.
+
+So the item proceeds as follows:
+
+- The `linuxArm64` Kotlin side is cross-compiled on the build box, as every other native build is.
+- The C bundle is built in `manylinux2014_aarch64` on the Mac's Docker. It is the one arm64 build, and
+  the build box cannot run it without the emulation this decision avoids.
+- The test binary runs in an arm64 container on the Mac, against the broker on the build box, through
+  the same tunnel `ci/b-40/run.sh` uses.
+
+The write-up says **real arm64 hardware (Apple silicon), in a linuxkit VM**, not emulation.
+
+## Iteration 2 (2026-09-25): built, published to disk, and run on arm64 hardware
+
+Everything below was measured by `ci/b-39/run.sh`, run on the Mac.
+
+- **AC: the klib carries its C, and a downstream build links with no configuration of its own.**
+  `kafkakn-core-linuxarm64` is published to a repository on disk. Its cinterop klib carries
+  `librdkafka-static.a libssl.a libcrypto.a libz.a libzstd.a`. `ci/downstream` links from that artefact
+  alone, with a Gradle home purged of the group: an AArch64 executable of 9.8 MB. The binary produced 50
+  records on arm64, and the broker's own consumer read all 50, with the header.
+- **AC: the glibc floor, measured as `ci/b-16/run.sh` measures it.** The floor is `GLIBC_2.25`, not
+  2.17. One weak OpenSSL reference, `getentropy`, is bound against Kotlin/Native's aarch64 sysroot.
+  Checked by running the binary: on `manylinux2014_aarch64` (glibc 2.17) it stops with `version
+  'GLIBC_2.25' not found`. The runner pins the number, and [B-44](B-44-arm64-glibc-floor.md) asks whether
+  to lower it.
+- **AC: H5 settled in the research, with what it cost.** See research §2.28. In short: no code in the
+  library, but code in the build, and three traps, each found by a failure:
+  - outline atomics;
+  - a cinterop task that did not see its archives as inputs;
+  - the floor above.
+- **Beyond the AC: the native suite on arm64.** It passes, 93 of 93, against the broker on the Linux box,
+  and agrees with the JVM arm on all 17 observations.
+
+**Two assumptions of the suite gave way once it ran on a second machine.** Both are fixed here, because
+without the fixes the item could not be verified:
+- the log-append scenario read the broker's clock on the test's own clock. It is now bracketed by two
+  records the broker stamps. `ci/b-28/run.sh` is green on both Linux arms after the change, and a mutant
+  reporting no timestamp is caught by name;
+- the native observation writer returned silently when `build/` did not exist. It now creates the
+  directory and fails when it cannot write.
+
+**Not done, on purpose:** publishing `linuxArm64`. Its bundle needs an arm64 Docker, which neither CI
+nor the build box has, and its floor is still an open question (B-44).

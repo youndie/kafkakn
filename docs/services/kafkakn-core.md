@@ -24,7 +24,7 @@ is nothing. The shape below is the **target**.
 |---|---|---|---|
 | `jvm` | mandatory | `org.apache.kafka:kafka-clients` 4.3.1 | the reference implementation, and therefore the oracle ([research §1.1](../research/research-architecture.md)) |
 | `linuxX64` | mandatory | librdkafka 2.13.0 through cinterop, linked statically | the reason the project exists: a producer inside a single binary |
-| `linuxArm64` | designed for, not built | same as `linuxX64` | [D6](../research/research-architecture.md) — a build-matrix row, claimed nowhere until it is one |
+| `linuxArm64` | built and run on request (`-Pkafkakn.linuxArm64`), not published | same as `linuxX64`; the bundle is built on an arm64 Docker, and binaries need glibc 2.25 | [§2.28](../research/research-architecture.md) — run on arm64 hardware by `ci/b-39/run.sh`; publishing it is not decided |
 
 Deliberately absent: macOS, Windows, `musl`, JS, Wasm. The spike measured `macosArm64` and it works;
 it is not in this project's scope and no claim is made here.

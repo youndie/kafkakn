@@ -30,6 +30,18 @@ val macosBundle: String =
     (findProperty("kafkakn.bundle.macosArm64") as String?)
         ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}-macosArm64"
 
+// The linuxArm64 bundle (B-39), built by `KAFKAKN_ARCH=aarch64 ci/librdkafka/build.sh` on an arm64 Docker
+// and copied to wherever the target is compiled.
+val linuxArm64Bundle: String =
+    (findProperty("kafkakn.bundle.linuxArm64") as String?)
+        ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}-linuxArm64"
+
+// linuxArm64 is declared on request only (`-Pkafkakn.linuxArm64`), not by default. It is built and run
+// (B-39), but its bundle needs an arm64 Docker, which neither the build box nor CI has. Declared by
+// default, every publish would need a bundle that a publishing machine cannot build. Publishing it is
+// a separate decision.
+val withLinuxArm64: Boolean = findProperty("kafkakn.linuxArm64") != null
+
 // macosArm64 is a CONTRIBUTOR'S target, declared only on a Mac (B-40): the native suite on the machine
 // people edit on, not a platform this library ships. On the Linux box - where publishing happens - the
 // target does not exist at all, so no publication of it can be produced there by accident.
@@ -38,13 +50,20 @@ val onMac: Boolean = System.getProperty("os.name").startsWith("Mac")
 /** The cinterop and its archives for one native target, from that target's own bundle. */
 fun org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget.rdkafka(bundleDir: String) {
     if (!kafkaC) return
-    compilations.getByName("main").cinterops.create("rdkafka") {
-        definitionFile.set(file("src/nativeInterop/cinterop/rdkafka.def"))
-        includeDirs("$bundleDir/include")
-        // Where the archives named in the .def are found. cinterop copies them INTO the klib, so a
-        // consumer links against the published artefact and nothing else - which is what B-13 found
-        // this project could not do.
-        extraOpts("-libraryPath", "$bundleDir/lib", "-libraryPath", "$bundleDir/lib64")
+    val interop =
+        compilations.getByName("main").cinterops.create("rdkafka") {
+            definitionFile.set(file("src/nativeInterop/cinterop/rdkafka.def"))
+            includeDirs("$bundleDir/include")
+            // Where the archives named in the .def are found. cinterop copies them INTO the klib, so a
+            // consumer links against the published artefact and nothing else - which is what B-13 found
+            // this project could not do.
+            extraOpts("-libraryPath", "$bundleDir/lib", "-libraryPath", "$bundleDir/lib64")
+        }
+    // The archives are inputs of the klib, and Gradle cannot tell from an `extraOpts` path. Without this
+    // the task stayed up to date across a rebuilt bundle, and the klib went on carrying the old archives:
+    // B-39's second arm64 link failed on symbols the new bundle no longer had.
+    tasks.named(interop.interopProcessingTaskName) {
+        inputs.files(fileTree(bundleDir) { include("lib/*.a", "lib64/*.a") })
     }
     // The test that links against the C: on each native target's own test source set. Only present when
     // the C bundle is: with -Pkafkakn.noKafkaC this directory is not a source root, so the Kafka-free
@@ -65,8 +84,9 @@ kotlin {
     if (onMac) {
         macosArm64 { rdkafka(macosBundle) }
     }
-    // linuxArm64 is designed for and not declared (research D6). Adding it is a line here and a
-    // build-matrix row; nothing in common code names a target, so it stays that way.
+    if (withLinuxArm64) {
+        linuxArm64 { rdkafka(linuxArm64Bundle) }
+    }
 
     sourceSets {
         commonMain.dependencies {

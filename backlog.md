@@ -101,9 +101,9 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-39](docs/backlog/B-39-linux-arm64.md) `[?]` | linuxArm64: settle H5 — does a second native target cost a matrix row and no code? | P2 | M | - |
+| [B-44](docs/backlog/B-44-arm64-glibc-floor.md) `[ ]` | linuxArm64 binaries need glibc 2.25 because one weak OpenSSL symbol is bound | P3 | S | - |
 
-## Closed (42)
+## Closed (43)
 
 **It builds, and a test can fail**
 
@@ -175,6 +175,7 @@ verdict.
 
 **Where it runs**
 
+- [B-39](docs/backlog/B-39-linux-arm64.md) `[x]` - linuxArm64: settle H5 — does a second native target cost a matrix row and no code?
 - [B-40](docs/backlog/B-40-macos-for-contributors.md) `[x]` - macOS, so a contributor can run the native arm without the Linux box
 
 <!-- END INDEX -->

@@ -13,12 +13,16 @@ import platform.posix.mkdir
 
 /**
  * The native target this binary was built for: `linuxX64` on the Linux box, `macosArm64` on a
- * contributor's Mac (B-40). Named rather than assumed, because the arm's name is the file its
- * observations go to and the stamp its records carry.
+ * contributor's Mac (B-40), `linuxArm64` in an arm64 container (B-39). Named rather than assumed,
+ * because the arm's name is the file its observations go to and the stamp its records carry.
  */
 @OptIn(kotlin.experimental.ExperimentalNativeApi::class)
 internal actual val armName: String =
-    if (Platform.osFamily == OsFamily.MACOSX) "macosArm64" else "linuxX64"
+    when {
+        Platform.osFamily == OsFamily.MACOSX -> "macosArm64"
+        Platform.cpuArchitecture == CpuArchitecture.ARM64 -> "linuxArm64"
+        else -> "linuxX64"
+    }
 
 internal actual fun recordObservation(
     key: String,
@@ -36,9 +40,13 @@ private fun append(
     value: String,
 ) {
     // 0x1FF is 0777; the process umask narrows it. mkdir failing because the directory already
-    // exists is the ordinary case and is ignored deliberately.
+    // exists is the ordinary case and is ignored deliberately. Both levels: `build` is there when Gradle
+    // runs the suite, and was not when B-39 ran the binary in a container's empty directory.
+    mkdir("build", 0x1FF.convert())
     mkdir("build/observations", 0x1FF.convert())
-    val file = fopen("build/observations/$name", "a") ?: return
+    // Loud, not `?: return`: that was here, and an arm whose observations went nowhere passed its whole
+    // suite. Only compare-arms, finding no file, could tell that the arm had not been compared at all.
+    val file = fopen("build/observations/$name", "a") ?: error("cannot append to build/observations/$name")
     fputs("$key=$value\n", file)
     fclose(file)
 }
