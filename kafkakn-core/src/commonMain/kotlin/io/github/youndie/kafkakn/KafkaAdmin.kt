@@ -112,6 +112,14 @@ public interface KafkaAdmin {
         totalCount: Int,
     )
 
+    /**
+     * Deletes every record before each partition's offset in [beforeOffsets], which becomes that partition's
+     * earliest ([B-63](../../../../../../../docs/backlog/B-63-delete-records.md)). Returns the low watermark the
+     * broker reports afterwards, per partition, so the caller sees what happened rather than what it asked for.
+     * An offset past the partition's end is refused with [IllegalArgumentException]. Deleting is not undone.
+     */
+    public suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long>
+
     /** Releases the client. */
     public suspend fun close()
 }

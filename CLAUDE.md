@@ -6,11 +6,11 @@ A Kafka client for Kotlin Multiplatform — a producer, a consumer and a minimal
 exists for contributors on a Mac and is not published; `linuxArm64` is built and run on request
 (`-Pkafkakn.linuxArm64`, `ci/b-39/run.sh`) and not published.
 
-**State (2026-09-25): stages 0 to 9 are closed; stages 10 to 13 are open (B-45 to B-63).** The producer has parity with the clients
+**State (2026-09-25): stages 0 to 13 are closed; the backlog has no open item.** The producer has parity with the clients
 underneath — explicit partition, timestamp, metadata, idempotence by default, compression, transactions,
 TLS with client certificates, SASL PLAIN/SCRAM/OAUTHBEARER, metrics; the consumer assigns, seeks, joins
-groups and commits, with exactly-once read-process-write; the admin client creates, deletes and
-describes topics. Everything is measured against the broker's own tools, and the contracts in
+groups and commits, with exactly-once read-process-write; the admin client creates, deletes, describes,
+configures and grows topics, deletes records, and reads and moves consumer groups and their offsets. Everything is measured against the broker's own tools, and the contracts in
 `docs/api/` say where the two arms differ. `linuxArm64` runs on arm64 hardware down to glibc 2.17 (B-39,
 B-44), built on request and not published. This line used to
 say *nothing is implemented*, and said it for twenty-four closed items after it stopped being true; it

@@ -135,7 +135,17 @@ describes the cluster. On both arms, and checked with the broker's own tools
   `IllegalArgumentException` on both arms, and the topic keeps its partitions.
 * **Automated:** `AdminPartitionsTest` on both arms, held against the broker's tools by `ci/b-62/run.sh`.
 
+### Scenario: Records before an offset are deleted, and the answer is the broker's low watermark
+* **Given:** a topic with ten records in partition 0 and five in partition 1.
+* **When:** each arm deletes partition 0 before 4, then before 2, then up to its end.
+* **Then:**
+  - the calls return 4, then 4 again (not the 2 that was asked for), then 10;
+  - partition 1, asked before 0, stays at 0;
+  - `kafka-get-offsets.sh --time -2` reports the same watermarks.
+
+  An offset past the end is refused with `IllegalArgumentException` on both arms, and nothing is deleted.
+* **Automated:** `AdminDeleteRecordsTest` on both arms, held against the broker's tool by `ci/b-63/run.sh`.
+
 ## 5. Out of scope
 
-Broker configuration, which is an operator's tool, not a service's. Deleting records
-([B-63](../backlog/B-63-delete-records.md)) is the rest of stage 13. ACLs are not planned.
+Broker configuration, which is an operator's tool, not a service's. ACLs are not planned.
