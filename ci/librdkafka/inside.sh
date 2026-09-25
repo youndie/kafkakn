@@ -36,7 +36,16 @@ build_openssl() {
     cd /tmp/ssl
     # no-zlib: OpenSSL's optional zlib link would add a second opinion about which zlib is in the
     # binary, and librdkafka links zlib itself.
-    ./Configure "${OPENSSL_TARGET:-linux-x86_64}" no-shared no-zlib no-tests --prefix="$OUT" --openssldir=/etc/ssl >/dev/null
+    # aarch64 (B-44): seed from /dev/urandom only. The default seed source, `os`, also compiles
+    # OpenSSL's getrandom path, and that path declares `getentropy` weak. Kotlin/Native's aarch64
+    # sysroot is glibc 2.25, which has getentropy, so the link binds it at GLIBC_2.25, and the loader
+    # then refuses glibc 2.17 (measured). `devrandom` is a Configure option, not a patch. OpenSSL still
+    # waits for /dev/random to be ready before it trusts /dev/urandom. x64 keeps `os`: its sysroot is
+    # 2.19, the weak reference stays empty there, and its binary is unchanged.
+    seed=""
+    [ "$(uname -m)" = aarch64 ] && seed="--with-rand-seed=devrandom"
+    # shellcheck disable=SC2086
+    ./Configure "${OPENSSL_TARGET:-linux-x86_64}" no-shared no-zlib no-tests $seed --prefix="$OUT" --openssldir=/etc/ssl >/dev/null
     make -j"$JOBS" >/dev/null && make install_sw >/dev/null
 }
 
@@ -103,3 +112,16 @@ for a in "$OUT/lib/librdkafka-static.a" "$LIB64/libssl.a" "$LIB64/libcrypto.a" "
 done
 [ "$fail" -eq 0 ] || { echo "  an archive calls a libgcc helper Kotlin/Native does not link" >&2; exit 1; }
 echo "  none: nothing is left for a libgcc newer than Kotlin/Native's"
+
+if [ "$(uname -m)" = aarch64 ]; then
+    echo
+    echo "=== aarch64: does any archive reference getentropy, even weakly? ==="
+    # The nm pair above asks about UNDEFINED (U) references and does not see a weak one (w). That is
+    # how `getentropy` got through it: harmless on x64, a GLIBC_2.25 floor on aarch64 (B-44).
+    for a in "$OUT/lib/librdkafka-static.a" "$LIB64/libssl.a" "$LIB64/libcrypto.a" "$OUT/lib/libz.a" "$OUT/lib/libzstd.a"; do
+        n=$(nm -u "$a" 2>/dev/null | grep -cE "[Uw] getentropy$" || true)
+        [ "$n" -eq 0 ] || { printf '  %-22s references getentropy %s times\n' "$(basename "$a")" "$n"; fail=1; }
+    done
+    [ "$fail" -eq 0 ] || { echo "  getentropy would put the floor at GLIBC_2.25" >&2; exit 1; }
+    echo "  none: nothing binds a symbol newer than 2.17 through the aarch64 sysroot"
+fi

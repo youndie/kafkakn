@@ -37,7 +37,7 @@ val linuxArm64Bundle: String =
         ?: "${System.getProperty("user.home")}/.cache/kafkakn/librdkafka-${libs.versions.librdkafka.get()}-linuxArm64"
 
 // linuxArm64 is declared on request only (`-Pkafkakn.linuxArm64`), not by default. It is built and run
-// (B-39), but its bundle needs an arm64 Docker, which neither the build box nor CI has. Declared by
+// (B-39), but its bundle needs an arm64 Docker, which the build box lacks and CI does not run. Declared by
 // default, every publish would need a bundle that a publishing machine cannot build. Publishing it is
 // a separate decision.
 val withLinuxArm64: Boolean = findProperty("kafkakn.linuxArm64") != null

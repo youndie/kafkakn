@@ -14,7 +14,8 @@
 #      configuration of its own;
 #   2. the native suite passes on arm64 against the broker, and agrees with the JVM arm;
 #   3. the downstream binary produces on arm64, and the broker's own consumer sees every record;
-#   4. the glibc floor of that binary, measured as ci/b-16/run.sh measures it for x64.
+#   4. the glibc floor of that binary, measured as ci/b-16/run.sh measures it for x64, and proved by
+#      running it on that glibc (B-44).
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -161,15 +162,28 @@ echo "=== 4. the oldest glibc the arm64 binary would run on ==="
 floor() { remote "readelf -V --wide \$HOME/$STAGE/$1.kexe | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1"; }
 printf '  downstream: %s\n' "$(floor downstream)"
 printf '  test:       %s\n' "$(floor test)"
-# NOT x64's 2.17, and the reason is one symbol. OpenSSL declares `getentropy` weak and calls it only if
-# it resolves. Kotlin/Native's aarch64 sysroot is glibc 2.25, where it does, so the link binds it at
-# GLIBC_2.25. The x64 sysroot is 2.19, where it does not. lld does not mark the version requirement weak
-# either, so the loader enforces it: on manylinux2014_aarch64 (glibc 2.17) this binary stops with
-# "version `GLIBC_2.25' not found", measured 2026-09-25. It is written down here so a change either way
-# shows. B-44 is where lowering it is decided.
-CLAIMED=GLIBC_2.25
+# The same floor as x64 (B-44). It was GLIBC_2.25: OpenSSL's weak `getentropy`, bound against
+# Kotlin/Native's aarch64 sysroot (glibc 2.25). The aarch64 bundle now seeds OpenSSL from /dev/urandom
+# (`--with-rand-seed=devrandom`), which compiles the reference out. inside.sh refuses any archive that
+# still has it.
+CLAIMED=GLIBC_2.17
 [ "$(floor downstream)" = "$CLAIMED" ] || { echo "  the documents say $CLAIMED and this binary says $(floor downstream)" >&2; exit 1; }
-echo "  the documents say $CLAIMED, and so does the binary: getentropy, from OpenSSL, bound against the aarch64 sysroot"
+echo "  the documents say $CLAIMED, and so does the binary"
+
+echo
+echo "=== and it runs there: the downstream binary, on glibc 2.17, produces to the broker ==="
+# A number read off the binary is not the loader's opinion. This is: the oldest glibc the claim names,
+# in the image the C bundle was built in, running the binary a stranger would link. Before B-44 it
+# stopped here with "version 'GLIBC_2.25' not found".
+OLD_IMAGE=quay.io/pypa/manylinux2014_aarch64
+STAMP_OLD=b39-glibc217-$(date +%s)
+docker run --rm --platform linux/arm64 -v "$OUT:/b39:ro" -v "$HERE/forward.pl:/forward.pl:ro" "$OLD_IMAGE" \
+    bash -c "echo \"inside: \$(ldd --version | head -1)\"; perl /forward.pl 9092 & sleep 1; /b39/downstream.kexe 127.0.0.1:9092 kafkakn $STAMP_OLD $RECORDS" \
+    > "$OUT/glibc217.out" 2>&1 || { cat "$OUT/glibc217.out"; echo "  THE BINARY DOES NOT RUN ON GLIBC 2.17" >&2; exit 1; }
+sed 's/^/  /' "$OUT/glibc217.out"
+found=$(remote "CONSUME_MS=30000 bash ci/harness/broker.sh consume kafkakn '^$STAMP_OLD:'")
+printf '  %s: the broker holds %s of %s\n' "$STAMP_OLD" "$found" "$RECORDS"
+[ "$found" = "$RECORDS" ] || { echo "  RECORDS MISSING" >&2; exit 1; }
 
 echo
 echo "B-39: linuxArm64 links from its published klib, and runs on arm64 hardware against the broker"
