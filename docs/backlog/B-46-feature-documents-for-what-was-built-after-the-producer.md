@@ -1,7 +1,7 @@
 ---
 id: B-46
 title: "Feature documents for consuming, exactly-once and administration"
-status: wip
+status: done
 priority: P2
 size: M
 stage: stage-10-housekeeping
@@ -31,3 +31,20 @@ reads. So today the report cannot see any of the consumer's tests.
   automated names a test that exists.
 - AC: `make check` passes, and the coverage map names the three documents.
 - Anchors: `docs/features/`, `docs/api/consumer-contract.md`, `kafkakn-core/src/commonTest/`.
+
+## Findings (2026-09-25)
+
+- **Three documents, written from the tests and the harness scripts' own verdicts:**
+  - `feature-consume-records`: 9 scenarios, including B-48's named commit and B-50's listener, which
+    landed after the item was written;
+  - `feature-exactly-once`: 1 scenario;
+  - `feature-administer-topics`: 4 scenarios.
+
+  Every scenario is automated.
+- **AC:** `bdd_report.py` lists all three. Every test they name exists (17, checked against the test
+  sources), as does every harness script (6). `make check` passes, and the coverage map describes the
+  three documents in words.
+- **One claim corrected while writing.** It first said `ci/b-34/run.sh` compares the cluster's broker
+  list. It compares the cluster id only, and prints the nodes and controller; the document says so.
+- Nothing is marked ***target***: each scenario describes what its test already checks. What is not built
+  is under each document's out-of-scope section, with its item.
