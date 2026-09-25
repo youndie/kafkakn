@@ -5,7 +5,9 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.ListGroupsOptions
 import org.apache.kafka.common.KafkaFuture
+import org.apache.kafka.common.errors.GroupIdNotFoundException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
 import org.apache.kafka.common.errors.TopicExistsException as ApacheTopicExistsException
@@ -84,6 +86,62 @@ internal class JvmKafkaAdmin(
             nodes = answer("describeCluster") { described.nodes() }.map { BrokerNode(it.id(), it.host(), it.port()) },
         )
     }
+
+    override suspend fun listConsumerGroups(): List<ConsumerGroupListing> =
+        // listGroups with consumer groups only: listConsumerGroups is deprecated in 4.3.1.
+        answer("listConsumerGroups") { delegate.listGroups(ListGroupsOptions.forConsumerGroups()).valid() }
+            .map {
+                ConsumerGroupListing(
+                    it.groupId(),
+                    GroupState.named(
+                        it
+                            .groupState()
+                            .map { state ->
+                                state.name
+                            }.orElse(null),
+                    ),
+                )
+            }.sortedBy { it.groupId }
+
+    /**
+     * Each group's future on its own, so that one group that does not exist becomes its description rather
+     * than the failure of the call. The Java client throws `GroupIdNotFoundException` for it, librdkafka
+     * describes it as DEAD with no members and cannot tell a missing group from a dead one. So both arms
+     * answer DEAD (B-58): a portable caller could not name the Java exception anyway.
+     */
+    override suspend fun describeConsumerGroups(groupIds: List<String>): Map<String, ConsumerGroupDescription> {
+        val futures = delegate.describeConsumerGroups(groupIds).describedGroups()
+        return groupIds.associateWith { id ->
+            try {
+                describedAs(id, futures.getValue(id).toCompletionStage().await())
+            } catch (missing: GroupIdNotFoundException) {
+                ConsumerGroupDescription(id, GroupState.DEAD, partitionAssignor = "", members = emptyList())
+            }
+        }
+    }
+
+    private fun describedAs(
+        id: String,
+        described: org.apache.kafka.clients.admin.ConsumerGroupDescription,
+    ) = ConsumerGroupDescription(
+        groupId = id,
+        state = GroupState.named(described.groupState()?.name),
+        partitionAssignor = described.partitionAssignor().orEmpty(),
+        members =
+            described.members().map { member ->
+                GroupMember(
+                    memberId = member.consumerId(),
+                    clientId = member.clientId(),
+                    host = member.host(),
+                    assignment =
+                        member
+                            .assignment()
+                            .topicPartitions()
+                            .map { TopicPartition(it.topic(), it.partition()) }
+                            .sortedWith(PARTITION_ORDER),
+                )
+            },
+    )
 
     override suspend fun close() {
         // `close` waits for pending requests; on a thread that exists for waiting.
