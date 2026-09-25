@@ -10,6 +10,8 @@ import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.errors.GroupIdNotFoundException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
+import org.apache.kafka.clients.admin.OffsetSpec as ApacheOffsetSpec
+import org.apache.kafka.common.TopicPartition as ApacheTopicPartition
 import org.apache.kafka.common.errors.TopicExistsException as ApacheTopicExistsException
 
 /** The JVM arm of the admin client: `Admin`, delegated to, as the producer is. */
@@ -142,6 +144,42 @@ internal class JvmKafkaAdmin(
                 )
             },
     )
+
+    /** `partitionsToOffsetAndMetadata`: a partition asked for and never committed maps to null, and is dropped. */
+    override suspend fun listConsumerGroupOffsets(groupId: String): Map<TopicPartition, Long> =
+        answer(
+            "listConsumerGroupOffsets",
+        ) { delegate.listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata() }
+            .mapNotNull { (partition, committed) ->
+                committed?.let { TopicPartition(partition.topic(), partition.partition()) to it.offset() }
+            }.sortedWith(compareBy(PARTITION_ORDER) { it.first })
+            .toMap()
+
+    /** `ListOffsetsResultInfo.offset` is -1 when no record is as late as a timestamp asked for: null here. */
+    override suspend fun listOffsets(
+        partitions: List<TopicPartition>,
+        spec: OffsetSpec,
+    ): Map<TopicPartition, Long?> {
+        val asked =
+            when (spec) {
+                OffsetSpec.Earliest -> ApacheOffsetSpec.earliest()
+                OffsetSpec.Latest -> ApacheOffsetSpec.latest()
+                is OffsetSpec.Timestamp -> ApacheOffsetSpec.forTimestamp(spec.timestamp)
+            }
+        val answered =
+            answer("listOffsets") {
+                delegate
+                    .listOffsets(
+                        partitions.associate { ApacheTopicPartition(it.topic, it.partition) to asked },
+                    ).all()
+            }
+        return partitions.sortedWith(PARTITION_ORDER).associateWith { partition ->
+            answered
+                .getValue(ApacheTopicPartition(partition.topic, partition.partition))
+                .offset()
+                .takeIf { it >= 0 }
+        }
+    }
 
     override suspend fun close() {
         // `close` waits for pending requests; on a thread that exists for waiting.
