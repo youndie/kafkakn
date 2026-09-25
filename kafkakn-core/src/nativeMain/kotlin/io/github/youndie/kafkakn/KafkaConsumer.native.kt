@@ -8,6 +8,7 @@ import kotlinx.cinterop.COpaquePointerVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.LongVar
 import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
@@ -39,6 +40,7 @@ import rdkafka.rd_kafka_assign
 import rdkafka.rd_kafka_assignment
 import rdkafka.rd_kafka_assignment_lost
 import rdkafka.rd_kafka_commit
+import rdkafka.rd_kafka_committed
 import rdkafka.rd_kafka_conf_new
 import rdkafka.rd_kafka_conf_set
 import rdkafka.rd_kafka_conf_set_opaque
@@ -65,6 +67,8 @@ import rdkafka.rd_kafka_message_timestamp
 import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_offsets_for_times
 import rdkafka.rd_kafka_poll_set_consumer
+import rdkafka.rd_kafka_position
+import rdkafka.rd_kafka_query_watermark_offsets
 import rdkafka.rd_kafka_rebalance_protocol
 import rdkafka.rd_kafka_resp_err_t
 import rdkafka.rd_kafka_subscribe
@@ -291,24 +295,25 @@ internal class NativeKafkaConsumer(
         return assignmentNow()
     }
 
-    private suspend fun assignmentNow(): List<TopicPartition> =
-        serial.withLock {
-            memScoped {
-                val held = alloc<CPointerVar<rd_kafka_topic_partition_list_t>>()
-                val err = rd_kafka_assignment(handle, held.ptr)
-                if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-                    throw KafkaConsumeException("assignment: ${rd_kafka_err2str(err)?.toKString()}")
-                }
-                val list = held.value ?: return@memScoped emptyList()
-                try {
-                    (0 until list.pointed.cnt)
-                        .map { index ->
-                            val entry = list.pointed.elems!![index]
-                            TopicPartition(entry.topic!!.toKString(), entry.partition)
-                        }.sortedWith(PARTITION_ORDER)
-                } finally {
-                    rd_kafka_topic_partition_list_destroy(list)
-                }
+    private suspend fun assignmentNow(): List<TopicPartition> = serial.withLock { heldNow() }
+
+    /** What librdkafka says this consumer holds, for a caller that already holds [serial]. */
+    private fun heldNow(): List<TopicPartition> =
+        memScoped {
+            val held = alloc<CPointerVar<rd_kafka_topic_partition_list_t>>()
+            val err = rd_kafka_assignment(handle, held.ptr)
+            if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                throw KafkaConsumeException("assignment: ${rd_kafka_err2str(err)?.toKString()}")
+            }
+            val list = held.value ?: return@memScoped emptyList()
+            try {
+                (0 until list.pointed.cnt)
+                    .map { index ->
+                        val entry = list.pointed.elems!![index]
+                        TopicPartition(entry.topic!!.toKString(), entry.partition)
+                    }.sortedWith(PARTITION_ORDER)
+            } finally {
+                rd_kafka_topic_partition_list_destroy(list)
             }
         }
 
@@ -371,6 +376,106 @@ internal class NativeKafkaConsumer(
             val found = list.pointed.elems!![0].offset
             // -1 is librdkafka's "no record at or after that time" — the end, as the contract says.
             if (found < 0) OFFSET_END else found
+        }
+
+    override suspend fun position(partition: TopicPartition): Long {
+        enter("position")
+        return serial.withLock {
+            check(partition in heldNow()) { "position: $partition is not assigned to this consumer" }
+            // Every source below may ask the broker, so on a thread that exists for waiting.
+            withContext(Dispatchers.IO) { resolvePosition(partition) }
+        }
+    }
+
+    /**
+     * The offset the next poll returns, answered the way the Java client answers it, because
+     * `rd_kafka_position` alone has none before the first record (`rdkafka.h`: "RD_KAFKA_OFFSET_INVALID in
+     * case there was no previous message"). In order:
+     * - with `assign`: [positions], which consumption and seeks both write, with a seek to the beginning
+     *   or the end resolved through the watermarks;
+     * - in a group: librdkafka's own position once a record was consumed. [positions] would be stale
+     *   across a rebalance, so it is not used;
+     * - what the group committed;
+     * - where `auto.offset.reset` says.
+     */
+    private fun resolvePosition(partition: TopicPartition): Long {
+        if (!subscribed) {
+            positions[partition]?.let { known ->
+                return when (known) {
+                    OFFSET_BEGINNING -> watermarks(partition).first
+                    OFFSET_END -> watermarks(partition).second
+                    else -> known
+                }
+            }
+        } else {
+            consumedPosition(partition)?.let { return it }
+        }
+        committedNow(listOf(partition))[partition]?.let { return it }
+        val (low, high) = watermarks(partition)
+        return when (val reset = properties["auto.offset.reset"] ?: "latest") {
+            "earliest", "smallest", "beginning" -> low
+
+            "latest", "largest", "end" -> high
+
+            else -> throw IllegalStateException(
+                "position: nothing committed for $partition, and auto.offset.reset=$reset",
+            )
+        }
+    }
+
+    private fun consumedPosition(partition: TopicPartition): Long? =
+        withPartitionList(listOf(partition to OFFSET_INVALID)) { list ->
+            val err = rd_kafka_position(handle, list)
+            if (err !=
+                RD_KAFKA_RESP_ERR_NO_ERROR
+            ) {
+                throw KafkaConsumeException("position: ${rd_kafka_err2str(err)?.toKString()}")
+            }
+            list.pointed.elems!![0]
+                .offset
+                .takeIf { it >= 0 }
+        }
+
+    /** `rd_kafka_query_watermark_offsets`: the earliest offset the broker still has, and the end. */
+    private fun watermarks(partition: TopicPartition): Pair<Long, Long> =
+        memScoped {
+            val low = alloc<LongVar>()
+            val high = alloc<LongVar>()
+            val err =
+                rd_kafka_query_watermark_offsets(
+                    handle,
+                    partition.topic,
+                    partition.partition,
+                    low.ptr,
+                    high.ptr,
+                    requestTimeoutMs,
+                )
+            if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                throw KafkaConsumeException("watermarks of $partition: ${rd_kafka_err2str(err)?.toKString()}")
+            }
+            low.value to high.value
+        }
+
+    override suspend fun committed(partitions: List<TopicPartition>): Map<TopicPartition, Long?> {
+        enter("committed")
+        requireGroup(namesAGroup, "committed")
+        if (partitions.isEmpty()) return emptyMap()
+        return serial.withLock { withContext(Dispatchers.IO) { committedNow(partitions) } }
+    }
+
+    /** `rd_kafka_committed`: the group's committed offset per partition, or null where there is none. */
+    private fun committedNow(partitions: List<TopicPartition>): Map<TopicPartition, Long?> =
+        withPartitionList(partitions.map { it to OFFSET_INVALID }) { list ->
+            val err = rd_kafka_committed(handle, list, requestTimeoutMs)
+            if (err !=
+                RD_KAFKA_RESP_ERR_NO_ERROR
+            ) {
+                throw KafkaConsumeException("committed: ${rd_kafka_err2str(err)?.toKString()}")
+            }
+            (0 until list.pointed.cnt).associate { index ->
+                val entry = list.pointed.elems!![index]
+                TopicPartition(entry.topic!!.toKString(), entry.partition) to entry.offset.takeIf { it >= 0 }
+            }
         }
 
     override suspend fun poll(timeout: Duration): List<ConsumerRecord> {
