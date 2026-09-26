@@ -1,7 +1,7 @@
 ---
 id: B-74
 title: "A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown'"
-status: wip
+status: done
 priority: P0
 size: M
 stage: stage-16-a-deadline-on-send
@@ -55,3 +55,39 @@ different types after different times, and neither says it in a way a caller can
 - Anchors: `docs/api/producer-contract.md`,
   `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.kt`, both actuals,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/`.
+
+## Findings (2026-09-27)
+
+- **The shape: the two-step one, `kafka-clients`' own.** `enqueue(record): Delivery` returns once the
+  record is queued. `Delivery.await()` returns once the broker acknowledged it. `send` is exactly the two
+  in a row. The contract states the rejected candidates and why:
+  - a `send` with a per-call deadline cannot be honoured on the JVM, where `max.block.ms` is fixed per
+    producer;
+  - a `CancellationException` subclass is a type the caller did not throw and cannot rely on.
+- **AC: "not queued" when the deadline passes with the queue full, and not in the topic; "unknown" once
+  queued, and B-73 says what that means.** `EnqueueTest`, with the broker paused (`ci/b-74/run.sh`):
+  - with `max.block.ms` 2 000, `enqueue` queued until the queue was full: 100 records on native, 30 × 1 KiB
+    on the JVM's 32 KiB buffer. The next one threw `RecordNotQueuedException` after 2 398 ms on native and
+    2 010 ms on the JVM. Once the broker answered, every queued record was in the topic, and the refused
+    one was not, read by the Java client;
+  - an `enqueue` with the broker paused was queued at once (0 ms). Its `await()` was cut at 1 s, and it
+    landed at offset 1 once the broker answered.
+
+  7 observations agree across the arms, with B-73's `CancelledSendTest` run alongside and unchanged.
+- **AC: the native 120 s limit and the JVM `max.block.ms` give the same "not queued" type.** Both throw
+  `RecordNotQueuedException` now. On native the limit **is** `max.block.ms`: kafkakn's own wait for room
+  reads the key (librdkafka has none) with the Java client's default of 60 s, and the fixed 120 s is gone.
+  On the JVM, the Java client's `TimeoutException` becomes the cause, and it is recognised as "not queued"
+  because the client calls back on the calling thread, before `send` returns, for a record it never
+  queued. A flag set when `send` returns would race with a queued record that fails fast.
+- **Nothing else moved.** The full suites pass on both arms (158 JVM, 147 native), apart from
+  `AccountingTest`, which needs its runner. `ci/b-09/run.sh`, the accounting, is green: 3 000 handed in
+  and 3 000 on the broker on both arms. Its control dropped 2 900 and was red for it.
+- **Mutants:** all four killed by `a_record_the_queue_has_no_room_for_within_max_block_ms_is_not_queued`:
+  - native ignoring `max.block.ms`: refused after 60 s, not 2;
+  - native throwing its old type;
+  - the JVM not reading the thread: the refused record became a delivery, and the test ran out of time;
+  - the JVM not mapping `TimeoutException`.
+- **For the HTTP bridge that raised this:** `enqueue` under a `max.block.ms` shorter than the request's
+  deadline. `RecordNotQueuedException` is a true `429`. A deadline that passes in `await()` is a true
+  `504 outcome-unknown`.

@@ -38,8 +38,12 @@ public interface KafkaProducer {
      * Sends [record] and returns where it landed, after the broker has acknowledged it.
      *
      * **Suspends** while the record cannot yet be accepted — a full queue is backpressure, not an
-     * error. Throws only for failures the producer cannot retry: an unknown topic where
+     * error — for up to `max.block.ms`, then throws [RecordNotQueuedException]: the record was never queued.
+     * Otherwise throws only for failures the producer cannot retry: an unknown topic where
      * auto-creation is off, an invalid configuration, a producer already closed.
+     *
+     * Exactly [enqueue] followed by [Delivery.await]. A caller who has to tell "never queued" from "queued,
+     * outcome unknown" takes the two steps itself (B-74).
      */
     public suspend fun send(record: ProducerRecord): RecordMetadata
 

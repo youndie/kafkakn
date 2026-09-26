@@ -26,7 +26,8 @@ and against each other.
 
 ```kotlin
 interface KafkaProducer {
-    suspend fun send(record: ProducerRecord): RecordMetadata
+    suspend fun send(record: ProducerRecord): RecordMetadata        // = enqueue(record).await()
+    suspend fun enqueue(record: ProducerRecord): Delivery           // B-74: queued, or RecordNotQueuedException
     suspend fun partitionsFor(topic: String): List<PartitionInfo>   // B-29
     suspend fun initTransactions()                                 // B-30
     suspend fun beginTransaction()
@@ -102,8 +103,8 @@ meets one of two moments, and the arms differ at the second:
 | **while waiting for room**, the queue at its bound | **the deadline is not kept.** `kafka-clients`' `send` blocks until it has room, and a coroutine cannot interrupt it: the caller came back only when the broker answered again (5.0 s of a 1 s cut), and by then **the record was queued, and it landed**. The bound that holds is `max.block.ms`. | back at the deadline (1.0 s); **the record was never queued**, and is not in the topic. The one clean moment |
 
 - **So a cancelled `send` means "outcome unknown" on both arms**, except on native while it waits for room.
-  A caller whose retry must not write twice cannot tell the moments apart today; that is
-  [B-74](../backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md).
+  A caller who needs to tell the moments apart uses `enqueue` and `max.block.ms` (next part, B-74), not
+  cancellation.
 - **A JVM caller whose deadline must hold bounds `max.block.ms` as well.** The coroutine's deadline cannot
   reach inside the client's wait.
 - **Cancelling leaks nothing on native.** Once the delivery reports of cancelled sends have arrived, no send
@@ -112,6 +113,46 @@ meets one of two moments, and the arms differ at the second:
   then reading each topic with `kafka-get-offsets.sh` and the Java client (`ci/b-73/run.sh`). The queue at its
   bound is native's `queue.buffering.max.messages` of 100, and the JVM's `buffer.memory` of 32 KiB overfilled
   by 1 KiB records.
+
+### `enqueue`: "never queued" and "outcome unknown", told apart
+
+`send` is two steps, and since [B-74](../backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) a caller
+can take them one at a time. `enqueue(record)` returns a `Delivery` once the client has **queued** the record,
+without waiting for the broker, and `Delivery.await()` returns its `RecordMetadata` once the broker has
+acknowledged it. `send(record)` is exactly `enqueue(record).await()`. A caller with a deadline, an HTTP
+bridge answering `429` or `504`, reads the answer off the step that ended:
+
+| what ended the wait | means | on both arms |
+|---|---|---|
+| `enqueue` threw `RecordNotQueuedException` | **never queued**: nothing written, a retry cannot write it twice | the wait for room, or for metadata, outlasted `max.block.ms` |
+| `enqueue` threw anything else | never queued either: refused on the way in | each client's own type, as before |
+| `enqueue` returned, `await()` cut short | **queued, outcome unknown**: the record goes on, and lands or fails without the caller | measured: the cut record landed on both arms |
+| `await()` threw | queued, and failed | each client's own type, as before |
+
+- **`max.block.ms` is honoured on both arms now, with the same type when it runs out.** It is the Java
+  client's own key. On native, kafkakn's wait for room reads it, since librdkafka has no such key, and the
+  default is the Java client's, 60 s. The native wait used to end at a fixed 120 s with
+  `KafkaProduceException`, while the JVM ended at `max.block.ms` with `TimeoutException`: one situation, two
+  types, two times. Both now throw `RecordNotQueuedException`, and the Java client's exception is its cause.
+- **Bound the first step with `max.block.ms`, not with a cancellation.** A cancellation cannot reach inside
+  `kafka-clients`' wait, so on the JVM it answers late and after the record may have been queued (B-73). On
+  native a cut `enqueue` does leave the record unqueued, but a portable caller cannot rely on that.
+- **How the JVM arm knows "not queued".** The Java client calls back on the calling thread, before `send`
+  returns, for a record that never reached its accumulator, and calls back from its network thread for a queued
+  one. kafkakn reads the thread, not a flag set when `send` returns: a flag would race with a queued record
+  that fails fast.
+- **Rejected:**
+  - *a `send` that takes a deadline and throws a distinct type for "not queued within it"*. On the JVM the
+    wait cannot be bounded per call: `max.block.ms` is the client's, fixed per producer. A per-call deadline
+    would be honoured on one arm and approximated on the other.
+  - *a subclass of `CancellationException` carrying the answer*. Coroutine machinery may replace a
+    cancellation's cause on its way up, and a caller cannot rely on a type it did not throw.
+- *Measured* (`ci/b-74/run.sh`, both arms, with the broker paused):
+  - with `max.block.ms` 2 000, records were queued until the queue was full: 100 on native, 30 × 1 KiB on the
+    JVM's 32 KiB buffer. The next `enqueue` threw `RecordNotQueuedException` after 2 398 and 2 010 ms. Once
+    the broker answered, every queued record was in the topic, and the refused one was not;
+  - a record `enqueue`d with the broker paused was queued at once (0 ms). Its `await()` was cut at 1 s, and
+    it landed at offset 1 once the broker answered, read by the Java client.
 
 ### A null value is a tombstone
 
@@ -481,6 +522,12 @@ It is the spelling that travels: librdkafka's own key is `compression.codec` and
 message names the key the caller wrote; librdkafka's own sentence names `compression.codec`, so the
 native arm puts the caller's key and value first.
 
+**`max.block.ms`, honoured on both arms since [B-74](../backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md).**
+The Java client's key for how long `send` may wait for room or for metadata. librdkafka has no such key, so
+the native arm reads it itself, for its own wait for room, and does not pass it to librdkafka. It has the same
+default, 60 s, and the same outcome when it runs out: `RecordNotQueuedException`. A value that is not a
+non-negative number is refused at construction on native, as the Java client refuses it on the JVM.
+
 A key neither actual honours is a **failure at construction**, not a silently ignored entry. The
 prior art's sibling lesson applies: an option accepted and dropped looks identical to one that
 worked, right up until it matters.
@@ -710,6 +757,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |
 | an admin client deletes records before an offset past the partition's end | `IllegalArgumentException`, on both arms, and nothing is deleted |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
+| no room in the queue, or no metadata, within `max.block.ms` | `enqueue` (and so `send`) throws `RecordNotQueuedException`, on both arms: never queued |
 | `sendOffsetsToTransaction` with group metadata the group has moved past | `StaleGroupMetadataException`, on both arms; abort and read again from the group's commit |
 | producer closed | `send` throws `IllegalStateException` |
 
