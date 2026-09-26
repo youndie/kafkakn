@@ -12,6 +12,7 @@
 # stops the run if MemAvailable falls below 1.5 GB.
 #
 #   DURATION=3600 ci/b-70/run.sh        # seconds of trickling input; the default is an hour
+#   EXEMPT=n1 ci/b-70/run.sh            # B-72: keep one slot out of the chaos, and report its memory's slope
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -23,6 +24,8 @@ CHAOS_EVERY=${CHAOS_EVERY:-45}
 FREEZE_FOR=${FREEZE_FOR:-20}
 PARTITIONS=6
 SLOTS="n1 n2 j1 j2"
+EXEMPT=${EXEMPT:-}
+CHAOS_SLOTS=$(for s in $SLOTS; do [ "$s" = "$EXEMPT" ] || printf '%s ' "$s"; done)
 STAMP=$(date +%s)
 RUN=/tmp/b70-$STAMP
 INPUT=kafkakn-soak-in-$STAMP
@@ -118,8 +121,9 @@ while kill -0 "$TRICKLE" 2> /dev/null; do
     if [ $(($(now) - last_sample)) -ge 60 ]; then sample; last_sample=$(now); fi
     if [ $(($(now) - last_chaos)) -ge "$CHAOS_EVERY" ]; then
         last_chaos=$(now)
-        set -- $SLOTS
-        shift $((RANDOM % 4))
+        # shellcheck disable=SC2086
+        set -- $CHAOS_SLOTS
+        shift $((RANDOM % $#))
         slot=$1
         if [ $((RANDOM % 2)) -eq 0 ]; then
             say "kill $slot (${PID[$slot]})"
@@ -186,6 +190,33 @@ for (slot, pid), samples in lives.items():
     first, last, peak = samples[0][1], samples[-1][1], max(s[1] for s in samples)
     print("  %-3s pid %-8s %5.1f min  start %6.1f  end %6.1f  peak %6.1f  growth %+6.1f" % (slot, pid, minutes, first, last, peak, last - first))
 PY
+
+if [ -n "$EXEMPT" ]; then
+    echo
+    echo "=== $EXEMPT, kept out of the chaos: its memory over the run (B-72) ==="
+    python3 - "$RUN/rss.txt" "$EXEMPT" <<'PY'
+import sys
+slot = sys.argv[2]
+rows = [line.split() for line in open(sys.argv[1])]
+pids = {}
+for t, s, pid, rss in rows:
+    if s == slot:
+        pids.setdefault(pid, []).append((int(t), int(rss) / 1024))
+pid, samples = max(pids.items(), key=lambda kv: len(kv[1]))
+start = samples[0][0]
+settled = [x for x in samples if x[0] - start >= 600]
+if len(settled) < 2:
+    print("  too short to say: %d samples after the first 10 minutes" % len(settled))
+    sys.exit(0)
+n = len(settled)
+mx = sum(t for t, _ in settled) / n
+my = sum(r for _, r in settled) / n
+slope = sum((t - mx) * (r - my) for t, r in settled) / sum((t - mx) ** 2 for t, _ in settled) * 3600
+print("  pid %s, %d lives in the slot, %.1f minutes in this one" % (pid, len(pids), (samples[-1][0] - start) / 60))
+print("  RSS at 10 min %.1f MB, at the end %.1f MB, peak %.1f MB; slope %+.2f MB/hour over %d samples"
+      % (settled[0][1], samples[-1][1], max(r for _, r in samples), slope, n))
+PY
+fi
 
 echo
 echo "=== the output, counted by the Java client ==="

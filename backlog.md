@@ -137,7 +137,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[ ]` | A native instance that lives the whole hour: its memory, measured | P3 | S | B-70 |
+| [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[~]` | A native instance that lives the whole hour: its memory, measured | P3 | S | B-70 |
 
 ## Closed (71)
 

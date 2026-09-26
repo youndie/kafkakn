@@ -1,7 +1,7 @@
 ---
 id: B-72
 title: "A native instance that lives the whole hour: its memory, measured"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-15-a-consumer-of-our-own
