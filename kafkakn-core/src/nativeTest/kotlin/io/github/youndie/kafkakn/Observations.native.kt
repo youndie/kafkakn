@@ -68,6 +68,14 @@ internal actual fun backpressureWaitCount(): Long = backpressureWaits.value
 
 internal actual fun givenUpMidDrain(): String = "${rebalancesMidDrain.value}/${recordsGivenUpMidDrain.value}"
 
+internal actual fun parkedSendCount(): Int = parkedSends()
+
+internal actual fun brokerPaused(paused: Boolean) {
+    val exit = platform.posix.system("docker ${if (paused) "pause" else "unpause"} kafkakn-broker > /dev/null 2>&1")
+    // Unpausing twice is harmless and fails in docker's words: only a pause that did not happen is an error.
+    check(!paused || exit == 0) { "docker could not pause the broker" }
+}
+
 internal actual fun adminFailFastConfig(): Map<String, String> = mapOf("socket.timeout.ms" to "5000")
 
 internal actual fun failFastConfig(): Map<String, String> =
