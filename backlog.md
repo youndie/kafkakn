@@ -125,9 +125,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (1)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-69](docs/backlog/B-69-cooperative-member-keeps-revoked-offsets.md) `[~]` | CooperativeTest's member commits a revoked partition's stale offset | P2 | XS | - |
 
 ## Closed (68)
 

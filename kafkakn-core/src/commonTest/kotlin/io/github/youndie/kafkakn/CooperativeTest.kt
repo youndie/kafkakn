@@ -99,11 +99,17 @@ class CooperativeTest {
                         events += "-${partitions.map { it.partition }}"
                         times += wallClock()
                         scope.commit(processed.filterKeys { it in partitions })
+                        // Committed and gone (B-69): kept, it would be committed again on a later revocation of the
+                        // same partition, over whatever its owner in between committed. B-65's member did exactly
+                        // that once, a stale 187 over another member's 300.
+                        processed.keys.removeAll { it in partitions }
                     }
 
                     override fun onLost(partitions: List<TopicPartition>) {
                         events += "!${partitions.map { it.partition }}"
                         times += wallClock()
+                        // Lost, not committed: the next owner starts from the group's commit, not from this.
+                        processed.keys.removeAll { it in partitions }
                     }
                 }
             withContext(Dispatchers.Default) {
