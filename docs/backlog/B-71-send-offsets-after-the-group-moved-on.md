@@ -9,7 +9,7 @@ stage: stage-15-a-consumer-of-our-own
 
 # B-71 — `sendOffsetsToTransaction` after the group moved on: one exception on both arms
 
-Found by [B-70](B-70-kafkakn-soak.md)'s hour of chaos. An exactly-once service frozen past its session wakes
+Found by [B-70](B-70-kafkakn-soak.md)'s soak under chaos (37 minutes of it, not the hour first written; see B-72). An exactly-once service frozen past its session wakes
 in the middle of a transaction. The group has rebalanced without it, and it hands `sendOffsetsToTransaction`
 the group metadata it had before:
 - the JVM throws `CommitFailedException`, the Java client's own type: *"Transaction offset Commit failed due

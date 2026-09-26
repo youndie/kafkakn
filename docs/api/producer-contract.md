@@ -369,7 +369,7 @@ The loop around it is the caller's.
   producer stays usable: measured, the same member with fresh metadata commits right after the abort.
   - The Java client throws `CommitFailedException`, kept as the cause.
   - librdkafka returns the error codes above, marked *abortable*, and its sentence stays in the message.
-  - [B-70](../backlog/B-70-kafkakn-soak.md)'s hour of chaos met this 17 times, each an instance woken from a
+  - [B-70](../backlog/B-70-kafkakn-soak.md)'s 37 minutes of chaos met this 17 times, each an instance woken from a
     freeze in the middle of a transaction, and not one record was lost or duplicated.
 
 **Measured 2026-09-25**, `ci/b-38/run.sh`: 300 input records trickled in by a third party, the

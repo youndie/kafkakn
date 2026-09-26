@@ -25,7 +25,7 @@ public class ProducerFencedException(
  *
  * **Abortable, not fatal.** Abort the transaction, and read again from the group's commit: the partitions may
  * belong to another member by now, and what this one processed will be processed again by whoever holds them.
- * The producer is still usable. B-70's hour of chaos met this as an instance waking from a freeze in the
+ * The producer is still usable. B-70's soak under chaos met this as an instance waking from a freeze in the
  * middle of a transaction.
  *
  * **One exception for both arms.** The Java client throws `CommitFailedException`, kept as the [cause].

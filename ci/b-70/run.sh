@@ -12,6 +12,7 @@
 # stops the run if MemAvailable falls below 1.5 GB.
 #
 #   DURATION=3600 ci/b-70/run.sh        # seconds of trickling input; the default is an hour
+#   EXEMPT=n1 ci/b-70/run.sh            # B-72: keep one slot out of the chaos, and report its memory's slope
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -23,6 +24,8 @@ CHAOS_EVERY=${CHAOS_EVERY:-45}
 FREEZE_FOR=${FREEZE_FOR:-20}
 PARTITIONS=6
 SLOTS="n1 n2 j1 j2"
+EXEMPT=${EXEMPT:-}
+CHAOS_SLOTS=$(for s in $SLOTS; do [ "$s" = "$EXEMPT" ] || printf '%s ' "$s"; done)
 STAMP=$(date +%s)
 RUN=/tmp/b70-$STAMP
 INPUT=kafkakn-soak-in-$STAMP
@@ -34,6 +37,9 @@ fail=0
 bad() { echo "    $*" >&2; fail=1; }
 kc() { docker exec kafkakn-broker "$@"; }
 now() { date +%s; }
+# The trickle is broker.sh running java: killing the wrapper left java writing for as long as its count lasted, so
+# the input kept growing after the chaos, the lag never reached zero, and the last run was counted short (B-72).
+kill_tree() { local child; for child in $(pgrep -P "$1"); do kill_tree "$child"; done; kill "$1" 2> /dev/null; }
 # Alive, and not a zombie: an instance that exited and was not waited for still answers kill -0, which is how the
 # smoke run missed j2 exiting after its freeze.
 alive() { kill -0 "$1" 2> /dev/null && [ "$(awk '/^State:/ { print $2 }' "/proc/$1/status" 2> /dev/null)" != Z ]; }
@@ -80,7 +86,10 @@ PARTITIONS=$PARTITIONS bash "$H" topic "$INPUT-rate" > /dev/null
 t0=$(date +%s%3N)
 bash "$H" records trickle "$INPUT-rate" "$PARTITIONS" 1000 0 > /dev/null
 rate=$((1000 * 1000 / ($(date +%s%3N) - t0)))
-RECORDS=$(((rate * DURATION * 9 / 10) / PARTITIONS * PARTITIONS))
+# Twice what the measured rate would send in DURATION, and stopped when DURATION is up: the rate measured on 1 000
+# records ran below the sustained one, so a trickle sized to it ended after 37 minutes of a promised hour, and the
+# chaos with it (B-72 found that about B-70's hour).
+RECORDS=$(((rate * DURATION * 2) / PARTITIONS * PARTITIONS))
 echo "  trickle rate $rate records/s; $RECORDS records"
 bash "$H" records trickle "$INPUT" "$PARTITIONS" "$RECORDS" 0 > "$RUN/trickle.out" 2>&1 &
 TRICKLE=$!
@@ -99,7 +108,8 @@ sample() {
 aborted=
 last_chaos=$(now)
 last_sample=0
-while kill -0 "$TRICKLE" 2> /dev/null; do
+chaos_started=$(now)
+while [ $(($(now) - chaos_started)) -lt "$DURATION" ]; do
     sleep 5
     avail=$(awk '/^MemAvailable/ { print int($2 / 1024) }' /proc/meminfo)
     if [ "$avail" -lt 1536 ]; then
@@ -118,8 +128,9 @@ while kill -0 "$TRICKLE" 2> /dev/null; do
     if [ $(($(now) - last_sample)) -ge 60 ]; then sample; last_sample=$(now); fi
     if [ $(($(now) - last_chaos)) -ge "$CHAOS_EVERY" ]; then
         last_chaos=$(now)
-        set -- $SLOTS
-        shift $((RANDOM % 4))
+        # shellcheck disable=SC2086
+        set -- $CHAOS_SLOTS
+        shift $((RANDOM % $#))
         slot=$1
         if [ $((RANDOM % 2)) -eq 0 ]; then
             say "kill $slot (${PID[$slot]})"
@@ -140,6 +151,8 @@ while kill -0 "$TRICKLE" 2> /dev/null; do
     fi
 done > "$RUN/chaos.txt"
 tail -3 "$RUN/chaos.txt" | sed 's/^/  /'
+echo "  chaos lasted $((($(now) - chaos_started) / 60)) min"
+kill_tree "$TRICKLE"
 
 echo
 echo "=== the input done; draining without chaos until the group's lag is zero ==="
@@ -148,7 +161,7 @@ lag_left() {
         | awk -v t="$INPUT" '$2 == t { if ($6 == "-") s += 1; else s += $6 } END { print s + 0 }'
 }
 if [ -z "$aborted" ]; then
-    kill "$TRICKLE" 2> /dev/null
+    kill_tree "$TRICKLE"
     for _ in $(seq 1 60); do
         for slot in $SLOTS; do
             alive "${PID[$slot]}" || { wait "${PID[$slot]}" 2> /dev/null; EXITS[$slot]=$((EXITS[$slot] + 1)); echo "$(now) $slot exited" >> "$RUN/events.txt"; start "$slot"; }
@@ -161,7 +174,7 @@ if [ -z "$aborted" ]; then
     echo "  lag left: $left"
 fi
 for slot in $SLOTS; do kill -9 "${PID[$slot]}" 2> /dev/null; done
-kill "$TRICKLE" 2> /dev/null
+kill_tree "$TRICKLE"
 wait 2> /dev/null
 
 echo
@@ -186,6 +199,44 @@ for (slot, pid), samples in lives.items():
     first, last, peak = samples[0][1], samples[-1][1], max(s[1] for s in samples)
     print("  %-3s pid %-8s %5.1f min  start %6.1f  end %6.1f  peak %6.1f  growth %+6.1f" % (slot, pid, minutes, first, last, peak, last - first))
 PY
+
+if [ -n "$EXEMPT" ]; then
+    echo
+    echo "=== $EXEMPT, kept out of the chaos: its memory over the run (B-72) ==="
+    python3 - "$RUN/rss.txt" "$EXEMPT" <<'PY'
+import sys
+slot = sys.argv[2]
+rows = [line.split() for line in open(sys.argv[1])]
+pids = {}
+for t, s, pid, rss in rows:
+    if s == slot:
+        pids.setdefault(pid, []).append((int(t), int(rss) / 1024))
+pid, samples = max(pids.items(), key=lambda kv: len(kv[1]))
+start = samples[0][0]
+settled = [x for x in samples if x[0] - start >= 600]
+if len(settled) < 2:
+    print("  too short to say: %d samples after the first 10 minutes" % len(settled))
+    sys.exit(0)
+n = len(settled)
+mx = sum(t for t, _ in settled) / n
+my = sum(r for _, r in settled) / n
+slope = sum((t - mx) * (r - my) for t, r in settled) / sum((t - mx) ** 2 for t, _ in settled) * 3600
+print("  pid %s, %d lives in the slot, %.1f minutes in this one" % (pid, len(pids), (samples[-1][0] - start) / 60))
+print("  RSS at 10 min %.1f MB, at the end %.1f MB, peak %.1f MB; slope %+.2f MB/hour over %d samples"
+      % (settled[0][1], samples[-1][1], max(r for _, r in samples), slope, n))
+# The lower envelope: the least RSS in each five-minute window. The raw slope follows transient peaks (a batch
+# picked up after a rebalance, 22 to 44 MB for a minute); a leak raises the floor the process returns to.
+windows = {}
+for t, r in settled:
+    windows.setdefault((t - settled[0][0]) // 300, []).append((t, r))
+floor = [min(w, key=lambda x: x[1]) for _, w in sorted(windows.items())]
+if len(floor) >= 2:
+    fx = sum(t for t, _ in floor) / len(floor)
+    fy = sum(r for _, r in floor) / len(floor)
+    fslope = sum((t - fx) * (r - fy) for t, r in floor) / sum((t - fx) ** 2 for t, _ in floor) * 3600
+    print("  floor per five minutes: %s MB; its slope %+.2f MB/hour" % (" ".join("%.1f" % r for _, r in floor), fslope))
+PY
+fi
 
 echo
 echo "=== the output, counted by the Java client ==="

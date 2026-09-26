@@ -13,7 +13,7 @@ import kotlin.time.TimeSource
 
 /**
  * [B-71](../../../../../../../docs/backlog/B-71-send-offsets-after-the-group-moved-on.md): offsets handed to a
- * transaction with the group metadata of a membership the group has moved past. B-70's hour of chaos met it as an
+ * transaction with the group metadata of a membership the group has moved past. B-70's soak under chaos met it as an
  * instance waking from a freeze mid-transaction; here it is made on purpose, two ways:
  * - the group rebalanced (a second member joined) after the metadata was taken: its generation is old;
  * - the member left after the metadata was taken: the coordinator no longer knows it.
