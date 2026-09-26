@@ -129,7 +129,7 @@ verdict.
 
 No open tasks.
 
-## Closed (68)
+## Closed (69)
 
 **It builds, and a test can fail**
 
@@ -243,6 +243,7 @@ No open tasks.
 - [B-66](docs/backlog/B-66-a-fenced-static-members-commit.md) `[x]` - What a fenced static member's commit does, on both arms
 - [B-67](docs/backlog/B-67-group-remote-assignor.md) `[x]` - group.remote.assignor under the KIP-848 protocol, measured
 - [B-68](docs/backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) `[-]` - The native poll can return records of a partition revoked or lost during that same poll
+- [B-69](docs/backlog/B-69-cooperative-member-keeps-revoked-offsets.md) `[x]` - CooperativeTest's member commits a revoked partition's stale offset
 
 <!-- END INDEX -->
 
