@@ -46,6 +46,9 @@ internal class NaiveProducer(
         }
     }
 
+    // Not naive: the two-step form (B-74) has no count to drop a record into.
+    override suspend fun enqueue(record: ProducerRecord): Delivery = delegate.enqueue(record)
+
     override suspend fun partitionsFor(topic: String): List<PartitionInfo> = delegate.partitionsFor(topic)
 
     override suspend fun initTransactions() = delegate.initTransactions()

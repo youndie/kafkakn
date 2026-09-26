@@ -307,6 +307,17 @@ internal class NativeKafkaProducer(
     }
 
     /**
+     * How long [enqueue] waits for room before [RecordNotQueuedException] (B-74): `max.block.ms`, the Java client's
+     * key, honoured here by this arm's own wait because librdkafka has no such key. Before the handle, so that a
+     * value this arm cannot read fails at construction like any other.
+     */
+    private val maxBlockMs: Long =
+        config.properties[MAX_BLOCK_MS]?.let { value ->
+            value.toLongOrNull()?.takeIf { it >= 0 }
+                ?: throw IllegalArgumentException("producer configuration max.block.ms refuses the value '$value'")
+        } ?: DEFAULT_MAX_BLOCK_MS
+
+    /**
      * The OAUTHBEARER bridge (B-33), before the handle because the handle's configuration names it: its
      * own scope, since the pump's is declared after the handle, and a [StableRef] librdkafka hands back
      * to the refresh callback as the opaque.
@@ -338,7 +349,8 @@ internal class NativeKafkaProducer(
                     // no metrics at all - librdkafka's default interval is 0, off (B-41).
                     if ("statistics.interval.ms" !in config.properties) put("statistics.interval.ms", STATISTICS_MS)
                 }
-            (config.properties + defaults).forEach { (key, value) ->
+            // `max.block.ms` is kafkakn's on this arm, not librdkafka's: the bound on the wait for room above (B-74).
+            (config.properties - MAX_BLOCK_MS + defaults).forEach { (key, value) ->
                 // librdkafka reports an unknown key here, so this arm refuses it at construction too -
                 // the contract says an unusable configuration fails, and the earlier the better.
                 // TWO REFUSALS, NOT ONE. librdkafka separates a name it does not know from a value it will
@@ -422,7 +434,9 @@ internal class NativeKafkaProducer(
      * A caller who sets `partitioner` explicitly keeps their choice; the default is a default.
      */
 
-    override suspend fun send(record: ProducerRecord): RecordMetadata {
+    override suspend fun send(record: ProducerRecord): RecordMetadata = enqueue(record).await()
+
+    override suspend fun enqueue(record: ProducerRecord): Delivery {
         val id = nextId.addAndGet(1)
         val slot = CompletableDeferred<RecordMetadata>()
 
@@ -435,9 +449,15 @@ internal class NativeKafkaProducer(
             unpark(id)
             throw failure
         }
-        // Cancelling here stops the caller waiting. It does not recall a record librdkafka has
-        // already accepted, and the contract does not pretend otherwise.
-        return slot.await()
+        // Queued. Cancelling the wait on this stops the caller waiting; it does not recall a record librdkafka
+        // has already accepted, and the contract does not pretend otherwise (B-73).
+        return NativeDelivery(slot)
+    }
+
+    private class NativeDelivery(
+        private val slot: CompletableDeferred<RecordMetadata>,
+    ) : Delivery {
+        override suspend fun await(): RecordMetadata = slot.await()
     }
 
     /**
@@ -469,9 +489,11 @@ internal class NativeKafkaProducer(
             rd_kafka_poll(handle, 0)
             delay(BACKPRESSURE_DELAY_MS)
             waited += BACKPRESSURE_DELAY_MS
-            if (waited > BACKPRESSURE_LIMIT_MS) {
-                throw KafkaProduceException(
-                    "${record.topic}: the producer queue stayed full for ${waited}ms",
+            // `max.block.ms`, the Java client's own key and bound (B-74): a fixed 120 s here once, and a different
+            // type from the JVM's for the same "not queued". Now the same key, the same type, on both arms.
+            if (waited > maxBlockMs) {
+                throw RecordNotQueuedException(
+                    "${record.topic}: not queued, the producer queue stayed full for ${waited}ms (max.block.ms $maxBlockMs)",
                 )
             }
         }
@@ -803,6 +825,9 @@ internal class NativeKafkaProducer(
 
         // Not a retry budget the caller can ignore: a queue that never drains is a broken producer,
         // and hanging for ever would be worse than saying so.
-        const val BACKPRESSURE_LIMIT_MS = 120_000L
+        const val MAX_BLOCK_MS = "max.block.ms"
+
+        /** The Java client's default for `max.block.ms`, so that an unset key bounds the same wait on both arms. */
+        const val DEFAULT_MAX_BLOCK_MS = 60_000L
     }
 }

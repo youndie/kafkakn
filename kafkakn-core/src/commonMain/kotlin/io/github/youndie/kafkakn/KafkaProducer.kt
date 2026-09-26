@@ -1,5 +1,25 @@
 package io.github.youndie.kafkakn
 
+/** A record [KafkaProducer.enqueue] has queued, and the broker's answer for it still to come. */
+public interface Delivery {
+    /**
+     * Where the record landed, once the broker acknowledged it, or the failure that ended it. Cancelling this wait
+     * does not recall the record: it is queued, and it goes on.
+     */
+    public suspend fun await(): RecordMetadata
+}
+
+/**
+ * The record was **not queued**, and nothing of it was written: the client waited `max.block.ms` for room in its
+ * queue, or for the topic's metadata, and gave up ([B-74](../../../../../../../docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md)).
+ * Trying again cannot write it twice. One type on both arms: the Java client's `TimeoutException` is the [cause]
+ * on the JVM, and on native it is kafkakn's own wait for room that ran out.
+ */
+public class RecordNotQueuedException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
+
 /**
  * A Kafka producer.
  *
@@ -22,6 +42,24 @@ public interface KafkaProducer {
      * auto-creation is off, an invalid configuration, a producer already closed.
      */
     public suspend fun send(record: ProducerRecord): RecordMetadata
+
+    /**
+     * Queues [record] and returns as soon as the client has accepted it, **without** waiting for the broker
+     * ([B-74](../../../../../../../docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md)). [send] is
+     * this followed by [Delivery.await]. The two steps are the two answers a caller with a deadline needs:
+     * - **it throws: the record was not queued.** Nothing was written, and trying again cannot write it twice.
+     *   [RecordNotQueuedException] when the wait for room, or for the topic's metadata, outlasted
+     *   `max.block.ms`, on both arms. Any other failure is thrown here too when it came before the record was
+     *   queued.
+     * - **it returns: the record is queued.** Its outcome is [Delivery.await]'s. A wait on that cut short, by a
+     *   deadline or a cancellation, leaves the record going on: it lands, or fails, whatever the caller does.
+     *
+     * To bound the first step, set `max.block.ms`: a cancellation is not a portable way to do it. On native a
+     * cut while waiting for room leaves the record unqueued, but on the JVM the client's wait cannot be
+     * interrupted, and a cut caller gets its thread back only when the client lets go, by which time the record
+     * may be queued (B-73, measured).
+     */
+    public suspend fun enqueue(record: ProducerRecord): Delivery
 
     /**
      * The partitions of [topic], as this producer's connection to the cluster sees them, ordered by
