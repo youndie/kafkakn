@@ -48,6 +48,18 @@ internal actual fun backpressureWaitCount(): Long = -1
 
 internal actual fun givenUpMidDrain(): String = "-"
 
+internal actual fun parkedSendCount(): Int = -1
+
+internal actual fun brokerPaused(paused: Boolean) {
+    val exit =
+        ProcessBuilder("docker", if (paused) "pause" else "unpause", "kafkakn-broker")
+            .redirectErrorStream(true)
+            .start()
+            .waitFor()
+    // Unpausing twice is harmless and fails in docker's words: only a pause that did not happen is an error.
+    check(!paused || exit == 0) { "docker could not pause the broker" }
+}
+
 internal actual fun adminFailFastConfig(): Map<String, String> =
     mapOf(
         "default.api.timeout.ms" to "5000",

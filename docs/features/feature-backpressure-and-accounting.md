@@ -60,10 +60,24 @@ drops records ([research §2.7](../research/research-architecture.md)).
 * **When:** another record is sent.
 * **Then:** the call has not returned; it returns once the queue drains.
 
-### Scenario: Cancelling a suspended send leaves nothing queued
-* **Given:** a `send` suspended on a full queue.
-* **When:** its coroutine is cancelled.
-* **Then:** the record is not delivered, and the end offsets do not move for it.
+### Scenario: Cancelling a send suspended on a full queue
+* **Given:** a `send` suspended on a full queue, the broker not answering.
+* **When:** its coroutine is cancelled at a deadline, and the broker answers later.
+* **Then, native:** the caller is back at the deadline, the record is never queued, and the end offsets do
+  not move for it.
+* **Then, JVM (measured, not the promise this scenario first made):** the caller is back only when
+  `kafka-clients` lets go of its blocking `send`: when there is room, or at `max.block.ms`. By then the
+  record is queued, and it lands. This scenario used to promise "not delivered" for both arms, with no
+  test behind it; B-73 measured the JVM doing otherwise.
+* **Automated:** `CancelledSendTest.a_send_cancelled_while_it_waits_for_room_is_measured`, read against the
+  broker by `ci/b-73/run.sh`.
+
+### Scenario: Cancelling a send after its record was queued does not recall it
+* **Given:** a `send` whose record is queued, the broker not answering.
+* **When:** its coroutine is cancelled at a deadline, and the broker answers later.
+* **Then:** the caller is back at the deadline, and the record lands, on both arms.
+* **Automated:** `CancelledSendTest.a_send_cancelled_after_its_record_was_queued_still_lands`, read against
+  the broker by `ci/b-73/run.sh`.
 
 ### Scenario: Both actuals account identically under backpressure
 * **Given:** the same 100 000 records and the same queue bound.
@@ -131,6 +145,7 @@ drops records ([research §2.7](../research/research-architecture.md)).
 |---|---|
 | the suspending seam on the native side | `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt` |
 | the scenarios above | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/BackpressureTest.kt` |
+| a cancelled send, both moments | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/CancelledSendTest.kt`, `ci/b-73/run.sh` |
 | the accounting against the broker | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/AccountingTest.kt` |
 | the producer that drops, so the guard can be seen failing | `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/NaiveProducer.kt` |
 | the reconciliation against end offsets | `ci/b-09/run.sh` |

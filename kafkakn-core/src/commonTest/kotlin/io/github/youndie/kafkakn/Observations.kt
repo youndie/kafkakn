@@ -74,6 +74,19 @@ internal expect fun backpressureWaitCount(): Long
 internal expect fun givenUpMidDrain(): String
 
 /**
+ * B-73: sends parked for a delivery report on native, process-wide. -1 on the JVM, whose client keeps its own
+ * callbacks and has no such registry to leak from.
+ */
+internal expect fun parkedSendCount(): Int
+
+/**
+ * B-73: pauses or unpauses the fixture broker's container (`docker pause`), so that a record can be queued and not
+ * delivered. Only when the runner asks, with `KAFKAKN_BROKER_CONTROL`: a suite run must never freeze the broker
+ * under other tests.
+ */
+internal expect fun brokerPaused(paused: Boolean)
+
+/**
  * The topic this arm accounts on, **per arm and fresh for the run**.
  *
  * The accounting oracle is the topic's end offsets, and a delta is only attributable while nothing

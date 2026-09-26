@@ -148,6 +148,10 @@ private const val RD_KAFKA_MSG_F_COPY: Int = 0x2
  * is enough for a registry written by producer threads and read by poll threads.
  */
 private val waiting = AtomicReference<Map<Long, CompletableDeferred<RecordMetadata>>>(emptyMap())
+
+/** How many sends are parked for a delivery report, process-wide: B-73's check that cancelling leaks none. */
+internal fun parkedSends(): Int = waiting.value.size
+
 private val nextId = AtomicLong(1)
 
 /** How often a caller has had to wait for room. Read by the suite; not public API. */
