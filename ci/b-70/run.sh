@@ -37,6 +37,9 @@ fail=0
 bad() { echo "    $*" >&2; fail=1; }
 kc() { docker exec kafkakn-broker "$@"; }
 now() { date +%s; }
+# The trickle is broker.sh running java: killing the wrapper left java writing for as long as its count lasted, so
+# the input kept growing after the chaos, the lag never reached zero, and the last run was counted short (B-72).
+kill_tree() { local child; for child in $(pgrep -P "$1"); do kill_tree "$child"; done; kill "$1" 2> /dev/null; }
 # Alive, and not a zombie: an instance that exited and was not waited for still answers kill -0, which is how the
 # smoke run missed j2 exiting after its freeze.
 alive() { kill -0 "$1" 2> /dev/null && [ "$(awk '/^State:/ { print $2 }' "/proc/$1/status" 2> /dev/null)" != Z ]; }
@@ -149,7 +152,7 @@ while [ $(($(now) - chaos_started)) -lt "$DURATION" ]; do
 done > "$RUN/chaos.txt"
 tail -3 "$RUN/chaos.txt" | sed 's/^/  /'
 echo "  chaos lasted $((($(now) - chaos_started) / 60)) min"
-kill "$TRICKLE" 2> /dev/null
+kill_tree "$TRICKLE"
 
 echo
 echo "=== the input done; draining without chaos until the group's lag is zero ==="
@@ -158,7 +161,7 @@ lag_left() {
         | awk -v t="$INPUT" '$2 == t { if ($6 == "-") s += 1; else s += $6 } END { print s + 0 }'
 }
 if [ -z "$aborted" ]; then
-    kill "$TRICKLE" 2> /dev/null
+    kill_tree "$TRICKLE"
     for _ in $(seq 1 60); do
         for slot in $SLOTS; do
             alive "${PID[$slot]}" || { wait "${PID[$slot]}" 2> /dev/null; EXITS[$slot]=$((EXITS[$slot] + 1)); echo "$(now) $slot exited" >> "$RUN/events.txt"; start "$slot"; }
@@ -171,7 +174,7 @@ if [ -z "$aborted" ]; then
     echo "  lag left: $left"
 fi
 for slot in $SLOTS; do kill -9 "${PID[$slot]}" 2> /dev/null; done
-kill "$TRICKLE" 2> /dev/null
+kill_tree "$TRICKLE"
 wait 2> /dev/null
 
 echo
