@@ -1,4 +1,9 @@
-# Snapshots to reposilite, and the whole of the artefact side even when it cannot upload.
+# Numbered versions to reposilite, and the whole of the artefact side even when it cannot upload.
+#
+# EVERY RUN PUBLISHES A VERSION OF ITS OWN (B-75): the head from gradle.properties, the run number on
+# the tail, the way sborka numbers its own. Six builds had gone out as one `0.1.0-SNAPSHOT`, and a
+# consumer could name the one it needed only by its timestamp. A published version is never written
+# again (the preflight refuses it), and a tag `v<version>` is pushed at the commit it was built from.
 #
 # The job always builds the C bundle and publishes to a Maven repository on disk, listing what it
 # produced coordinate by coordinate. Only the last step needs credentials. That split is deliberate:
@@ -10,16 +15,24 @@
 
 name: publish
 
+# Started by hand only. It used to start on a pushed `v*` tag too, and this workflow now pushes one.
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # For the tag at the end, and nothing else.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      # The portfolio's one implementation of `<head>.<run number>`. Every script below reads the
+      # result through ci/lib/coordinate.sh, and every Gradle call gets it as -PVERSION.
+      - id: version
+        uses: youndie/sborka/.github/actions/determine-version@main
+      - run: echo "KAFKAKN_VERSION=${{ steps.version.outputs.version }}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -60,8 +73,8 @@ jobs:
           ORG_GRADLE_PROJECT_REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
           ORG_GRADLE_PROJECT_REPOSILITE_SECRET: ${{ secrets.REPOSILITE_SECRET }}
         run: |
-          ./gradlew --no-daemon --console=plain :kafkakn-core:publishAllPublicationsToWipRepository
-          echo "published io.github.youndie:kafkakn-core{,-jvm,-linuxx64}:$(sed -n 's/^version=//p' gradle.properties)"
+          ./gradlew --no-daemon --console=plain "-PVERSION=$KAFKAKN_VERSION" :kafkakn-core:publishAllPublicationsToWipRepository
+          echo "published io.github.youndie.kafkakn:kafkakn-core{,-jvm,-linuxx64}:$KAFKAKN_VERSION"
 
       # An upload that returned 2xx is not a publication. This is the statement worth making: a
       # separate build, knowing a coordinate and a URL, compiling against every variant with the
@@ -71,6 +84,18 @@ jobs:
         env:
           REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
         run: bash ci/publish/verify-published.sh
+
+      # The number leads back to the commit (B-75). Only after the version resolved from the network:
+      # a tag on a publish that did not land names a version nobody can use. A tag that already exists
+      # fails this step, which is right, since the preflight has refused that version before it.
+      - name: tag the commit with the version
+        if: env.REPOSILITE_USER != ''
+        env:
+          REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
+        run: |
+          git tag "v$KAFKAKN_VERSION" "$GITHUB_SHA"
+          git push origin "v$KAFKAKN_VERSION"
+          echo "v$KAFKAKN_VERSION -> $GITHUB_SHA"
 
       - name: say so when it did not upload
         if: env.REPOSILITE_USER == ''

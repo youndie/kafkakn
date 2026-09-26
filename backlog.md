@@ -98,6 +98,14 @@ down and measures it. [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-recor
 whose wait was cut tell "never queued" from "queued, outcome unknown". The bridge's honest answers, `429` for
 the first and `504` for the second, depend on that split.
 
+### Stage 17: numbered publishes
+
+**Opened 2026-09-27 at the owner's request.** Six builds had gone out as `0.1.0-SNAPSHOT`. The HTTP bridge
+could name the one carrying `enqueue` only by its timestamp, and the next publish would have replaced it
+without the bridge noticing. [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) gives every
+publish a number of its own, the way `sborka` numbers its own publishes: the head from `gradle.properties`,
+the run number on the tail.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -137,6 +145,7 @@ verdict.
 | `stage-14-unmeasured-promises` | What the contracts promise and no run measured | `onLost` on session expiry, a fenced static member's commit, and `group.remote.assignor`. |
 | `stage-15-a-consumer-of-our-own` | A service that uses it, for an hour | `kafkakn-soak`: an exactly-once service on both arms, killed and frozen at random, with its output and memory measured. |
 | `stage-16-a-deadline-on-send` | A caller can bound `send` and know what it left behind | What a cancelled `send` means for its record, measured on both arms, and a way to tell "never queued" from "queued, outcome unknown". |
+| `stage-17-numbered-publishes` | A consumer can name the build it depends on | Every publish gets a version of its own, is never overwritten, and is tagged at the commit it was built from. |
 
 ## Marks
 
@@ -148,7 +157,7 @@ verdict.
 
 No open tasks.
 
-## Closed (74)
+## Closed (75)
 
 **It builds, and a test can fail**
 
@@ -275,6 +284,10 @@ No open tasks.
 - [B-73](docs/backlog/B-73-a-cancelled-send.md) `[x]` - A cancelled send: what the contract promises, measured on both arms
 - [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[x]` - A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown'
 
+**A consumer can name the build it depends on**
+
+- [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) `[x]` - Every publish gets a number of its own
+
 <!-- END INDEX -->
 
 ## Decisions worth not re-litigating
@@ -309,8 +322,9 @@ one trades three `konan.properties` keys JetBrains may change at any patch relea
 build image and a one-line patch this project carries — the difference being *when* the breakage
 lands: on somebody else's release, or on ours.
 
-**Snapshots to reposilite, never Maven Central.** No release, no version promise. Publication is a
-decision nobody has taken.
+**Reposilite, never Maven Central.** Publication to Central is a decision nobody has taken. Since
+[B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) every publish is a numbered version,
+`<head>.<run number>`, and is never overwritten.
 
 **linuxArm64 is not published and does not run in CI** (the owner, 2026-09-25). It builds and runs on
 request only (`-Pkafkakn.linuxArm64`, `ci/b-39/run.sh` on a Mac, whose Docker is an arm64 host). It has
@@ -328,9 +342,11 @@ protocols after the rebalance listener ([B-50](docs/backlog/B-50-a-rebalance-lis
 change, and administration after the consumer features it describes. **ACLs, OIDC token fetching,
 Schema Registry and Streams stay out.**
 
-**Reposilite snapshots are enough; no release work is planned** (the owner, 2026-09-25). The question of
-a numbered release or Maven Central was put again once the backlog closed, and answered: no. The
-decision above stands as it was, and nobody needs to ask again.
+**Reposilite is enough; Maven Central is not planned** (the owner, 2026-09-25). The question of Maven
+Central was put again once the backlog closed, and answered: no. **Amended 2026-09-27, by the owner:**
+a snapshot that every publish overwrote turned out to be the problem, not the absence of a release. So
+publishes are numbered the way `sborka`'s are ([B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md)).
+That adds no release process: a publish is still one workflow run.
 
 **The admin client's remaining options wait for a caller who needs them** (the owner, 2026-09-25):
 - `OffsetSpec` max-timestamp;

@@ -315,6 +315,13 @@ without a rename ([§2.11](#211-a-per-artefact-route-is-a-token-per-target)).
 Amended 2026-09-17: the group was `io.github.youndie` until the publishing token made the cost of
 that visible.
 
+Amended 2026-09-27 ([B-75](../backlog/B-75-every-publish-gets-its-own-number.md)): the snapshot is gone.
+Six builds had gone out as `0.1.0-SNAPSHOT`, each replacing the last. The first consumer, an HTTP bridge,
+could name the build carrying `enqueue` only by its timestamp, and the next publish would have replaced it
+unseen. Every publish is now `<head>.<run number>`, the scheme `sborka` publishes under, into the same
+repository. It is never overwritten and is tagged at its commit. This is still not a release: no Central
+and no compatibility promise. What a number promises is only that the bytes it names never change.
+
 **D8 — the repository is public, so CI runs on GitHub's standard runners.** `make check` on every
 pull request, the same target a contributor runs. The label matters and is not a default taken
 blindly: on this account a job on `ubuntu-latest` in a **private** repository does not start at all

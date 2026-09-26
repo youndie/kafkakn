@@ -9,7 +9,7 @@ owner: unassigned
 depends_on:
   - test-broker
 publishes:
-  - io.github.youndie.kafkakn:kafkakn-core (snapshots, reposilite)
+  - io.github.youndie.kafkakn:kafkakn-core (reposilite, numbered 0.1.0.<run>)
 ---
 
 # kafkakn-core
@@ -65,7 +65,12 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
 
 - Snapshots to `reposilite.kotlin.website/snapshots` under a **content filter**, so an outage there
   cannot fail the resolution of anything else ([D7](../research/research-architecture.md)).
-- **No Maven Central**, no release, no version promise.
+- **No Maven Central**, and no compatibility promise.
+- **Every publish is a version of its own** ([B-75](../backlog/B-75-every-publish-gets-its-own-number.md)):
+  `version` in `gradle.properties` is the head, and the publish workflow appends its run number through
+  sborka's `determine-version` action and passes the whole as `-PVERSION`. Every publish script reads it
+  through `ci/lib/coordinate.sh`. `ci/publish/preflight.sh` refuses a version whose POM already answers
+  under any coordinate, and the workflow tags the commit `v<version>` once the version resolves back.
 - **Three coordinates, not one.** A KMP module has as many as it has targets, and a route that
   covers one covers none of the others:
 
