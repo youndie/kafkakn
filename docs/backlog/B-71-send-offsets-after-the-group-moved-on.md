@@ -1,7 +1,7 @@
 ---
 id: B-71
 title: "sendOffsetsToTransaction after the group moved on: one exception on both arms"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-15-a-consumer-of-our-own

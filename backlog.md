@@ -137,7 +137,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[ ]` | sendOffsetsToTransaction after the group moved on: one exception on both arms | P2 | S | - |
+| [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[~]` | sendOffsetsToTransaction after the group moved on: one exception on both arms | P2 | S | - |
 | [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[ ]` | A native instance that lives the whole hour: its memory, measured | P3 | S | B-70 |
 
 ## Closed (70)
