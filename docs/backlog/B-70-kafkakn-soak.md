@@ -54,7 +54,10 @@ one of our own (2026-09-26).
 - **AC: one common service, built on both arms.** `kafkakn-soak` holds `runSoak` in common code, with a
   native entry point and a JVM one. The native executable is 10.9 MB, release. The JVM program is launched
   from the classpath `soakJvmLaunch` writes, so the runner kills and freezes the process itself, not Gradle.
-- **AC: an hour under chaos, every input record exactly once.** One run, `ci/b-70/run.sh`, `DURATION=3600`:
+- **AC: an hour under chaos, every input record exactly once.** One run, `ci/b-70/run.sh`, `DURATION=3600`.
+  **Corrected by B-72: the chaos lasted 37 minutes, not the hour.** The runner sized the input to a rate
+  measured on 1 000 records, the sustained rate was higher, and the chaos stopped when the input did. The
+  hour this AC asks for was then run by B-72: 60 minutes of chaos, 609 627 records, exactly once.
   - **input 388 800 records, output 388 800: missing 0, more than once 0, unknown 0**, under
     `read_committed`, counted by the Java client;
   - the group's commits at `64800/64800` on all six input partitions;
