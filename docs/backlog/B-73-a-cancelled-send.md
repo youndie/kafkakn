@@ -1,7 +1,7 @@
 ---
 id: B-73
 title: "A cancelled send: what the contract promises, measured on both arms"
-status: wip
+status: done
 priority: P0
 size: M
 stage: stage-16-a-deadline-on-send
@@ -55,3 +55,36 @@ else once a deadline passes. For such a caller the unwritten sentence decides wh
   `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/`, `ci/b-73/run.sh` if the pause needs a
   runner.
+
+## Findings (2026-09-26)
+
+- **AC: the contract names both moments on each arm, measured.** `producer-contract.md` has a
+  *Cancellation* part under `send`, with a table of both moments per arm.
+- **AC: cancelled after the record is queued: the record lands.** `CancelledSendTest`:
+  - one warm send, then `docker pause`, then a `send` cut at 1 s, and the broker unpaused at 6 s;
+  - on both arms the caller was back in about 1.0 s (1 021 to 1 046 ms), and the topic held `warm cut`,
+    read by the Java client (`ci/b-73/run.sh`).
+- **AC: cancelled while waiting for room: what each arm did, measured.** The queue is at its bound: 100
+  records on native, and 40 × 1 KiB over a 32 KiB buffer on the JVM. With the broker paused, a probe is cut
+  at 1 s:
+  - **native**: back at 1 000 ms, the probe never queued, end offset 101 = warm + 100, and the probe
+    absent from the topic;
+  - **JVM**: **back only at about 5 030 ms**, when the broker answered again. The probe was queued and
+    landed: end offset 42 = warm + 40 + probe. `kafka-clients`' `send` blocks while it waits for room, and
+    a coroutine cannot interrupt it. The item's reading of the code was right: the JVM arm has no clean
+    moment here. The deadline is not kept, and the bound that holds is `max.block.ms`.
+
+  The test now holds each arm's measured behaviour, so a change on either side is seen.
+- **AC: no parked slot after the reports.** On native, `parkedSends()` is 0 after both tests.
+- **Found: a feature scenario promised what the JVM does not do.** *"Cancelling a suspended send leaves
+  nothing queued"* had no test and promised "not delivered" for both arms. It now says what each arm does,
+  and names the test.
+- **Mutants (native):** both killed by `a_send_cancelled_while_it_waits_for_room_is_measured`:
+  - the slot left parked when a cut interrupts the wait for room;
+  - the wait for room made non-cancellable, so the probe is queued after all.
+
+  The JVM behaviour is `kafka-clients`' own, with no kafkakn code of its own to mutate. The test holds it.
+- **For [B-74](B-74-a-cut-wait-says-whether-the-record-was-queued.md):** "never queued" is a clean,
+  observable moment on native only. On the JVM a cut caller cannot even get control back before the client
+  queues or gives up, so any "never queued" answer there has to come from bounding `max.block.ms` from the
+  caller's deadline.
