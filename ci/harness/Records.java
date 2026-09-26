@@ -102,7 +102,8 @@ public class Records {
             consumer.assign(List.of(partition));
             consumer.seekToBeginning(List.of(partition));
             long end = consumer.endOffsets(List.of(partition)).get(partition);
-            long deadline = System.currentTimeMillis() + 30_000;
+            // Long enough for B-70's hour of output: a deadline that ends a dump early is a count that lies.
+            long deadline = System.currentTimeMillis() + 600_000;
             while (consumer.position(partition) < end && System.currentTimeMillis() < deadline) {
                 for (ConsumerRecord<byte[], byte[]> r : consumer.poll(Duration.ofMillis(500))) {
                     List<String> headers = new ArrayList<>();

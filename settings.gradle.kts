@@ -1,6 +1,8 @@
 rootProject.name = "kafkakn"
 
 include(":kafkakn-core")
+// B-70: this project's own consumer, for the soak run. Not published.
+include(":kafkakn-soak")
 
 pluginManagement {
     repositories {
