@@ -162,7 +162,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-76](docs/backlog/B-76-enqueue-without-metadata.md) `[ ]` | Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says | P0 | M | B-74 |
+| [B-76](docs/backlog/B-76-enqueue-without-metadata.md) `[~]` | Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says | P0 | M | B-74 |
 
 ## Closed (75)
 

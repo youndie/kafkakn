@@ -1,7 +1,7 @@
 ---
 id: B-76
 title: "Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-16-a-deadline-on-send
