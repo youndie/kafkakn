@@ -34,6 +34,9 @@ fail=0
 bad() { echo "    $*" >&2; fail=1; }
 kc() { docker exec kafkakn-broker "$@"; }
 now() { date +%s; }
+# Alive, and not a zombie: an instance that exited and was not waited for still answers kill -0, which is how the
+# smoke run missed j2 exiting after its freeze.
+alive() { kill -0 "$1" 2> /dev/null && [ "$(awk '/^State:/ { print $2 }' "/proc/$1/status" 2> /dev/null)" != Z ]; }
 say() { echo "[$(date +%T)] $*"; }
 
 echo "=== environment ==="
@@ -105,7 +108,7 @@ while kill -0 "$TRICKLE" 2> /dev/null; do
         break
     fi
     for slot in $SLOTS; do
-        if ! kill -0 "${PID[$slot]}" 2> /dev/null; then
+        if ! alive "${PID[$slot]}"; then
             wait "${PID[$slot]}" 2> /dev/null
             EXITS[$slot]=$((EXITS[$slot] + 1))
             echo "$(now) $slot exited" >> "$RUN/events.txt"
@@ -148,7 +151,7 @@ if [ -z "$aborted" ]; then
     kill "$TRICKLE" 2> /dev/null
     for _ in $(seq 1 60); do
         for slot in $SLOTS; do
-            kill -0 "${PID[$slot]}" 2> /dev/null || { EXITS[$slot]=$((EXITS[$slot] + 1)); echo "$(now) $slot exited" >> "$RUN/events.txt"; start "$slot"; }
+            alive "${PID[$slot]}" || { wait "${PID[$slot]}" 2> /dev/null; EXITS[$slot]=$((EXITS[$slot] + 1)); echo "$(now) $slot exited" >> "$RUN/events.txt"; start "$slot"; }
         done
         left=$(lag_left)
         [ "$left" -eq 0 ] && break
