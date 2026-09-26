@@ -133,14 +133,13 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (2)
+## Open (1)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[~]` | sendOffsetsToTransaction after the group moved on: one exception on both arms | P2 | S | - |
 | [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[ ]` | A native instance that lives the whole hour: its memory, measured | P3 | S | B-70 |
 
-## Closed (70)
+## Closed (71)
 
 **It builds, and a test can fail**
 
@@ -259,6 +258,7 @@ verdict.
 **A service that uses it, for an hour**
 
 - [B-70](docs/backlog/B-70-kafkakn-soak.md) `[x]` - kafkakn-soak: a service built on kafkakn, run under chaos for an hour
+- [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[x]` - sendOffsetsToTransaction after the group moved on: one exception on both arms
 
 <!-- END INDEX -->
 
