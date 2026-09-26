@@ -6,7 +6,7 @@ A Kafka client for Kotlin Multiplatform — a producer, a consumer and a minimal
 exists for contributors on a Mac and is not published; `linuxArm64` is built and run on request
 (`-Pkafkakn.linuxArm64`, `ci/b-39/run.sh`) and not published.
 
-**State (2026-09-27): stages 0 to 16 are closed; the backlog has no open item. A caller can tell a record never queued from one whose outcome is unknown (`enqueue`, B-74). `kafkakn-soak` ran an hour under chaos, exactly once, with no memory growth.** The producer has parity with the clients
+**State (2026-09-27): stages 0 to 15 and 17 are closed; stage 16 is reopened for B-76. A caller can tell a record never queued from one whose outcome is unknown (`enqueue`, B-74), except that native `enqueue` queues a record whose topic has no metadata yet (B-76). `kafkakn-soak` ran an hour under chaos, exactly once, with no memory growth.** The producer has parity with the clients
 underneath — explicit partition, timestamp, metadata, idempotence by default, compression, transactions,
 TLS with client certificates, SASL PLAIN/SCRAM/OAUTHBEARER, metrics; the consumer assigns, seeks, joins
 groups and commits, with exactly-once read-process-write; the admin client creates, deletes, describes,
