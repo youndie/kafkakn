@@ -133,13 +133,14 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (2)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-70](docs/backlog/B-70-kafkakn-soak.md) `[~]` | kafkakn-soak: a service built on kafkakn, run under chaos for an hour | P2 | L | - |
+| [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[ ]` | sendOffsetsToTransaction after the group moved on: one exception on both arms | P2 | S | - |
+| [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[ ]` | A native instance that lives the whole hour: its memory, measured | P3 | S | B-70 |
 
-## Closed (69)
+## Closed (70)
 
 **It builds, and a test can fail**
 
@@ -254,6 +255,10 @@ verdict.
 - [B-67](docs/backlog/B-67-group-remote-assignor.md) `[x]` - group.remote.assignor under the KIP-848 protocol, measured
 - [B-68](docs/backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) `[-]` - The native poll can return records of a partition revoked or lost during that same poll
 - [B-69](docs/backlog/B-69-cooperative-member-keeps-revoked-offsets.md) `[x]` - CooperativeTest's member commits a revoked partition's stale offset
+
+**A service that uses it, for an hour**
+
+- [B-70](docs/backlog/B-70-kafkakn-soak.md) `[x]` - kafkakn-soak: a service built on kafkakn, run under chaos for an hour
 
 <!-- END INDEX -->
 
