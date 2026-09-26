@@ -1,7 +1,7 @@
 ---
 id: B-74
 title: "A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown'"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-16-a-deadline-on-send
