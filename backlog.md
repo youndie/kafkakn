@@ -98,6 +98,11 @@ down and measures it. [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-recor
 whose wait was cut tell "never queued" from "queued, outcome unknown". The bridge's honest answers, `429` for
 the first and `504` for the second, depend on that split.
 
+**Reopened 2026-09-27.** The bridge measured the half of B-74's promise that B-74 did not measure. When a
+topic's metadata does not arrive, the JVM arm refuses the record and the native arm queues it.
+[B-76](docs/backlog/B-76-enqueue-without-metadata.md) makes the native arm keep the promise; the owner chose
+that over correcting the promise to the measurement.
+
 ### Stage 17: numbered publishes
 
 **Opened 2026-09-27 at the owner's request.** Six builds had gone out as `0.1.0-SNAPSHOT`. The HTTP bridge
@@ -153,9 +158,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (1)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-76](docs/backlog/B-76-enqueue-without-metadata.md) `[ ]` | Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says | P0 | M | B-74 |
 
 ## Closed (75)
 
