@@ -88,6 +88,16 @@ consumer who needs it, and there is none outside. So the one consumer this proje
 service in a module of this repository, run long enough and roughly enough for the library to be found
 wrong by something other than a test written around one promise.
 
+### Stage 16: a deadline on `send`
+
+**Opened 2026-09-26 at the owner's request.** A second consumer is being planned: an HTTP bridge built on
+keel, whose response waits for the broker's acknowledgement under a deadline. Before any of it exists, it has
+found a question this repository never asked. `send` can be cancelled on both arms, and the contract does not
+say what a cancelled `send` means for its record. [B-73](docs/backlog/B-73-a-cancelled-send.md) writes that
+down and measures it. [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) lets a caller
+whose wait was cut tell "never queued" from "queued, outcome unknown". The bridge's honest answers, `429` for
+the first and `504` for the second, depend on that split.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -126,6 +136,7 @@ verdict.
 | `stage-13-admin` | Administering what it reads and writes | Consumer groups (describe, offsets, reset, delete), topic configuration, adding partitions, deleting records. |
 | `stage-14-unmeasured-promises` | What the contracts promise and no run measured | `onLost` on session expiry, a fenced static member's commit, and `group.remote.assignor`. |
 | `stage-15-a-consumer-of-our-own` | A service that uses it, for an hour | `kafkakn-soak`: an exactly-once service on both arms, killed and frozen at random, with its output and memory measured. |
+| `stage-16-a-deadline-on-send` | A caller can bound `send` and know what it left behind | What a cancelled `send` means for its record, measured on both arms, and a way to tell "never queued" from "queued, outcome unknown". |
 
 ## Marks
 
@@ -133,9 +144,12 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (2)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-73](docs/backlog/B-73-a-cancelled-send.md) `[ ]` | A cancelled send: what the contract promises, measured on both arms | P0 | M | - |
+| [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[ ]` | A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown' | P0 | M | B-73 |
 
 ## Closed (72)
 
