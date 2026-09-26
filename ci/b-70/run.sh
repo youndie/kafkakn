@@ -83,7 +83,10 @@ PARTITIONS=$PARTITIONS bash "$H" topic "$INPUT-rate" > /dev/null
 t0=$(date +%s%3N)
 bash "$H" records trickle "$INPUT-rate" "$PARTITIONS" 1000 0 > /dev/null
 rate=$((1000 * 1000 / ($(date +%s%3N) - t0)))
-RECORDS=$(((rate * DURATION * 9 / 10) / PARTITIONS * PARTITIONS))
+# Twice what the measured rate would send in DURATION, and stopped when DURATION is up: the rate measured on 1 000
+# records ran below the sustained one, so a trickle sized to it ended after 37 minutes of a promised hour, and the
+# chaos with it (B-72 found that about B-70's hour).
+RECORDS=$(((rate * DURATION * 2) / PARTITIONS * PARTITIONS))
 echo "  trickle rate $rate records/s; $RECORDS records"
 bash "$H" records trickle "$INPUT" "$PARTITIONS" "$RECORDS" 0 > "$RUN/trickle.out" 2>&1 &
 TRICKLE=$!
@@ -102,7 +105,8 @@ sample() {
 aborted=
 last_chaos=$(now)
 last_sample=0
-while kill -0 "$TRICKLE" 2> /dev/null; do
+chaos_started=$(now)
+while [ $(($(now) - chaos_started)) -lt "$DURATION" ]; do
     sleep 5
     avail=$(awk '/^MemAvailable/ { print int($2 / 1024) }' /proc/meminfo)
     if [ "$avail" -lt 1536 ]; then
@@ -144,6 +148,8 @@ while kill -0 "$TRICKLE" 2> /dev/null; do
     fi
 done > "$RUN/chaos.txt"
 tail -3 "$RUN/chaos.txt" | sed 's/^/  /'
+echo "  chaos lasted $((($(now) - chaos_started) / 60)) min"
+kill "$TRICKLE" 2> /dev/null
 
 echo
 echo "=== the input done; draining without chaos until the group's lag is zero ==="
@@ -215,6 +221,17 @@ slope = sum((t - mx) * (r - my) for t, r in settled) / sum((t - mx) ** 2 for t, 
 print("  pid %s, %d lives in the slot, %.1f minutes in this one" % (pid, len(pids), (samples[-1][0] - start) / 60))
 print("  RSS at 10 min %.1f MB, at the end %.1f MB, peak %.1f MB; slope %+.2f MB/hour over %d samples"
       % (settled[0][1], samples[-1][1], max(r for _, r in samples), slope, n))
+# The lower envelope: the least RSS in each five-minute window. The raw slope follows transient peaks (a batch
+# picked up after a rebalance, 22 to 44 MB for a minute); a leak raises the floor the process returns to.
+windows = {}
+for t, r in settled:
+    windows.setdefault((t - settled[0][0]) // 300, []).append((t, r))
+floor = [min(w, key=lambda x: x[1]) for _, w in sorted(windows.items())]
+if len(floor) >= 2:
+    fx = sum(t for t, _ in floor) / len(floor)
+    fy = sum(r for _, r in floor) / len(floor)
+    fslope = sum((t - fx) * (r - fy) for t, r in floor) / sum((t - fx) ** 2 for t, _ in floor) * 3600
+    print("  floor per five minutes: %s MB; its slope %+.2f MB/hour" % (" ".join("%.1f" % r for _, r in floor), fslope))
 PY
 fi
 
