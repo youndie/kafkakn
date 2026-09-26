@@ -144,13 +144,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[ ]` | A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown' | P0 | M | B-73 |
+No open tasks.
 
-## Closed (73)
+## Closed (74)
 
 **It builds, and a test can fail**
 
@@ -275,6 +273,7 @@ verdict.
 **A caller can bound `send` and know what it left behind**
 
 - [B-73](docs/backlog/B-73-a-cancelled-send.md) `[x]` - A cancelled send: what the contract promises, measured on both arms
+- [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[x]` - A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown'
 
 <!-- END INDEX -->
 

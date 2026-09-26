@@ -1,17 +1,17 @@
 package io.github.youndie.kafkakn
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.apache.kafka.clients.consumer.CommitFailedException
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import org.apache.kafka.clients.producer.ProducerConfig as ApacheProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord as ApacheRecord
 import org.apache.kafka.common.errors.ProducerFencedException as ApacheProducerFencedException
+import org.apache.kafka.common.errors.TimeoutException as ApacheTimeoutException
 import org.apache.kafka.common.header.internals.RecordHeader as ApacheHeader
 
 /**
@@ -238,7 +238,9 @@ internal class JvmKafkaProducer(
      * does **not** recall a record the client has already accepted, and nothing here pretends
      * otherwise.
      */
-    override suspend fun send(record: ProducerRecord): RecordMetadata =
+    override suspend fun send(record: ProducerRecord): RecordMetadata = enqueue(record).await()
+
+    override suspend fun enqueue(record: ProducerRecord): Delivery =
         // `Dispatchers.IO`, and this is the whole of what "suspends" means on this arm.
         //
         // `kafka-clients`' `send` WAITS inside the client before it returns: for metadata it does
@@ -249,31 +251,56 @@ internal class JvmKafkaProducer(
         //
         // So the wait happens on a thread that exists for waiting. The caller's dispatcher stays
         // free, which is what the contract's "suspends" promises and what librdkafka's arm does by
-        // never blocking at all.
+        // never blocking at all. A coroutine cancelled meanwhile cannot interrupt that wait (B-73).
         withContext(Dispatchers.IO) {
-            suspendCancellableCoroutine { continuation ->
-                delegate.send(record.toApache()) { metadata, failure ->
-                    when {
-                        failure != null -> {
-                            continuation.resumeWithException(failure.asFenced() ?: failure)
-                        }
+            val answer = CompletableDeferred<RecordMetadata>()
+            // The Java client calls back on THIS thread, before `send` returns, for a record that never reached its
+            // accumulator: the wait for room or metadata ran out, or the record was refused on the way in. A queued
+            // record is called back from the client's network thread. So the thread says which (B-74), where a flag
+            // set after `send` returns would race with a queued record that failed fast.
+            val caller = Thread.currentThread()
+            var notQueued: Exception? = null
+            delegate.send(record.toApache()) { metadata, failure ->
+                when {
+                    failure != null && Thread.currentThread() === caller -> {
+                        notQueued = failure
+                    }
 
-                        else -> {
-                            continuation.resume(
-                                RecordMetadata(
-                                    topic = metadata.topic(),
-                                    partition = metadata.partition(),
-                                    offset = metadata.offset(),
-                                    // The broker's kept time; the Java client exposes the value and not
-                                    // its type, which is why kafkakn has no type field (B-28).
-                                    timestamp = metadata.timestamp(),
-                                ),
-                            )
-                        }
+                    failure != null -> {
+                        answer.completeExceptionally(failure.asFenced() ?: failure)
+                    }
+
+                    else -> {
+                        answer.complete(
+                            RecordMetadata(
+                                topic = metadata.topic(),
+                                partition = metadata.partition(),
+                                offset = metadata.offset(),
+                                // The broker's kept time; the Java client exposes the value and not
+                                // its type, which is why kafkakn has no type field (B-28).
+                                timestamp = metadata.timestamp(),
+                            ),
+                        )
                     }
                 }
             }
+            notQueued?.let { failure ->
+                // `max.block.ms` ran out: the one "not queued" both arms name alike (B-74). Any other refusal
+                // on the way in is thrown as the client said it, but still from here: it was not queued either.
+                throw if (failure is ApacheTimeoutException) {
+                    RecordNotQueuedException("${record.topic}: not queued: ${failure.message}", failure)
+                } else {
+                    failure.asFenced() ?: failure
+                }
+            }
+            JvmDelivery(answer)
         }
+
+    private class JvmDelivery(
+        private val answer: CompletableDeferred<RecordMetadata>,
+    ) : Delivery {
+        override suspend fun await(): RecordMetadata = answer.await()
+    }
 
     /**
      * The five-argument constructor, because the shorter ones cannot carry headers.

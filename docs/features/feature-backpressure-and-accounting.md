@@ -72,6 +72,21 @@ drops records ([research §2.7](../research/research-architecture.md)).
 * **Automated:** `CancelledSendTest.a_send_cancelled_while_it_waits_for_room_is_measured`, read against the
   broker by `ci/b-73/run.sh`.
 
+### Scenario: A record the queue has no room for within max.block.ms is not queued, and says so
+* **Given:** a producer at its queue bound with `max.block.ms` of 2 s, the broker not answering.
+* **When:** another record is `enqueue`d.
+* **Then:** after `max.block.ms` it throws `RecordNotQueuedException`, on both arms, and once the broker
+  answers that record is not in the topic, while every queued one is.
+* **Automated:** `EnqueueTest.a_record_the_queue_has_no_room_for_within_max_block_ms_is_not_queued`, read
+  against the broker by `ci/b-74/run.sh`.
+
+### Scenario: A queued record whose wait is cut goes on and lands
+* **Given:** a record `enqueue`d with the broker not answering: queued at once.
+* **When:** the wait on its `Delivery` is cut, and the broker answers later.
+* **Then:** the record lands, on both arms: "outcome unknown" meant it went on.
+* **Automated:** `EnqueueTest.a_record_queued_and_cut_while_awaiting_is_outcome_unknown_and_lands`, read
+  against the broker by `ci/b-74/run.sh`.
+
 ### Scenario: Cancelling a send after its record was queued does not recall it
 * **Given:** a `send` whose record is queued, the broker not answering.
 * **When:** its coroutine is cancelled at a deadline, and the broker answers later.
