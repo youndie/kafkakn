@@ -144,14 +144,13 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (2)
+## Open (1)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-73](docs/backlog/B-73-a-cancelled-send.md) `[ ]` | A cancelled send: what the contract promises, measured on both arms | P0 | M | - |
 | [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[ ]` | A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown' | P0 | M | B-73 |
 
-## Closed (72)
+## Closed (73)
 
 **It builds, and a test can fail**
 
@@ -272,6 +271,10 @@ verdict.
 - [B-70](docs/backlog/B-70-kafkakn-soak.md) `[x]` - kafkakn-soak: a service built on kafkakn, run under chaos for an hour
 - [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[x]` - sendOffsetsToTransaction after the group moved on: one exception on both arms
 - [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[x]` - A native instance that lives the whole hour: its memory, measured
+
+**A caller can bound `send` and know what it left behind**
+
+- [B-73](docs/backlog/B-73-a-cancelled-send.md) `[x]` - A cancelled send: what the contract promises, measured on both arms
 
 <!-- END INDEX -->
 

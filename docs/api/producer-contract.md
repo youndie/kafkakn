@@ -90,6 +90,29 @@ there counts **records** read by `kafka-console-consumer`, and names the isolati
 ([B-30](../backlog/B-30-transactions.md), `ci/b-30/run.sh`). An end-offset delta on such a topic
 proves nothing either way.
 
+#### Cancellation
+
+**Cancelling a `send` stops the caller waiting; it never recalls a record the client has queued** (measured
+2026-09-26, [B-73](../backlog/B-73-a-cancelled-send.md)). A `withTimeout` around `send`, or a cancelled scope,
+meets one of two moments, and the arms differ at the second:
+
+| cancelled | JVM | native |
+|---|---|---|
+| **after the record is queued**, waiting for the broker's acknowledgement | back at the deadline (1.0 s of a 1 s cut); **the record lands** when the broker answers | back at the deadline (1.0 s); **the record lands** |
+| **while waiting for room**, the queue at its bound | **the deadline is not kept.** `kafka-clients`' `send` blocks until it has room, and a coroutine cannot interrupt it: the caller came back only when the broker answered again (5.0 s of a 1 s cut), and by then **the record was queued, and it landed**. The bound that holds is `max.block.ms`. | back at the deadline (1.0 s); **the record was never queued**, and is not in the topic. The one clean moment |
+
+- **So a cancelled `send` means "outcome unknown" on both arms**, except on native while it waits for room.
+  A caller whose retry must not write twice cannot tell the moments apart today; that is
+  [B-74](../backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md).
+- **A JVM caller whose deadline must hold bounds `max.block.ms` as well.** The coroutine's deadline cannot
+  reach inside the client's wait.
+- **Cancelling leaks nothing on native.** Once the delivery reports of cancelled sends have arrived, no send
+  is left parked (0 after both tests).
+- Measured by pausing the broker (`docker pause`: connections stay open, nothing is answered) around the cut,
+  then reading each topic with `kafka-get-offsets.sh` and the Java client (`ci/b-73/run.sh`). The queue at its
+  bound is native's `queue.buffering.max.messages` of 100, and the JVM's `buffer.memory` of 32 KiB overfilled
+  by 1 KiB records.
+
 ### A null value is a tombstone
 
 `ProducerRecord.value` is nullable since [B-47](../backlog/B-47-a-producer-can-write-a-tombstone.md).
