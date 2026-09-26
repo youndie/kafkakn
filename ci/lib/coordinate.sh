@@ -7,13 +7,21 @@
 # `sborka.group` first, `group` second, because a repository can be on either side of that migration
 # and a helper that knows only one of them is the same defect again.
 #
-#   . ci/lib/coordinate.sh   # sets GROUP, GROUP_PATH, VERSION
+#   . ci/lib/coordinate.sh   # sets GROUP, GROUP_PATH, VERSION, VERSION_ARG
+#
+# VERSION_ARG is what a Gradle call passes so the build publishes the same VERSION: `-PVERSION=...`,
+# or nothing when there is no KAFKAKN_VERSION and the build falls back to the head.
 kafkakn_coordinate() {
     local properties=${1:-gradle.properties}
     GROUP=$(sed -n 's/^sborka\.group=//p' "$properties")
     [ -n "$GROUP" ] || GROUP=$(sed -n 's/^group=//p' "$properties")
     VERSION=$(sed -n 's/^version=//p' "$properties")
+    # B-75: `gradle.properties` holds only the head. CI publishes `<head>.<run number>` and hands it
+    # over as KAFKAKN_VERSION, which wins here for the same reason `-PVERSION` wins in the build: a
+    # script that reads the head checks a coordinate that was never published.
+    VERSION=${KAFKAKN_VERSION:-$VERSION}
     [ -n "$GROUP" ] || { echo "no group in $properties - neither sborka.group nor group" >&2; return 1; }
     [ -n "$VERSION" ] || { echo "no version in $properties" >&2; return 1; }
     GROUP_PATH=${GROUP//./\/}
+    VERSION_ARG=${KAFKAKN_VERSION:+-PVERSION=$KAFKAKN_VERSION}
 }

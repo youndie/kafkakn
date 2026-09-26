@@ -26,7 +26,7 @@ echo "  version $VERSION"
 echo
 echo "=== publish to a real Maven repository on disk ==="
 rm -rf "$REPO"
-./gradlew --no-daemon --console=plain :kafkakn-core:publishAllPublicationsToLocalRepository 2>&1 | tail -3
+./gradlew --no-daemon --console=plain $VERSION_ARG :kafkakn-core:publishAllPublicationsToLocalRepository 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "PUBLISH FAILED"; exit 1; }
 
 echo
@@ -45,6 +45,16 @@ for artefact in kafkakn-core kafkakn-core-jvm kafkakn-core-linuxx64; do
     printf '  %-24s %s\n' "$artefact" "$files"
     for required in .module .pom; do
         ls "$dir" | grep -q -- "$required\$" || { echo "  $artefact has no *$required" >&2; missing=$((missing + 1)); }
+    done
+    # Every file named after the version it sits under (B-75). The archive tasks name their files
+    # after the PROJECT version, so a build that set the publication's version and nothing else puts
+    # files named after the head under the full number, and two publishes ship identical names.
+    # A snapshot's files carry a timestamp where `-SNAPSHOT` was, hence the prefix without it.
+    for file in $(ls "$dir" | grep -vE '\.(sha1|sha256|sha512|md5)$'); do
+        case "$file" in
+            "$artefact-${VERSION%-SNAPSHOT}"*) ;;
+            *) echo "  $artefact/$VERSION holds $file, not named after $VERSION" >&2; missing=$((missing + 1)) ;;
+        esac
     done
 done
 [ "$missing" -eq 0 ] || { echo "  $missing coordinate(s) or file(s) missing" >&2; exit 1; }

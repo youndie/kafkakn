@@ -153,13 +153,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) `[~]` | Every publish gets a number of its own | P1 | S | - |
+No open tasks.
 
-## Closed (74)
+## Closed (75)
 
 **It builds, and a test can fail**
 
@@ -285,6 +283,10 @@ verdict.
 
 - [B-73](docs/backlog/B-73-a-cancelled-send.md) `[x]` - A cancelled send: what the contract promises, measured on both arms
 - [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[x]` - A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown'
+
+**A consumer can name the build it depends on**
+
+- [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) `[x]` - Every publish gets a number of its own
 
 <!-- END INDEX -->
 

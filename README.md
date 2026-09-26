@@ -32,12 +32,17 @@ runs it, and an independent reader counts what arrived.
 
 ## Getting it
 
-Snapshots only — no release, no Maven Central, no version promise
-([D7](docs/research/research-architecture.md)). What would end that is a **condition, not a date**:
+Published to reposilite only, never to Maven Central, and with no compatibility promise
+([D7](docs/research/research-architecture.md)). What would change that is a **condition, not a date**:
 somebody outside this portfolio turning up and wanting the library. Nothing is being done to bring
-one — the repository is not announced anywhere, and the item that would have tested demand was
-dropped for that reason ([B-21](docs/backlog/B-21-does-anyone-want-this.md)) — so the honest reading
-is that snapshots are where this stays until that happens by itself.
+one. The repository is not announced anywhere, and the item that would have tested demand was
+dropped for that reason ([B-21](docs/backlog/B-21-does-anyone-want-this.md)).
+
+Every publish is a version of its own, `0.1.0.<n>`, and is never overwritten
+([B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md)). Each one is tagged `v0.1.0.<n>` at the
+commit it was built from; the newest is the highest tag, or `<latest>` in the
+[metadata](https://reposilite.kotlin.website/snapshots/io/github/youndie/kafkakn/kafkakn-core/maven-metadata.xml).
+Builds before 2026-09-27 went out as `0.1.0-SNAPSHOT`, each over the last.
 
 The whole of a build file that links it, because the two halves that usually get shown on their own
 do not compose into a working one — measured, see [`ci/b-20/run.sh`](ci/b-20/run.sh):
@@ -60,7 +65,7 @@ kotlin {
     }
 
     sourceSets.commonMain.dependencies {
-        implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0-SNAPSHOT")
+        implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0.<n>")
     }
 }
 ```

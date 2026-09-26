@@ -24,10 +24,44 @@ MAVEN_REPO=${MAVEN_REPO:-snapshots}
 kafkakn_coordinate || exit 2
 REPO=$ROOT/build/local-repo
 
-[ -n "${REPOSILITE_USER:-}" ] && [ -n "${REPOSILITE_SECRET:-}" ] || {
-    echo "REPOSILITE_USER and REPOSILITE_SECRET are required" >&2; exit 2; }
 [ -d "$REPO/$GROUP_PATH" ] || {
     echo "no local publication under $REPO/$GROUP_PATH - run ci/publish/run.sh first" >&2; exit 2; }
+
+artefacts=$(ls "$REPO/$GROUP_PATH")
+[ -n "$artefacts" ] || { echo "the local publication produced no artefacts - nothing to check" >&2; exit 2; }
+
+# B-75: A PUBLISHED VERSION IS NEVER WRITTEN AGAIN. A numbered version is a promise that what a
+# consumer resolved yesterday is what it resolves today, and Reposilite overwrites whatever it is
+# sent. The run number does not protect it either: re-running a workflow run keeps its number. So
+# every coordinate is asked for this version's POM, anonymously as a consumer would, and one answer
+# of 200 refuses the publish. An answer that is neither 200 nor 404 refuses it too: "could not tell"
+# is not "free". A snapshot is the one version meant to be replaced, and is not asked. This runs
+# before the credentials are asked for because it needs none, so it can be checked without them.
+case "$VERSION" in
+    *-SNAPSHOT) echo "  $VERSION is a snapshot - replacing it is what a snapshot is for" ;;
+    *)
+        echo "=== is $VERSION still unpublished under every coordinate? ==="
+        taken=0
+        for artefact in $artefacts; do
+            pom="/$MAVEN_REPO/$GROUP_PATH/$artefact/$VERSION/$artefact-$VERSION.pom"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "$HOST$pom")
+            case "$code" in
+                404) printf '  %-28s %s  free\n' "$artefact" "$code" ;;
+                200) printf '  %-28s %s  ALREADY PUBLISHED\n' "$artefact" "$code"; taken=$((taken + 1)) ;;
+                *)   printf '  %-28s %s  CANNOT TELL\n' "$artefact" "$code"; taken=$((taken + 1)) ;;
+            esac
+        done
+        if [ "$taken" -gt 0 ]; then
+            echo >&2
+            echo "  $VERSION is already published, or its state could not be read, and NOTHING was" >&2
+            echo "  uploaded. A re-run keeps its run number: start a new run of the workflow instead." >&2
+            exit 1
+        fi
+        ;;
+esac
+
+[ -n "${REPOSILITE_USER:-}" ] && [ -n "${REPOSILITE_SECRET:-}" ] || {
+    echo "REPOSILITE_USER and REPOSILITE_SECRET are required" >&2; exit 2; }
 
 # Credentials out of argv: `curl -u` puts the secret where `ps` can read it for the life of the call.
 credentials=$(mktemp)
@@ -35,9 +69,7 @@ chmod 600 "$credentials"
 trap 'rm -f "$credentials"' EXIT
 printf 'user = "%s:%s"\n' "$REPOSILITE_USER" "$REPOSILITE_SECRET" > "$credentials"
 
-artefacts=$(ls "$REPO/$GROUP_PATH")
-[ -n "$artefacts" ] || { echo "the local publication produced no artefacts - nothing to check" >&2; exit 2; }
-
+echo
 echo "=== can the token write every coordinate under $GROUP? ==="
 refused=0
 for artefact in $artefacts; do
@@ -60,3 +92,4 @@ if [ "$refused" -gt 0 ]; then
     exit 1
 fi
 echo "  every coordinate is writable - the upload can proceed"
+

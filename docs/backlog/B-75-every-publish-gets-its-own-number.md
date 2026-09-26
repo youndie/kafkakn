@@ -1,7 +1,7 @@
 ---
 id: B-75
 title: "Every publish gets a number of its own"
-status: wip
+status: done
 priority: P1
 size: S
 stage: stage-17-numbered-publishes
@@ -44,3 +44,14 @@ changes is that a published version never changes again.
   `0.4.0.86`.
 - No overwrite guard exists in sborka's `publish` convention on `main` as of 2026-09-27. Whatever
   refuses a second publish of one version has to be here.
+- Verified on the Linux box, 2026-09-27. `KAFKAKN_VERSION=0.1.0.999 ci/publish/run.sh` published every
+  file named `…-0.1.0.999…` under all three coordinates, and the downstream build compiled against them.
+  The preflight's version check, against a local HTTP server holding that publication, answered 200 ×3
+  and refused (exit 1). Against reposilite it answered 404 ×3 and passed. Against an unreachable host it
+  answered 000 ×3 and refused. The positive control for the method: the real POM
+  `kafkakn-core-0.1.0-20260926.224535-6.pom` answers 200 there.
+- Mutant: `VERSION_ARG` emptied, so the build no longer gets `-PVERSION` while the scripts expect the
+  full number. The build published under the head `0.1.0` instead, and `run.sh` failed with
+  "3 coordinate(s) or file(s) missing".
+- Not exercised here: the workflow itself (sborka's action, the tag push). Its first run is that
+  check, and the pull request says so.
