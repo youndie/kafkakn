@@ -18,6 +18,25 @@ public class ProducerFencedException(
 ) : IllegalStateException(message, cause)
 
 /**
+ * The offsets handed to [KafkaProducer.sendOffsetsToTransaction] carry the group metadata of a membership the
+ * group has moved past ([B-71](../../../../../../../docs/backlog/B-71-send-offsets-after-the-group-moved-on.md)):
+ * the group rebalanced after the metadata was taken, or the member left it. The broker refuses them, and nothing
+ * of this transaction is committed.
+ *
+ * **Abortable, not fatal.** Abort the transaction, and read again from the group's commit: the partitions may
+ * belong to another member by now, and what this one processed will be processed again by whoever holds them.
+ * The producer is still usable. B-70's hour of chaos met this as an instance waking from a freeze in the
+ * middle of a transaction.
+ *
+ * **One exception for both arms.** The Java client throws `CommitFailedException`, kept as the [cause].
+ * librdkafka refuses with `ILLEGAL_GENERATION` or `UNKNOWN_MEMBER_ID`, and its sentence stays in the message.
+ */
+public class StaleGroupMetadataException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
+
+/**
  * Runs [block] inside a transaction: commits when it returns, aborts when it throws, and rethrows.
  *
  * **Built on the four calls, not instead of them.** A caller who has to decide when to abort — on a

@@ -361,6 +361,16 @@ The loop around it is the caller's.
   and destroys it.
 - **It depends on the consumer's `read_committed` default** ([consumer-contract](consumer-contract.md) §3):
   a loop that reads uncommitted input is not exactly-once whatever it does with its output.
+- **Metadata the group has moved past is refused with `StaleGroupMetadataException`, on both arms**
+  ([B-71](../backlog/B-71-send-offsets-after-the-group-moved-on.md)). Taken before a rebalance, it is refused
+  as `ILLEGAL_GENERATION`; taken before the member left, as `UNKNOWN_MEMBER_ID`. The error is abortable,
+  not fatal: **abort the transaction, and read again from the group's commit**. The partitions may belong to
+  another member by now, and what this member processed will be processed again by whoever holds them. The
+  producer stays usable: measured, the same member with fresh metadata commits right after the abort.
+  - The Java client throws `CommitFailedException`, kept as the cause.
+  - librdkafka returns the error codes above, marked *abortable*, and its sentence stays in the message.
+  - [B-70](../backlog/B-70-kafkakn-soak.md)'s hour of chaos met this 17 times, each an instance woken from a
+    freeze in the middle of a transaction, and not one record was lost or duplicated.
 
 **Measured 2026-09-25**, `ci/b-38/run.sh`: 300 input records trickled in by a third party, the
 processor stopped three times at random points — each after one to three committed batches, either
@@ -677,6 +687,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |
 | an admin client deletes records before an offset past the partition's end | `IllegalArgumentException`, on both arms, and nothing is deleted |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
+| `sendOffsetsToTransaction` with group metadata the group has moved past | `StaleGroupMetadataException`, on both arms; abort and read again from the group's commit |
 | producer closed | `send` throws `IllegalStateException` |
 
 Error **text** is not part of the contract; error **type** and the fact that something is thrown at
