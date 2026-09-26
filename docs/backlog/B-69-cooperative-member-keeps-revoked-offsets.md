@@ -1,7 +1,7 @@
 ---
 id: B-69
 title: "CooperativeTest's member commits a revoked partition's stale offset"
-status: wip
+status: done
 priority: P2
 size: XS
 stage: stage-14-unmeasured-promises
@@ -27,3 +27,18 @@ teaches people to rerun rather than read.
 - AC: `CooperativeTest`'s member forgets a revoked or lost partition's offset.
 - AC: `ci/b-55/run.sh` and `ci/b-57/run.sh` stay green.
 - Anchors: `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/CooperativeTest.kt`.
+
+## Findings (2026-09-26)
+
+- **AC: the member forgets a revoked or lost partition's offset.** After committing on revocation it drops
+  those partitions from `processed`, and on loss it drops them without committing, as B-65's member does.
+- **AC: the runners stay green.**
+  - `ci/b-55/run.sh`: 1 200 records, 0 lost, 0 processed twice, commits `200/200` on all six partitions.
+  - `ci/b-57/run.sh`: the same numbers under the KIP-848 protocol.
+
+  Both ran with `GRADLE_OPTS=-Dorg.gradle.daemon=false`, which keeps the test worker out of other sessions'
+  limited scopes.
+- **Not mutation-checked, and why.** The stale commit needs a member to get a partition back and give it up
+  again before reading anything from it. No run arranges that on demand; B-65 met it once. Reverting the fix
+  would pass every run here, so a kill cannot be shown. The item rests on the one observation in B-65 and on
+  reading the member.
