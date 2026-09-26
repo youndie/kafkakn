@@ -3,6 +3,7 @@ package io.github.youndie.kafkakn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.apache.kafka.clients.consumer.CommitFailedException
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
@@ -329,7 +330,12 @@ internal class JvmKafkaProducer(
                     org.apache.kafka.clients.consumer
                         .OffsetAndMetadata(next)
             }
-        transactional { delegate.sendOffsetsToTransaction(positions, apache) }
+        try {
+            transactional { delegate.sendOffsetsToTransaction(positions, apache) }
+        } catch (stale: CommitFailedException) {
+            // The group moved past the membership in this metadata (B-71): one type on both arms, abortable.
+            throw StaleGroupMetadataException("sendOffsetsToTransaction: ${stale.message}", stale)
+        }
     }
 
     override suspend fun commitTransaction() = transactional { delegate.commitTransaction() }

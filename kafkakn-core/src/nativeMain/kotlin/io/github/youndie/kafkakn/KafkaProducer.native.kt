@@ -36,7 +36,9 @@ import kotlinx.coroutines.withContext
 import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
+import rdkafka.RD_KAFKA_RESP_ERR_ILLEGAL_GENERATION
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
+import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
 import rdkafka.RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN
 import rdkafka.RD_KAFKA_RESP_ERR__FATAL
 import rdkafka.RD_KAFKA_RESP_ERR__FENCED
@@ -714,6 +716,21 @@ internal class NativeKafkaProducer(
         }
     }
 
+    /**
+     * Offsets tied to a membership the group has moved past (B-71), as the one exception both arms throw for it:
+     * `ILLEGAL_GENERATION` when the group rebalanced since the metadata was taken, `UNKNOWN_MEMBER_ID` when the
+     * member has left. librdkafka marks both abortable, and so does the contract.
+     */
+    private fun staleOrNull(
+        code: rd_kafka_resp_err_t,
+        said: String,
+    ): StaleGroupMetadataException? =
+        if (code == RD_KAFKA_RESP_ERR_ILLEGAL_GENERATION || code == RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID) {
+            StaleGroupMetadataException(said)
+        } else {
+            null
+        }
+
     /** Turns a returned `rd_kafka_error_t` into an exception, and frees it. */
     private fun transactional(
         what: String,
@@ -731,7 +748,7 @@ internal class NativeKafkaProducer(
                     "abortable".takeIf { rd_kafka_error_txn_requires_abort(error) != 0 },
                 )
             val said = "$what: $name ($code): $text${if (flags.isEmpty()) "" else " $flags"}"
-            throw fencedOrNull(code, said) ?: KafkaProduceException(said)
+            throw fencedOrNull(code, said) ?: staleOrNull(code, said) ?: KafkaProduceException(said)
         } finally {
             rd_kafka_error_destroy(error)
         }
