@@ -81,6 +81,13 @@ B-65 measures the other.
 Left out on purpose, by the owner: the admin client's remaining options (see the decisions), and any
 release beyond the reposilite snapshots.
 
+### Stage 15: a consumer of our own
+
+**Opened 2026-09-26 at the owner's request.** The owner decided that nothing further is built without a
+consumer who needs it, and there is none outside. So the one consumer this project can have is its own: a
+service in a module of this repository, run long enough and roughly enough for the library to be found
+wrong by something other than a test written around one promise.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -118,6 +125,7 @@ verdict.
 | `stage-12-group-protocols` | Groups as they are run now | Cooperative rebalancing, static membership, and the KIP-848 consumer protocol. |
 | `stage-13-admin` | Administering what it reads and writes | Consumer groups (describe, offsets, reset, delete), topic configuration, adding partitions, deleting records. |
 | `stage-14-unmeasured-promises` | What the contracts promise and no run measured | `onLost` on session expiry, a fenced static member's commit, and `group.remote.assignor`. |
+| `stage-15-a-consumer-of-our-own` | A service that uses it, for an hour | `kafkakn-soak`: an exactly-once service on both arms, killed and frozen at random, with its output and memory measured. |
 
 ## Marks
 
@@ -125,11 +133,14 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (2)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-71](docs/backlog/B-71-send-offsets-after-the-group-moved-on.md) `[ ]` | sendOffsetsToTransaction after the group moved on: one exception on both arms | P2 | S | - |
+| [B-72](docs/backlog/B-72-a-native-instance-that-lives-the-hour.md) `[ ]` | A native instance that lives the whole hour: its memory, measured | P3 | S | B-70 |
 
-## Closed (69)
+## Closed (70)
 
 **It builds, and a test can fail**
 
@@ -244,6 +255,10 @@ No open tasks.
 - [B-67](docs/backlog/B-67-group-remote-assignor.md) `[x]` - group.remote.assignor under the KIP-848 protocol, measured
 - [B-68](docs/backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) `[-]` - The native poll can return records of a partition revoked or lost during that same poll
 - [B-69](docs/backlog/B-69-cooperative-member-keeps-revoked-offsets.md) `[x]` - CooperativeTest's member commits a revoked partition's stale offset
+
+**A service that uses it, for an hour**
+
+- [B-70](docs/backlog/B-70-kafkakn-soak.md) `[x]` - kafkakn-soak: a service built on kafkakn, run under chaos for an hour
 
 <!-- END INDEX -->
 
