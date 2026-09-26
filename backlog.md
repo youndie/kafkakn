@@ -148,7 +148,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-73](docs/backlog/B-73-a-cancelled-send.md) `[ ]` | A cancelled send: what the contract promises, measured on both arms | P0 | M | - |
+| [B-73](docs/backlog/B-73-a-cancelled-send.md) `[~]` | A cancelled send: what the contract promises, measured on both arms | P0 | M | - |
 | [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[ ]` | A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown' | P0 | M | B-73 |
 
 ## Closed (72)

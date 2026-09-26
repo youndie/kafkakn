@@ -1,7 +1,7 @@
 ---
 id: B-73
 title: "A cancelled send: what the contract promises, measured on both arms"
-status: open
+status: wip
 priority: P0
 size: M
 stage: stage-16-a-deadline-on-send
