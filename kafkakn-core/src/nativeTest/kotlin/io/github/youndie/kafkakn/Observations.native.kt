@@ -84,6 +84,9 @@ internal actual fun failFastConfig(): Map<String, String> =
         // moment the caller finds out anything at all went wrong.
         "message.timeout.ms" to "20000",
         "socket.timeout.ms" to "5000",
+        // Since B-76 a producer that cannot reach the cluster stops at `enqueue`, waiting for metadata, and this is
+        // that wait's bound. The JVM arm's value, where the same wait always stopped.
+        "max.block.ms" to "20000",
     )
 
 /** librdkafka's own reading of the key, off the handle the producer actually built. */
