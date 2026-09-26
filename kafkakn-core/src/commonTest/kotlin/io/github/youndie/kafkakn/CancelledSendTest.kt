@@ -146,6 +146,19 @@ class CancelledSendTest {
                     recordArmFact("cancel.room.parked", parkedSendCount().toString())
                     assertEquals(null, cut, "the probe was cut")
                     assertTrue(parkedSendCount() <= 0, "a parked send left behind: ${parkedSendCount()}")
+                    // Measured 2026-09-26 (B-73), and held here so it cannot change unnoticed:
+                    if (armName == "jvm") {
+                        // kafka-clients' send blocks while it waits for room, and a coroutine cannot interrupt it. The
+                        // cut caller gets its thread back only when the client lets go, here when the broker answered
+                        // again, and by then the probe was queued: it is in the topic.
+                        assertTrue(returnedAfter >= CUT * 3, "the JVM caller came back in $returnedAfter")
+                        assertEquals(1L, probeLanded, "on the JVM, the cut probe was queued after all")
+                    } else {
+                        // Native waits for room in a loop of its own, and a cut there is clean: the caller is back at
+                        // the deadline, and the probe was never queued.
+                        assertTrue(returnedAfter < CUT * 2, "the native caller came back in $returnedAfter")
+                        assertEquals(0L, probeLanded, "on native, the cut probe was never queued")
+                    }
                 } finally {
                     producer.close()
                 }
