@@ -906,6 +906,27 @@ This is the list the differential suite exists to check
    at all ([research §2.5](../research/research-architecture.md)). No batching entry point is
    offered until an item asks for one.
 
+### Where the JVM arm loses records the native arm does not: a burst into a topic created a moment before
+
+Measured on 2026-09-27, [B-79](../backlog/B-79-poll-after-rebalance-under-load.md). A burst of 2 × 1 000 records
+into a topic of two partitions, sent at once after `createTopics` returned, `linger.ms` 5, the clients' other
+defaults (idempotence on), ten rounds per row:
+
+| | a burst at once | one acknowledged record per partition first |
+|---|---|---|
+| JVM arm | 9 of 10 rounds lost records: the first batch of one partition (16 records) and once 952, each with `TimeoutException: Expiring 16 record(s) … 120000 ms has passed` | 10 of 10 clean |
+| native arm | 10 of 10 clean | 10 of 10 clean |
+| the Java client alone, no kafkakn (`ci/b-79/Burst.java`) | 1 thread: 4 of 5 lost; 64 threads: 3 of 5 | — |
+
+The broker's log says what happened each time. The producer re-sent sequence 0 of one partition after the broker
+had accepted later sequences there, up to 999. The broker refused it about 120 times as
+`OutOfOrderSequenceException` until `delivery.timeout.ms` expired the batch. The first such burst in a process came
+through clean in every series, and the ones after it did not. So it belongs to `kafka-clients` 4.3.1, not to the JVM
+arm: the Java client alone reproduces it, from one thread as from sixty-four. The records are not lost silently:
+each fails its `Delivery.await()`, and the accounting sees it. **A caller writing a burst into a topic it has just
+created acknowledges one record per partition first.** The suite's fill does (`PollAfterRebalanceTest`). This is
+recorded, not promised away: nothing is filed upstream from this project.
+
 ## Code anchors
 
 | What | Where |
