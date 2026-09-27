@@ -174,6 +174,24 @@ bridge answering `429` or `504`, reads the answer off the step that ended:
   `max.block.ms` on both arms, so a topic created meanwhile is found. The native message names the cluster's
   last answer (*"Local: Broker transport failure"*, *"Broker: Unknown topic or partition"*) and, when there is
   one, the last broker error.
+- **Every broker down, a topic already written to: never queued, on both arms since
+  [B-80](../backlog/B-80-native-forgets-topics-when-every-broker-is-down.md).** The Java client's
+  `metadata.recovery.strategy`, `rebootstrap` by default, replaces its metadata with the bootstrap addresses as
+  soon as it needs metadata and no broker is reachable. A known topic is then unknown again, and `send` waits
+  `max.block.ms` for it and refuses (`NetworkClient`, `Metadata.bootstrap`, kafka-clients 4.3.1; measured in
+  [B-77](../backlog/B-77-a-stopped-broker-and-a-known-topic.md)). Native forgets the topics it has described when
+  librdkafka reports every broker down (`_ALL_BROKERS_DOWN`), under the same key and default, so its next `enqueue`
+  waits the same way. `metadata.recovery.strategy=none` keeps the topics on both arms: records are queued during
+  the outage and land when a broker is back. This is one key with one meaning, and the caller chooses.
+- *Measured* 2026-09-27 (`ci/b-77/run.sh`, `docker stop`, `max.block.ms` 5 000, `enqueue` at 0, 5 and 20 s):
+
+  | `metadata.recovery.strategy` | JVM | native | afterwards |
+  |---|---|---|---|
+  | `rebootstrap` (default) | refused at 5 and 20 s, after 5 001 ms each | refused at 0, 5 and 20 s, after 5 001–5 002 ms | the topic holds none of them; the first `enqueue` after the broker is back is queued and lands |
+  | `none` | queued, 0–1 ms | queued, 0 ms | every one landed |
+
+  **At the instant of the stop the answer is not promised.** Neither client has noticed yet, and the JVM answered
+  both ways at 0 s: refused in B-77's run, and queued in B-80's first run.
 
 ### A null value is a tombstone
 
@@ -597,8 +615,8 @@ So the contract splits the map in two, and says which half a key is in:
 
 | | |
 |---|---|
-| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password`, `sasl.mechanism`, `sasl.username`, `sasl.password`, `transactional.id` — same name, same meaning, both arms |
-| **platform** | everything else: `queue.buffering.max.messages`, `partitioner` (native); `buffer.memory`, `max.block.ms`, `linger.ms` (jvm) |
+| **portable** | `bootstrap.servers`, `acks`, `compression.type`, `security.protocol`, `ssl.ca.location`, `ssl.certificate.location`, `ssl.key.location`, `ssl.key.password`, `sasl.mechanism`, `sasl.username`, `sasl.password`, `transactional.id`, `max.block.ms` (since B-74), `metadata.recovery.strategy` (since B-80) — same name, same meaning, both arms |
+| **platform** | everything else: `queue.buffering.max.messages`, `partitioner` (native); `buffer.memory`, `linger.ms` (jvm) |
 
 A platform key travels to the arm that owns it and is **refused by the other at construction**. That
 is deliberate: a producer that accepted `buffer.memory` on native and ignored it would be lying

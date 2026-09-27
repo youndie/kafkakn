@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# B-77: a MEASUREMENT. The broker is stopped (docker stop, connections refused) with a topic already known, and each
-# arm enqueues at 0, 5 and 20 s after the stop. What each said, how long it took, and what became of every record it
-# queued, read back with the broker's own tools once the broker is started again.
-#
-# Three passes: the JVM as it ships, the JVM with metadata.recovery.strategy=none (the hypothesis that Kafka 4's
-# rebootstrap drops a known topic's metadata when every broker is unreachable), and native.
+# B-77, B-80: the broker is stopped (docker stop, connections refused) with a topic already known, and each arm
+# enqueues at 0, 5 and 20 s after the stop, then once more when the broker is back. The answer at 0 s is printed
+# and not asserted: neither client has noticed the stop yet, and the JVM answered it both ways. Two strategies, both arms each,
+# compared: as they ship (metadata.recovery.strategy=rebootstrap), where both must refuse; and with
+# metadata.recovery.strategy=none, where both must queue. The topic is read back with the broker's own reader.
 #
 #   ci/b-77/run.sh
 set -uo pipefail
@@ -15,7 +14,6 @@ cd "$ROOT" || exit 3
 H=ci/harness/broker.sh
 OBS=kafkakn-core/build/observations
 export GRADLE_OPTS=-Dorg.gradle.daemon=false
-kc() { docker exec kafkakn-broker "$@"; }
 fact() { sed -n "s/^$2=//p" "$1" | tail -1; }
 values() { bash "$H" records dump "$1" | awk -F/ '{ print $4 }' | python3 -c '
 import sys
@@ -29,35 +27,35 @@ date -Is
 bash "$H" up || exit 1
 
 fail=0
-pass() {
-    local name=$1 task=$2 arm=$3 extra=$4
+bad() { echo "    $*" >&2; fail=1; }
+for strategy in rebootstrap none; do
+    extra=; [ "$strategy" = none ] && extra="metadata.recovery.strategy=none"
     echo
-    echo "=== $name ==="
+    echo "=== metadata.recovery.strategy=$strategy ==="
     rm -rf "$OBS"
-    KAFKAKN_BROKER_STOP=1 KAFKAKN_STOPPED_EXTRA="$extra" ./gradlew --console=plain ":kafkakn-core:$task" --rerun \
-        --tests '*StoppedBrokerTest*' > "build/b-77-$name.out" 2>&1
-    code=$?
-    # Started again whatever happened, and waited for: the next pass, and every other run, needs the broker.
-    docker start kafkakn-broker > /dev/null 2>&1
-    bash "$H" up > /dev/null || { echo "  THE BROKER DID NOT COME BACK" >&2; exit 1; }
-    printf '  exit=%s\n' "$code"
-    [ "$code" -eq 0 ] || { grep -E "FAILED|Exception" "build/b-77-$name.out" | head -5; fail=1; }
-    local f="$OBS/$arm-local.txt"
-    for i in 0 1 2; do
-        printf '  at %6s ms: %-6s after %5s ms  %s\n' "$(fact "$f" "stopped.$i.at.ms")" \
-            "$(fact "$f" "stopped.$i.said" | cut -c1-6)" "$(fact "$f" "stopped.$i.after.ms")" \
-            "$(fact "$f" "stopped.$i.said" | cut -c1-200)"
-        printf '             fate of r-%s: %s\n' "$i" "$(fact "$f" "stopped.r-$i.fate" | cut -c1-160)"
+    for task in jvmTest linuxX64Test; do
+        KAFKAKN_BROKER_STOP=1 KAFKAKN_STOPPED_EXTRA="$extra" ./gradlew --console=plain ":kafkakn-core:$task" --rerun \
+            --tests '*StoppedBrokerTest*' > "build/b-77-$strategy-$task.out" 2>&1
+        code=$?
+        # Started again whatever happened: the next pass, and every other run, needs the broker.
+        docker start kafkakn-broker > /dev/null 2>&1
+        bash "$H" up > /dev/null || { echo "  THE BROKER DID NOT COME BACK" >&2; exit 1; }
+        printf '  %-14s exit=%s\n' "$task" "$code"
+        [ "$code" -eq 0 ] || { grep -E "FAILED|AssertionError|expected" "build/b-77-$strategy-$task.out" | head -6; bad "$task failed"; }
     done
-    t=$(fact "$f" stopped.topic)
-    [ -n "$t" ] && printf '  the topic holds: %s\n' "$(values "$t" | paste -sd' ')"
-    cp "$f" "build/b-77-$name.facts" 2>/dev/null
-}
-
-pass jvm-default jvmTest jvm ""
-pass jvm-no-rebootstrap jvmTest jvm "metadata.recovery.strategy=none"
-pass native linuxX64Test linuxX64 ""
+    MIN_OBSERVATIONS=3 bash ci/harness/compare-arms.sh "$OBS/jvm.txt" "$OBS/linuxX64.txt" || fail=1
+    for arm in jvm linuxX64; do
+        f="$OBS/$arm-local.txt"
+        echo "  $arm:"
+        for i in 0 1 2; do
+            printf '    r-%s after %5s ms: %s\n' "$i" "$(fact "$f" "stopped.$i.after.ms")" "$(fact "$f" "stopped.$i.said" | cut -c1-150)"
+        done
+        printf '    back: %s\n' "$(fact "$f" stopped.back.said | cut -c1-80)"
+        t=$(fact "$f" stopped.topic)
+        [ -n "$t" ] && printf '    the topic holds: %s\n' "$(values "$t" | paste -sd' ')"
+    done
+done
 
 echo
-[ "$fail" -eq 0 ] || { echo "B-77: a pass did not complete - the measurement is incomplete"; exit 1; }
-echo "B-77: measured; the answers are above, and the decision is the owner's"
+[ "$fail" -eq 0 ] || { echo "B-80: RED"; exit 1; }
+echo "B-80: with every broker down both arms refuse as they ship and queue with metadata.recovery.strategy=none"

@@ -12,6 +12,7 @@ import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.cstr
 import kotlinx.cinterop.get
@@ -211,14 +212,23 @@ private val errorReport =
         CPointer<ByteVar>?,
         COpaquePointer?,
         Unit,
-    > { _, code, reason, _ ->
+    > { _, code, reason, opaque ->
         // `_ALL_BROKERS_DOWN` is skipped, and that is the difference between a usable message and a
         // useless one. It is a SUMMARY of other errors - librdkafka's own header calls it informational
         // and says not to treat it as fatal - and it arrives last, after the error that explains
         // anything. Measured: keeping the last error of any kind produced
         // `Local: All broker connections are down: 1/1 brokers are down` for a certificate that could
         // not be verified, a certificate that had expired, and a port with nothing on it alike.
-        if (code == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN) return@staticCFunction
+        if (code == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN) {
+            // Every broker is down (B-80). The Java client, with `metadata.recovery.strategy=rebootstrap`, its default,
+            // then replaces its metadata with the bootstrap addresses and forgets every topic, so its `send` waits
+            // `max.block.ms` for metadata and refuses (`NetworkClient`, `Metadata.bootstrap`, kafka-clients 4.3.1). Native
+            // forgets the topics it has described, so the next `enqueue` waits the same way. Measured in B-77: before
+            // this, native queued every record the JVM refused.
+            val context = opaque?.asStableRef<HandleContext>()?.get()
+            if (context != null && context.rebootstraps) context.describedTopics.value = emptySet()
+            return@staticCFunction
+        }
         lastConnectionError.value = "${rd_kafka_err2str(code)?.toKString()}: ${reason?.toKString()}"
     }
 
@@ -329,7 +339,13 @@ internal class NativeKafkaProducer(
 
     /** The handle's opaque: the OAUTHBEARER bridge if there is one, and the latest statistics (B-41). */
     private val context =
-        StableRef.create(HandleContext(config.oauthBearerTokenProvider?.let { OAuthBearerBridge(it, oauthScope) }))
+        StableRef.create(
+            HandleContext(
+                oauth = config.oauthBearerTokenProvider?.let { OAuthBearerBridge(it, oauthScope) },
+                // librdkafka refuses any value but `none` and `rebootstrap` at construction, and defaults to the latter.
+                rebootstraps = (config.properties[METADATA_RECOVERY_STRATEGY] ?: "rebootstrap") == "rebootstrap",
+            ),
+        )
 
     private val handle: CPointer<rd_kafka_t> =
         memScoped {
@@ -460,9 +476,6 @@ internal class NativeKafkaProducer(
         return NativeDelivery(slot)
     }
 
-    /** Topics this producer has had metadata for (B-76): an `enqueue` to one of them does not wait for it again. */
-    private val knownTopics = AtomicReference<Set<String>>(emptySet())
-
     /**
      * For tests of the platform seam: [topic] is treated as described, as if the cluster had answered for it and
      * then gone away. That is the one state in which librdkafka holds records it cannot deliver since B-76, and
@@ -470,8 +483,8 @@ internal class NativeKafkaProducer(
      */
     internal fun describedAlready(topic: String) {
         while (true) {
-            val known = knownTopics.value
-            if (knownTopics.compareAndSet(known, known + topic)) return
+            val known = context.get().describedTopics.value
+            if (context.get().describedTopics.compareAndSet(known, known + topic)) return
         }
     }
 
@@ -500,7 +513,7 @@ internal class NativeKafkaProducer(
         started: TimeMark,
     ) {
         var said: String? = null
-        while (topic !in knownTopics.value) {
+        while (topic !in context.get().describedTopics.value) {
             val left = maxBlockMs - started.elapsedNow().inWholeMilliseconds
             if (left <= 0) {
                 val why = lastConnectionError.value?.let { "; last broker error: $it" } ?: ""
@@ -532,7 +545,7 @@ internal class NativeKafkaProducer(
 
     /**
      * ONE request for [topic]'s metadata, bounded by [budgetMs]. Null once the cluster has described it, with the
-     * topic added to [knownTopics]; otherwise what the cluster said, after the Java client's own pause between
+     * topic added to [HandleContext.describedTopics]; otherwise what the cluster said, after the Java client's own pause between
      * metadata requests, `retry.backoff.ms`. The pause is taken here, while this request still holds the topic's
      * wait, so that the callers waiting on it do not ask in its place. Retrying is [awaitMetadata]'s alone: a
      * second loop here once hid whether that one worked. Blocking, on `Dispatchers.IO`.
@@ -545,8 +558,8 @@ internal class NativeKafkaProducer(
         try {
             describe(topic, budgetMs.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt(), asked = "metadata")
             while (true) {
-                val known = knownTopics.value
-                if (knownTopics.compareAndSet(known, known + topic)) return null
+                val known = context.get().describedTopics.value
+                if (context.get().describedTopics.compareAndSet(known, known + topic)) return null
             }
         } catch (unanswered: KafkaMetadataException) {
             delay(minOf(METADATA_RETRY_MS, maxOf(0L, budgetMs - started.elapsedNow().inWholeMilliseconds)))
@@ -931,6 +944,9 @@ internal class NativeKafkaProducer(
         // Not a retry budget the caller can ignore: a queue that never drains is a broken producer,
         // and hanging for ever would be worse than saying so.
         const val MAX_BLOCK_MS = "max.block.ms"
+
+        /** librdkafka's key and the Java client's, with one meaning on both (B-80). */
+        const val METADATA_RECOVERY_STRATEGY = "metadata.recovery.strategy"
 
         /** The Java client's default for `max.block.ms`, so that an unset key bounds the same wait on both arms. */
         const val DEFAULT_MAX_BLOCK_MS = 60_000L

@@ -119,7 +119,9 @@ the run number on the tail.
 **Opened 2026-09-27 at the owner's request.** [mostik](https://github.com/youndie/mostik) found that with the broker
 stopped and a topic already known, the JVM refuses the record and native queues it
 ([B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md)). This is measured first and decided after, since
-why the Java client refuses is not yet known. The day's whole-suite runs found two harness defects. A fixture
+why the Java client refuses was not known. It was Kafka 4's `rebootstrap` default forgetting the topic. The owner
+chose native following the oracle, and [B-80](docs/backlog/B-80-native-forgets-topics-when-every-broker-is-down.md)
+did it. The day's whole-suite runs found two harness defects. A fixture
 topic in the wrong shape was kept silently ([B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md)). A fill
 that expires its records on a loaded machine ([B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md)) is also
 measured before it is touched.
@@ -172,14 +174,13 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (2)
+## Open (1)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[?]` | A stopped broker and a known topic: the JVM refuses the record, native queues it | P1 | M | B-76 |
 | [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[ ]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
 
-## Closed (77)
+## Closed (79)
 
 **It builds, and a test can fail**
 
@@ -313,7 +314,9 @@ verdict.
 
 **What mostik and a day of whole-suite runs turned up**
 
+- [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[x]` - A stopped broker and a known topic: the JVM refuses the record, native queues it
 - [B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md) `[x]` - A fixture topic in the wrong shape stops the harness, instead of failing the suite for the wrong reason
+- [B-80](docs/backlog/B-80-native-forgets-topics-when-every-broker-is-down.md) `[x]` - Native forgets the topics it described when every broker is down, as the Java client's rebootstrap does
 
 <!-- END INDEX -->
 

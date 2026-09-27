@@ -97,6 +97,14 @@ drops records ([research §2.7](../research/research-architecture.md)).
 * **Automated:** `EnqueueMetadataTest.a_record_for_a_topic_created_while_enqueue_waits_is_queued_and_lands`,
   read against the broker by `ci/b-76/run.sh`.
 
+### Scenario: With every broker down, a record for a known topic is not queued
+* **Given:** a producer that has written to a topic, `max.block.ms` of 5 s, and the broker then stopped.
+* **When:** a record is `enqueue`d 5 or 20 s after the stop.
+* **Then:** it throws `RecordNotQueuedException` after `max.block.ms`, on both arms, and is not in the topic once
+  the broker is back. With `metadata.recovery.strategy=none` it is queued instead, on both arms, and lands.
+* **Automated:** `StoppedBrokerTest.a_record_enqueued_while_every_broker_is_down_is_answered_alike_on_both_arms`,
+  read against the broker by `ci/b-77/run.sh` in both strategies.
+
 ### Scenario: A queued record whose wait is cut goes on and lands
 * **Given:** a record `enqueue`d with the broker not answering: queued at once.
 * **When:** the wait on its `Delivery` is cut, and the broker answers later.

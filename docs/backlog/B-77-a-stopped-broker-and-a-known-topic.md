@@ -1,7 +1,7 @@
 ---
 id: B-77
 title: "A stopped broker and a known topic: the JVM refuses the record, native queues it"
-status: question
+status: done
 priority: P1
 size: M
 stage: stage-18-what-the-consumer-and-the-harness-found
@@ -87,3 +87,7 @@ Both answers are true under the contract. Which one should both arms give while 
    find them again through `bootstrap.servers`.
 3. **The contract names the difference** and changes nothing. mostik keeps answering `429` on the JVM and `504` on
    native for the same outage.
+
+## Decision (the owner, 2026-09-27)
+
+**Option 1: native follows the oracle.** Done in [B-80](B-80-native-forgets-topics-when-every-broker-is-down.md).
