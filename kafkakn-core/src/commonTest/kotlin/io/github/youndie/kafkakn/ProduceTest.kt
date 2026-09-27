@@ -70,7 +70,9 @@ class ProduceTest {
     @Test
     fun a_topic_that_does_not_exist_is_an_error_not_a_silence() =
         runTest {
-            val producer = kafkaProducer(producerConfig())
+            // `max.block.ms` bounds the wait for the topic's metadata, on both arms since B-76. At the Java client's
+            // default, 60 s, the wait is as long as `runTest`'s own timeout, and the test lost that race on the JVM.
+            val producer = kafkaProducer(producerConfig("max.block.ms" to "5000"))
             val absent = "kafkakn-absent-${randomSuffix()}"
             try {
                 producer.send(ProducerRecord(absent, "x".encodeToByteArray()))

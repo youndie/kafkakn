@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
@@ -94,6 +95,8 @@ import rdkafka.rd_kafka_vtype_t
 import rdkafka.rd_kafka_vu_t
 import kotlin.concurrent.AtomicLong
 import kotlin.concurrent.AtomicReference
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * The native arm: librdkafka through cinterop.
@@ -437,6 +440,9 @@ internal class NativeKafkaProducer(
     override suspend fun send(record: ProducerRecord): RecordMetadata = enqueue(record).await()
 
     override suspend fun enqueue(record: ProducerRecord): Delivery {
+        // ONE budget for both waits, metadata and then room, as the Java client spends `max.block.ms` on the two.
+        val started = TimeSource.Monotonic.markNow()
+        awaitMetadata(record.topic, started)
         val id = nextId.addAndGet(1)
         val slot = CompletableDeferred<RecordMetadata>()
 
@@ -444,7 +450,7 @@ internal class NativeKafkaProducer(
         // function returns. A registry filled afterwards races with the very callback it is for.
         park(id, slot)
         try {
-            enqueue(id, record)
+            enqueue(id, record, started)
         } catch (failure: Throwable) {
             unpark(id)
             throw failure
@@ -452,6 +458,100 @@ internal class NativeKafkaProducer(
         // Queued. Cancelling the wait on this stops the caller waiting; it does not recall a record librdkafka
         // has already accepted, and the contract does not pretend otherwise (B-73).
         return NativeDelivery(slot)
+    }
+
+    /** Topics this producer has had metadata for (B-76): an `enqueue` to one of them does not wait for it again. */
+    private val knownTopics = AtomicReference<Set<String>>(emptySet())
+
+    /**
+     * For tests of the platform seam: [topic] is treated as described, as if the cluster had answered for it and
+     * then gone away. That is the one state in which librdkafka holds records it cannot deliver since B-76, and
+     * reaching it for real takes a broker that answers once and then stops.
+     */
+    internal fun describedAlready(topic: String) {
+        while (true) {
+            val known = knownTopics.value
+            if (knownTopics.compareAndSet(known, known + topic)) return
+        }
+    }
+
+    /**
+     * The wait for a topic's metadata in progress, one per topic. A burst of `enqueue` calls to a new topic asks the
+     * cluster once, and the others wait for that answer. The value is what the cluster last said, or null.
+     */
+    private val metadataWaits = AtomicReference<Map<String, CompletableDeferred<String?>>>(emptyMap())
+
+    /**
+     * Returns once the cluster has described [topic], or throws [RecordNotQueuedException] when `max.block.ms`, counted
+     * from [started], runs out first (B-76).
+     *
+     * librdkafka queues a record for a topic it has no metadata for, and looks for the metadata in the background. So
+     * `rd_kafka_produceva` said "queued" for a record with nowhere to go: to a cluster that did not answer, or to a
+     * topic that did not exist. The caller read "queued, outcome unknown" where the Java client, which waits for the
+     * metadata inside `send`, says "never queued". And `close` then waited out `message.timeout.ms` for the record.
+     *
+     * Asked again until the budget runs out, as the Java client does: a topic created meanwhile is found, and a missing
+     * one is refused at `max.block.ms`, not at the cluster's first "unknown topic". The wait belongs to the caller that
+     * started it, never to a scope of this producer's, because `close` destroys the handle under anything still
+     * inside `rd_kafka_metadata`.
+     */
+    private suspend fun awaitMetadata(
+        topic: String,
+        started: TimeMark,
+    ) {
+        var said: String? = null
+        while (topic !in knownTopics.value) {
+            val left = maxBlockMs - started.elapsedNow().inWholeMilliseconds
+            if (left <= 0) {
+                val why = lastConnectionError.value?.let { "; last broker error: $it" } ?: ""
+                throw RecordNotQueuedException(
+                    "$topic: not queued, no metadata for the topic within max.block.ms $maxBlockMs" +
+                        (said?.let { " ($it)" } ?: "") + why,
+                )
+            }
+            val current = metadataWaits.value[topic]
+            if (current != null) {
+                withTimeoutOrNull(left) { said = current.await() ?: said }
+                continue
+            }
+            val mine = CompletableDeferred<String?>()
+            val waits = metadataWaits.value
+            if (topic in waits || !metadataWaits.compareAndSet(waits, waits + (topic to mine))) continue
+            try {
+                said = withContext(Dispatchers.IO) { metadataWithin(topic, left) }
+            } finally {
+                // Completed whatever happened, a cancelled caller included: whoever waits on it looks again.
+                mine.complete(said)
+                while (true) {
+                    val now = metadataWaits.value
+                    if (now[topic] !== mine || metadataWaits.compareAndSet(now, now - topic)) break
+                }
+            }
+        }
+    }
+
+    /**
+     * ONE request for [topic]'s metadata, bounded by [budgetMs]. Null once the cluster has described it, with the
+     * topic added to [knownTopics]; otherwise what the cluster said, after the Java client's own pause between
+     * metadata requests, `retry.backoff.ms`. The pause is taken here, while this request still holds the topic's
+     * wait, so that the callers waiting on it do not ask in its place. Retrying is [awaitMetadata]'s alone: a
+     * second loop here once hid whether that one worked. Blocking, on `Dispatchers.IO`.
+     */
+    private suspend fun metadataWithin(
+        topic: String,
+        budgetMs: Long,
+    ): String? {
+        val started = TimeSource.Monotonic.markNow()
+        try {
+            describe(topic, budgetMs.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt(), asked = "metadata")
+            while (true) {
+                val known = knownTopics.value
+                if (knownTopics.compareAndSet(known, known + topic)) return null
+            }
+        } catch (unanswered: KafkaMetadataException) {
+            delay(minOf(METADATA_RETRY_MS, maxOf(0L, budgetMs - started.elapsedNow().inWholeMilliseconds)))
+            return unanswered.message
+        }
     }
 
     private class NativeDelivery(
@@ -474,8 +574,8 @@ internal class NativeKafkaProducer(
     private suspend fun enqueue(
         id: Long,
         record: ProducerRecord,
+        started: TimeMark,
     ) {
-        var waited = 0L
         while (true) {
             val error = produceOnce(id, record)
             if (error == RD_KAFKA_RESP_ERR_NO_ERROR) return
@@ -488,7 +588,7 @@ internal class NativeKafkaProducer(
             // than a spin. Neither blocks the thread.
             rd_kafka_poll(handle, 0)
             delay(BACKPRESSURE_DELAY_MS)
-            waited += BACKPRESSURE_DELAY_MS
+            val waited = started.elapsedNow().inWholeMilliseconds
             // `max.block.ms`, the Java client's own key and bound (B-74): a fixed 120 s here once, and a different
             // type from the JVM's for the same "not queued". Now the same key, the same type, on both arms.
             if (waited > maxBlockMs) {
@@ -606,19 +706,22 @@ internal class NativeKafkaProducer(
      * requests", and this is one. The Java client bounds the same question by `max.block.ms`, a key
      * that exists only there.
      */
-    private fun describe(topic: String): List<PartitionInfo> =
+    private fun describe(
+        topic: String,
+        timeout: Int = effectiveConfig("socket.timeout.ms")?.toIntOrNull() ?: DEFAULT_SOCKET_TIMEOUT_MS,
+        asked: String = "partitionsFor($topic)",
+    ): List<PartitionInfo> =
         memScoped {
-            val timeout = effectiveConfig("socket.timeout.ms")?.toIntOrNull() ?: DEFAULT_SOCKET_TIMEOUT_MS
             val rkt = rd_kafka_topic_new(handle, topic, null) ?: error("rd_kafka_topic_new returned null for $topic")
             try {
                 val described = alloc<CPointerVar<rd_kafka_metadata_t>>()
                 val err = rd_kafka_metadata(handle, 0, rkt, described.ptr, timeout)
                 if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-                    throw KafkaMetadataException("partitionsFor($topic): ${rd_kafka_err2str(err)?.toKString()}")
+                    throw KafkaMetadataException("$asked: ${rd_kafka_err2str(err)?.toKString()}")
                 }
                 val metadata = described.value ?: error("rd_kafka_metadata succeeded and described nothing")
                 try {
-                    partitionsOf(topic, metadata.pointed)
+                    partitionsOf(topic, metadata.pointed, asked)
                 } finally {
                     rd_kafka_metadata_destroy(metadata)
                 }
@@ -630,16 +733,15 @@ internal class NativeKafkaProducer(
     private fun partitionsOf(
         topic: String,
         metadata: rd_kafka_metadata_t,
+        asked: String,
     ): List<PartitionInfo> {
         val described =
             (0 until metadata.topic_cnt).map { metadata.topics!![it] }.singleOrNull { it.topic?.toKString() == topic }
-                ?: throw KafkaMetadataException(
-                    "partitionsFor($topic): the cluster's answer did not describe the topic",
-                )
+                ?: throw KafkaMetadataException("$asked: the cluster's answer did not describe the topic")
         // A topic the broker does not have comes back as a described topic carrying an error, not as
         // a failed call - the error has to be read here or an unknown topic is an empty list.
         if (described.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-            throw KafkaMetadataException("partitionsFor($topic): ${rd_kafka_err2str(described.err)?.toKString()}")
+            throw KafkaMetadataException("$asked: ${rd_kafka_err2str(described.err)?.toKString()}")
         }
         return (0 until described.partition_cnt)
             .map { index ->
@@ -822,6 +924,9 @@ internal class NativeKafkaProducer(
         const val DEFAULT_SOCKET_TIMEOUT_MS = 60_000
         const val POLL_IDLE_MS = 2L
         const val BACKPRESSURE_DELAY_MS = 1L
+
+        /** Between two metadata requests for a topic not yet described: the Java client's `retry.backoff.ms`. */
+        const val METADATA_RETRY_MS = 100L
 
         // Not a retry budget the caller can ignore: a queue that never drains is a broken producer,
         // and hanging for ever would be worse than saying so.

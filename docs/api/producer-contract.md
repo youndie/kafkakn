@@ -153,6 +153,27 @@ bridge answering `429` or `504`, reads the answer off the step that ended:
     the broker answered, every queued record was in the topic, and the refused one was not;
   - a record `enqueue`d with the broker paused was queued at once (0 ms). Its `await()` was cut at 1 s, and
     it landed at offset 1 once the broker answered, read by the Java client.
+- **"No metadata" is the other half of the row, and native kept it only since
+  [B-76](../backlog/B-76-enqueue-without-metadata.md).** librdkafka queues a record for a topic it has no metadata
+  for and looks for the metadata in the background, so the native `enqueue` said "queued" for a record with
+  nowhere to go. Its `close` then waited out `message.timeout.ms` for that record: 300 200 ms, measured by the
+  first consumer. The native `enqueue` now waits for the topic's metadata before it queues, off the caller's
+  dispatcher, retrying every 100 ms (the Java client's `retry.backoff.ms`) until the cluster describes the topic
+  or `max.block.ms` runs out. The wait for metadata and the wait for room share the one `max.block.ms`, as they do
+  in the Java client. A topic described once is not waited for again by that producer. A burst of `enqueue` calls
+  to a new topic asks the cluster once.
+- *Measured* 2026-09-27 (`ci/b-76/run.sh`, both arms, `max.block.ms` 1 000):
+
+  | | JVM | native |
+  |---|---|---|
+  | no broker at the address | `RecordNotQueuedException` after 1 025 ms; `close` 7 ms | `RecordNotQueuedException` after 1 003 ms; `close` 0 ms |
+  | a topic that does not exist (auto-creation off) | `RecordNotQueuedException` after 1 002 ms | `RecordNotQueuedException` after 1 001 ms; the topic is still absent |
+  | the topic created 2 s into the wait (`max.block.ms` 20 000) | queued after 2 726 ms, landed at offset 0 | queued after 2 095 ms, landed at offset 0 |
+
+  Unlike `partitionsFor`, which answers an unknown topic in about 57 ms on native, `enqueue` keeps asking until
+  `max.block.ms` on both arms, so a topic created meanwhile is found. The native message names the cluster's
+  last answer (*"Local: Broker transport failure"*, *"Broker: Unknown topic or partition"*) and, when there is
+  one, the last broker error.
 
 ### A null value is a tombstone
 
@@ -329,8 +350,10 @@ arms: `ExpiringCredentialRefreshingLogin` on the JVM, the refresh callback on na
   channel: an exception out of the handler is replaced by *"An internal error occurred while retrieving
   token from callback handler"* (`OAuthBearerLoginModule.identifyToken`, 4.3.1, measured before it was
   read), while `OAuthBearerTokenCallback.error` becomes the `LoginException`'s message. The JVM arm fails
-  at construction — the Java client logs in there; the native arm at the first `send`, after
-  `message.timeout.ms`, with *"Failed to acquire SASL OAUTHBEARER token: …"* and the provider's words.
+  at construction — the Java client logs in there; the native arm at the first `enqueue`, after
+  `max.block.ms`, with a `RecordNotQueuedException` whose message ends with *"Failed to acquire SASL
+  OAUTHBEARER token: …"* and the provider's words (since B-76; before it, the first `send` failed after
+  `message.timeout.ms`).
   The words travel; the exception object does not, on either arm.
 - **Measured 2026-09-25**, `ci/b-33/run.sh`: 50/50 records with the caller's tokens on each arm; with
   twelve-second tokens and a broker that re-authenticates OAUTHBEARER connections every ten seconds,
@@ -343,8 +366,10 @@ is refused at construction.
 
 A wrong password makes `send` throw, and the message **names authentication**. As for an
 unverifiable peer, the native arm reports it through the error callback — measured, *"… SASL
-authentication error: Authentication failed: Invalid username or password"* — and waits out
-`message.timeout.ms` first; the JVM arm throws `SaslAuthenticationException` at once.
+authentication error: Authentication failed: Invalid username or password"* — and `enqueue` waits
+out `max.block.ms` for metadata the cluster will not give before it throws `RecordNotQueuedException`
+carrying that sentence (since B-76; before it, the record waited out `message.timeout.ms`). The JVM arm
+throws `SaslAuthenticationException` at once.
 
 ### `partitionsFor`
 
@@ -757,7 +782,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |
 | an admin client deletes records before an offset past the partition's end | `IllegalArgumentException`, on both arms, and nothing is deleted |
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
-| no room in the queue, or no metadata, within `max.block.ms` | `enqueue` (and so `send`) throws `RecordNotQueuedException`, on both arms: never queued |
+| no room in the queue, or no metadata, within `max.block.ms` | `enqueue` (and so `send`) throws `RecordNotQueuedException`, on both arms: never queued. Measured: room 2026-09-26 (B-74), metadata 2026-09-27 (B-76) |
 | `sendOffsetsToTransaction` with group metadata the group has moved past | `StaleGroupMetadataException`, on both arms; abort and read again from the group's commit |
 | producer closed | `send` throws `IllegalStateException` |
 
@@ -765,16 +790,18 @@ Error **text** is not part of the contract; error **type** and the fact that som
 all are.
 
 **How long an unverifiable peer takes to fail is not the same on the two arms, and the contract says
-so rather than promising the faster one.** `rd_kafka_new` connects to nothing, and
-`rd_kafka_produce` only enqueues, so on native the record waits out `message.timeout.ms` — **300 000
-ms by default** — and comes back as `Local: Message timed out`. What makes it nameable is the error
-callback, which keeps the last connection error that is not `_ALL_BROKERS_DOWN`, so the message ends
-up carrying *"certificate verify failed: broker certificate could not be verified, verify that
+so rather than promising the faster one.** `rd_kafka_new` connects to nothing, and a peer that cannot be
+verified never describes a topic, so on native `enqueue` waits for metadata until `max.block.ms` — **60 000
+ms by default** — and throws `RecordNotQueuedException`: the record was never queued
+([B-76](../backlog/B-76-enqueue-without-metadata.md)). Before B-76 the record was queued without metadata,
+waited out `message.timeout.ms` (300 000 ms by default) and came back as `Local: Message timed out`. What
+makes either nameable is the error callback, which keeps the last connection error that is not
+`_ALL_BROKERS_DOWN`, so the message ends up carrying *"certificate verify failed: broker certificate could not be verified, verify that
 `ssl.ca.location` is correctly configured"* ([research §2.9](../research/research-architecture.md)).
 The JVM arm fails in seconds with `SslAuthenticationException`.
 
-A caller who wants a native failure in seconds rather than minutes sets `message.timeout.ms`, which
-is a platform key; the suite does exactly that. Failing pending sends the moment the error callback
+A caller who wants a native failure in seconds rather than a minute sets `max.block.ms`, which both arms
+honour; the suite does exactly that. Failing pending sends the moment the error callback
 reports an SSL error would remove the difference, and it is not done: it would mean this library
 deciding that one class of librdkafka error is fatal, which is a policy librdkafka deliberately
 leaves to the application.

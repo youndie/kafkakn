@@ -24,9 +24,11 @@ import kotlin.time.TimeSource
  * `JvmDispatcherSeamTest` holds for `send` on the other arm, with the mark taken before the call
  * (research §2.22).
  *
- * **A platform-seam test, and in `linuxX64Test` on purpose.** The fixture is a port with no broker:
- * librdkafka queues the records at once and keeps them until `message.timeout.ms`, so `flush` has
- * something to wait for. The Java client queues nothing without metadata, so the same fixture makes its
+ * **A platform-seam test, and in `linuxX64Test` on purpose.** The fixture is a port with no broker, and a
+ * topic the producer treats as already described: librdkafka queues the records at once and keeps them until
+ * `message.timeout.ms`, so `flush` has something to wait for. Before B-76 the port alone was the fixture,
+ * because the native `enqueue` queued a record with no metadata; now it waits for the metadata and refuses, so
+ * the topic is marked described, the state of a producer whose cluster answered once and then went away. The Java client queues nothing without metadata, so the same fixture makes its
  * `flush` return at once — vacuous there, and that arm's `flush` runs on `Dispatchers.IO` by construction.
  * The strict topic was tried first and does not work on either arm: the broker refuses those records at
  * once, which drains the queue as surely as an acknowledgement (the lesson `JvmDispatcherSeamTest` records).
@@ -37,13 +39,13 @@ class NativeFlushSeamTest {
     fun flush_with_records_pending_does_not_hold_the_callers_dispatcher() =
         runTest(timeout = 2.minutes) {
             val producer =
-                kafkaProducer(
+                NativeKafkaProducer(
                     ProducerConfig(
                         "bootstrap.servers" to "127.0.0.1:9099",
                         "message.timeout.ms" to PENDING_MS.toString(),
                         "socket.timeout.ms" to "2000",
                     ),
-                )
+                ).apply { describedAlready(testTopic) }
             val lane = Dispatchers.Default.limitedParallelism(1)
             var longestSilence = Duration.ZERO
             var waited = Duration.ZERO

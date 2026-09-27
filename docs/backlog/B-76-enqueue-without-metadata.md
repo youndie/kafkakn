@@ -1,7 +1,7 @@
 ---
 id: B-76
 title: "Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says"
-status: open
+status: done
 priority: P0
 size: M
 stage: stage-16-a-deadline-on-send
@@ -56,3 +56,37 @@ same on both.
 - AC: the contract's error table carries a *measured* date for the metadata half of the row, per arm.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `docs/api/producer-contract.md`, `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/`.
+
+## Findings (2026-09-27)
+
+- **Done: the first candidate.** Before the first `enqueue` to a topic, the native arm asks for that topic's
+  metadata (`rd_kafka_metadata` for one topic, on `Dispatchers.IO`). It asks again after 100 ms (the Java
+  client's `retry.backoff.ms`) until the cluster describes the topic or `max.block.ms` runs out, and remembers
+  topics already described. One request at a time per topic: a burst of `enqueue` calls to a new topic waits on
+  the one in flight. The wait for metadata and the wait for room share one `max.block.ms`. The second candidate,
+  purging from the unassigned queue, was not needed.
+- **Does not break a topic created on first use.** `rd_kafka_metadata` for one topic asks with the producer's own
+  `allow.auto.create.topics`, the same as the produce path (`rdkafka_metadata.c`, librdkafka 2.13.0, lines 98–140).
+- *Measured*, `ci/b-76/run.sh`, `max.block.ms` 1 000. No broker: JVM 1 025 ms, native 1 003 ms, `close` 7 ms
+  and 0 ms. Missing topic: 1 002 ms and 1 001 ms, and the topic is still absent. Topic created 2 s into a 20 s
+  wait: queued after 2 726 ms and 2 095 ms, landed at offset 0. The arms agree on all five observations. Red
+  before the fix: native queued all three at 0 ms.
+- **What changed for a caller the cluster refuses** (TLS peer not verifiable, SASL credentials refused, an
+  OAUTHBEARER provider that throws). On native the refusal now arrives from `enqueue` at `max.block.ms`, as a
+  `RecordNotQueuedException` carrying the last broker error. Before, it arrived from `await` after
+  `message.timeout.ms`. The words are unchanged; `ci/b-11`, `b-31`, `b-32` and `b-33` are green, and
+  `failFastConfig` sets `max.block.ms` 20 000 on native as on the JVM.
+- **Two tests had leaned on the defect or on a race.** `NativeFlushSeamTest`'s fixture was "records queued with
+  no broker", which only existed because of this defect. It now marks the topic described (`describedAlready`),
+  the state of a cluster that answered once and went away. `ProduceTest`'s missing-topic test waited
+  `max.block.ms` at the 60 s default, as long as `runTest`'s own timeout; it sets 5 000 now.
+- **Mutants.** Removing the inner retry loop survived, because the outer loop asked again anyway (without the
+  pause). The inner loop was removed, and one loop remains. Refusing after the first request instead was killed
+  by `a_record_for_a_topic_created_while_enqueue_waits_is_queued_and_lands`.
+- **Regressions**, all green: `ci/b-74` (queue full, B-73), `ci/b-09` (accounting 3 000 → 3 000 on both arms,
+  control red), `ci/b-11` (150 native tests), `ci/b-27`, `ci/b-29`, `ci/b-31`, `ci/b-32`, `ci/b-33`.
+- **Environment, not this change.** The test broker's `kafkakn` topic had one partition, not the three the suite
+  expects, so `ExplicitPartitionTest` failed on both arms in a whole-suite run; recreated with three.
+  `PollAfterRebalanceTest` failed on the JVM three times in whole-suite runs, with its fill's records expiring
+  after 120 s, while the shared build machine was loaded. It passed alone, with `EnqueueMetadataTest`, in a whole
+  JVM suite on `main`, and in a whole JVM suite on this branch afterwards.
