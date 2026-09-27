@@ -22,13 +22,24 @@ import kotlin.concurrent.AtomicReference
 
 /**
  * What librdkafka's callbacks reach through the handle's opaque — one per handle, because a handle has
- * one opaque: the OAUTHBEARER bridge when there is a provider (B-33), and the latest statistics
- * document (B-41).
+ * one opaque: the OAUTHBEARER bridge when there is a provider (B-33), the latest statistics
+ * document (B-41), and the topics the producer has had metadata for (B-76, B-80).
  */
 internal class HandleContext(
     val oauth: OAuthBearerBridge?,
+    /**
+     * Whether the topics in [describedTopics] are forgotten when every broker is down (B-80): the effective
+     * `metadata.recovery.strategy` is `rebootstrap`, librdkafka's default and the Java client's.
+     */
+    val rebootstraps: Boolean,
 ) {
     val statistics = AtomicReference<String?>(null)
+
+    /**
+     * Topics the producer has had metadata for: an `enqueue` to one of them does not wait for it again (B-76). Here,
+     * where the error callback reaches it, because that callback is what empties it (B-80).
+     */
+    val describedTopics = AtomicReference<Set<String>>(emptySet())
 }
 
 /**
