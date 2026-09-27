@@ -30,3 +30,8 @@ and stops only that one.
 - AC: if it is the broker or the machine, the fill is sized to what the fixture can take, and the item says so. If
   it is the client, that is a finding for the contract, not a test change.
 - Anchors: `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/PollAfterRebalanceTest.kt`.
+
+## Iteration log
+
+- 2026-09-27, B-80's regressions: a fourth time, in `ci/b-09/run.sh`'s control pass (the whole suite run against
+  the dropping producer), with the same message. Pass 1 of the same run, the whole suite, was green.
