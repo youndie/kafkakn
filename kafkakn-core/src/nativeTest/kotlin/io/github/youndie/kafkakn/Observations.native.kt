@@ -76,6 +76,12 @@ internal actual fun brokerPaused(paused: Boolean) {
     check(!paused || exit == 0) { "docker could not pause the broker" }
 }
 
+internal actual fun brokerStopped(stopped: Boolean) {
+    val command = if (stopped) "docker stop -t 1 kafkakn-broker" else "docker start kafkakn-broker"
+    val exit = platform.posix.system("$command > /dev/null 2>&1")
+    check(exit == 0) { "docker could not ${if (stopped) "stop" else "start"} the broker" }
+}
+
 internal actual fun adminFailFastConfig(): Map<String, String> = mapOf("socket.timeout.ms" to "5000")
 
 internal actual fun failFastConfig(): Map<String, String> =
