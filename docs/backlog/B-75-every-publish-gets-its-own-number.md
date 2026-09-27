@@ -12,7 +12,7 @@ blocked_by: []
 # B-75 — every publish gets a number of its own
 
 Every publish so far went out as `0.1.0-SNAPSHOT`, six builds under one name by 2026-09-26. A consumer
-cannot name the build it depends on. The HTTP bridge on keel needed `enqueue` (B-74) and could only
+cannot name the build it depends on. [mostik](https://github.com/youndie/mostik), the HTTP bridge on keel built as this library's consumer, needed `enqueue` (B-74) and could only
 say so by quoting a timestamped build, `0.1.0-20260926.224535-6`. The next publish from `main`
 replaces what `0.1.0-SNAPSHOT` resolves to, and nothing downstream notices.
 

@@ -14,7 +14,7 @@ blocked_by: [B-74]
 The contract's error table, since [B-74](B-74-a-cut-wait-says-whether-the-record-was-queued.md), says that
 when there is *no room in the queue, or no metadata*, within `max.block.ms`, `enqueue` (and so `send`) throws
 `RecordNotQueuedException` on both arms. B-74 measured the queue-full half only. The metadata half was measured
-on 2026-09-27 by a consumer, an HTTP bridge planned on keel. It used a bootstrap address nobody listens on,
+on 2026-09-27 by [mostik](https://github.com/youndie/mostik), the HTTP → Kafka bridge on keel developed as this library's consumer. It used a bootstrap address nobody listens on,
 `max.block.ms` 1 000, and one `enqueue` to a topic:
 
 | | JVM | native |

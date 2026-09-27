@@ -316,8 +316,8 @@ Amended 2026-09-17: the group was `io.github.youndie` until the publishing token
 that visible.
 
 Amended 2026-09-27 ([B-75](../backlog/B-75-every-publish-gets-its-own-number.md)): the snapshot is gone.
-Six builds had gone out as `0.1.0-SNAPSHOT`, each replacing the last. The first consumer, an HTTP bridge,
-could name the build carrying `enqueue` only by its timestamp, and the next publish would have replaced it
+Six builds had gone out as `0.1.0-SNAPSHOT`, each replacing the last. The consumer built for it,
+[mostik](https://github.com/youndie/mostik), an HTTP bridge, could name the build carrying `enqueue` only by its timestamp, and the next publish would have replaced it
 unseen. Every publish is now `<head>.<run number>`, the scheme `sborka` publishes under, into the same
 repository. It is never overwritten and is tagged at its commit. This is still not a release: no Central
 and no compatibility promise. What a number promises is only that the bytes it names never change.
