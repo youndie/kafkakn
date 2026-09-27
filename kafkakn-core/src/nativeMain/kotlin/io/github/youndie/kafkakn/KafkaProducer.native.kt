@@ -490,7 +490,7 @@ internal class NativeKafkaProducer(
      * topic that did not exist. The caller read "queued, outcome unknown" where the Java client, which waits for the
      * metadata inside `send`, says "never queued". And `close` then waited out `message.timeout.ms` for the record.
      *
-     * Retried until the budget runs out, as the Java client does: a topic created meanwhile is found, and a missing
+     * Asked again until the budget runs out, as the Java client does: a topic created meanwhile is found, and a missing
      * one is refused at `max.block.ms`, not at the cluster's first "unknown topic". The wait belongs to the caller that
      * started it, never to a scope of this producer's, because `close` destroys the handle under anything still
      * inside `rd_kafka_metadata`.
@@ -531,29 +531,26 @@ internal class NativeKafkaProducer(
     }
 
     /**
-     * Asks the cluster to describe [topic] until it does or [budgetMs] runs out. Null once it has, with the topic added
-     * to [knownTopics]; otherwise the last thing the cluster said. Blocking, on `Dispatchers.IO`.
+     * ONE request for [topic]'s metadata, bounded by [budgetMs]. Null once the cluster has described it, with the
+     * topic added to [knownTopics]; otherwise what the cluster said, after the Java client's own pause between
+     * metadata requests, `retry.backoff.ms`. The pause is taken here, while this request still holds the topic's
+     * wait, so that the callers waiting on it do not ask in its place. Retrying is [awaitMetadata]'s alone: a
+     * second loop here once hid whether that one worked. Blocking, on `Dispatchers.IO`.
      */
     private suspend fun metadataWithin(
         topic: String,
         budgetMs: Long,
     ): String? {
         val started = TimeSource.Monotonic.markNow()
-        var said: String? = null
-        while (true) {
-            val left = budgetMs - started.elapsedNow().inWholeMilliseconds
-            if (left <= 0) return said
-            try {
-                describe(topic, left.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), asked = "metadata")
-                while (true) {
-                    val known = knownTopics.value
-                    if (knownTopics.compareAndSet(known, known + topic)) return null
-                }
-            } catch (unanswered: KafkaMetadataException) {
-                said = unanswered.message
+        try {
+            describe(topic, budgetMs.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt(), asked = "metadata")
+            while (true) {
+                val known = knownTopics.value
+                if (knownTopics.compareAndSet(known, known + topic)) return null
             }
-            // The Java client's own pause between metadata requests, `retry.backoff.ms`.
+        } catch (unanswered: KafkaMetadataException) {
             delay(minOf(METADATA_RETRY_MS, maxOf(0L, budgetMs - started.elapsedNow().inWholeMilliseconds)))
+            return unanswered.message
         }
     }
 
