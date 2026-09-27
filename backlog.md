@@ -178,7 +178,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[ ]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
+| [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[~]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
 
 ## Closed (79)
 

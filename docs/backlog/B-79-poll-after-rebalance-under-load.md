@@ -1,7 +1,7 @@
 ---
 id: B-79
 title: "PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found
