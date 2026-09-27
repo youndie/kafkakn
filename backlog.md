@@ -176,10 +176,10 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[?]` | A stopped broker and a known topic: the JVM refuses the record, native queues it | P1 | M | B-76 |
+| [B-80](docs/backlog/B-80-native-forgets-topics-when-every-broker-is-down.md) `[~]` | Native forgets the topics it described when every broker is down, as the Java client's rebootstrap does | P1 | M | B-77 |
 | [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[ ]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
 
-## Closed (77)
+## Closed (78)
 
 **It builds, and a test can fail**
 
@@ -313,6 +313,7 @@ verdict.
 
 **What mostik and a day of whole-suite runs turned up**
 
+- [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[x]` - A stopped broker and a known topic: the JVM refuses the record, native queues it
 - [B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md) `[x]` - A fixture topic in the wrong shape stops the harness, instead of failing the suite for the wrong reason
 
 <!-- END INDEX -->
