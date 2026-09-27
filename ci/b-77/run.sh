@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # B-77, B-80: the broker is stopped (docker stop, connections refused) with a topic already known, and each arm
-# enqueues at 0, 5 and 20 s after the stop, then once more when the broker is back. Two strategies, both arms each,
+# enqueues at 0, 5 and 20 s after the stop, then once more when the broker is back. The answer at 0 s is printed
+# and not asserted: neither client has noticed the stop yet, and the JVM answered it both ways. Two strategies, both arms each,
 # compared: as they ship (metadata.recovery.strategy=rebootstrap), where both must refuse; and with
 # metadata.recovery.strategy=none, where both must queue. The topic is read back with the broker's own reader.
 #
@@ -42,7 +43,7 @@ for strategy in rebootstrap none; do
         printf '  %-14s exit=%s\n' "$task" "$code"
         [ "$code" -eq 0 ] || { grep -E "FAILED|AssertionError|expected" "build/b-77-$strategy-$task.out" | head -6; bad "$task failed"; }
     done
-    MIN_OBSERVATIONS=4 bash ci/harness/compare-arms.sh "$OBS/jvm.txt" "$OBS/linuxX64.txt" || fail=1
+    MIN_OBSERVATIONS=3 bash ci/harness/compare-arms.sh "$OBS/jvm.txt" "$OBS/linuxX64.txt" || fail=1
     for arm in jvm linuxX64; do
         f="$OBS/$arm-local.txt"
         echo "  $arm:"

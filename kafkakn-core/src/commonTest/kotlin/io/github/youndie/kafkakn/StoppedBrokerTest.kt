@@ -21,10 +21,14 @@ import kotlin.time.TimeSource
  * the Java client's `metadata.recovery.strategy`, `rebootstrap` by default, forgets a known topic when no broker is
  * reachable, so its `send` refuses at `max.block.ms`, while native queued.
  * [B-80](../../../../../../../docs/backlog/B-80-native-forgets-topics-when-every-broker-is-down.md) makes native
- * follow the oracle. So, with `enqueue` at 0, 5 and 20 s after `docker stop`:
+ * follow the oracle. So, with `enqueue` at 5 and 20 s after `docker stop`:
  * - as they ship, both arms refuse every record with [RecordNotQueuedException], and none is in the topic after;
  * - with `metadata.recovery.strategy=none` (`KAFKAKN_STOPPED_EXTRA`), both queue every record, and each lands;
  * - either way, once the broker is back, the topic is described again and the next record is queued and lands.
+ *
+ * A record at the moment of the stop is recorded and not asserted. Neither client has noticed yet that the brokers
+ * are gone, and the JVM answered both ways at 0 s in two runs: refused on 2026-09-27 in B-77, and queued in B-80's
+ * first run. No contract can promise an answer the oracle does not give consistently.
  *
  * Only when `ci/b-77/run.sh` asks, with `KAFKAKN_BROKER_STOP`: stopping the broker under other tests would fail them.
  */
@@ -79,13 +83,15 @@ class StoppedBrokerTest {
                                     queued +=
                                         value to producer.enqueue(ProducerRecord(topic, value.encodeToByteArray()))
                                 }
-                            answers += said.substringBefore(":")
                             recordArmFact(
                                 "stopped.$index.after.ms",
                                 started.elapsedNow().inWholeMilliseconds.toString(),
                             )
                             recordArmFact("stopped.$index.said", said.replace('\n', ' ').take(REASON))
-                            recordObservation("stopped.$index", said.substringBefore(":"))
+                            if (at >= NOTICED) {
+                                answers += said.substringBefore(":")
+                                recordObservation("stopped.$index", said.substringBefore(":"))
+                            }
                         }
                     } finally {
                         brokerStopped(false)
@@ -119,7 +125,8 @@ class StoppedBrokerTest {
                     recordArmFact("stopped.topic", topic)
                     recordArmFact("stopped.extra", extra?.let { "${it.first}=${it.second}" } ?: "none")
                     val expected = if (keeps) "queued" else "threw RecordNotQueuedException"
-                    assertEquals(List(MOMENTS.size) { expected }, answers, "while every broker was down")
+                    assertEquals(MOMENTS.count { it >= NOTICED }, answers.size)
+                    assertEquals(List(answers.size) { expected }, answers, "while every broker was down")
                     assertEquals("queued", backSaid, "once the broker was back")
                     assertTrue(fates.values.all { it == "landed" }, "every queued record lands: $fates")
                 } finally {
@@ -143,6 +150,9 @@ class StoppedBrokerTest {
         const val MAX_BLOCK_MS = 5_000L
         const val REASON = 300
         val MOMENTS = listOf(0.seconds, 5.seconds, 20.seconds)
+
+        /** From when an answer is asserted: after both clients have had time to see every broker gone. */
+        val NOTICED = 5.seconds
         val BACK = 2.minutes
         val LANDING = 3.minutes
     }
