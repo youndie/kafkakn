@@ -90,15 +90,16 @@ wrong by something other than a test written around one promise.
 
 ### Stage 16: a deadline on `send`
 
-**Opened 2026-09-26 at the owner's request.** A second consumer is being planned: an HTTP bridge built on
-keel, whose response waits for the broker's acknowledgement under a deadline. Before any of it exists, it has
-found a question this repository never asked. `send` can be cancelled on both arms, and the contract does not
+**Opened 2026-09-26 at the owner's request.** The second consumer is [mostik](https://github.com/youndie/mostik), an HTTP → Kafka bridge built on
+keel and developed as this library's consumer on purpose, under the rule of stage 15: nothing further is built
+here without a consumer who needs it. Its response waits for the broker's acknowledgement under a deadline.
+While it was still being designed, it found a question this repository never asked. `send` can be cancelled on both arms, and the contract does not
 say what a cancelled `send` means for its record. [B-73](docs/backlog/B-73-a-cancelled-send.md) writes that
 down and measures it. [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) lets a caller
 whose wait was cut tell "never queued" from "queued, outcome unknown". The bridge's honest answers, `429` for
 the first and `504` for the second, depend on that split.
 
-**Reopened 2026-09-27.** The bridge measured the half of B-74's promise that B-74 did not measure. When a
+**Reopened 2026-09-27.** mostik measured the half of B-74's promise that B-74 did not measure. When a
 topic's metadata does not arrive, the JVM arm refuses the record and the native arm queues it.
 [B-76](docs/backlog/B-76-enqueue-without-metadata.md) makes the native arm keep the promise; the owner chose
 that over correcting the promise to the measurement.
@@ -107,9 +108,9 @@ client does, and both arms refuse alike. Stage 16 is closed again.
 
 ### Stage 17: numbered publishes
 
-**Opened 2026-09-27 at the owner's request.** Six builds had gone out as `0.1.0-SNAPSHOT`. The HTTP bridge
-could name the one carrying `enqueue` only by its timestamp, and the next publish would have replaced it
-without the bridge noticing. [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) gives every
+**Opened 2026-09-27 at the owner's request.** Six builds had gone out as `0.1.0-SNAPSHOT`. mostik could
+name the one carrying `enqueue` only by its timestamp, and the next publish would have replaced it without
+mostik noticing. [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) gives every
 publish a number of its own, the way `sborka` numbers its own publishes: the head from `gradle.properties`,
 the run number on the tail.
 
