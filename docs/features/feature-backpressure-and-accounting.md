@@ -80,6 +80,23 @@ drops records ([research §2.7](../research/research-architecture.md)).
 * **Automated:** `EnqueueTest.a_record_the_queue_has_no_room_for_within_max_block_ms_is_not_queued`, read
   against the broker by `ci/b-74/run.sh`.
 
+### Scenario: A record whose topic has no metadata within max.block.ms is not queued
+* **Given:** a producer with `max.block.ms` of 1 s, and either no broker at its address or a topic that does
+  not exist.
+* **When:** a record is `enqueue`d.
+* **Then:** after `max.block.ms` it throws `RecordNotQueuedException`, on both arms; with no broker, `close`
+  returns at once because nothing was queued; the missing topic is still missing.
+* **Automated:** `EnqueueMetadataTest.a_record_for_a_cluster_that_does_not_answer_is_not_queued_within_max_block_ms`
+  and `EnqueueMetadataTest.a_record_for_a_topic_that_does_not_exist_is_not_queued`, read against the broker by
+  `ci/b-76/run.sh`.
+
+### Scenario: A record whose topic appears while enqueue waits is queued
+* **Given:** a producer with `max.block.ms` of 20 s, and a topic created 2 s after the `enqueue`.
+* **When:** the topic exists.
+* **Then:** the record is queued then, not before, and lands at offset 0, on both arms.
+* **Automated:** `EnqueueMetadataTest.a_record_for_a_topic_created_while_enqueue_waits_is_queued_and_lands`,
+  read against the broker by `ci/b-76/run.sh`.
+
 ### Scenario: A queued record whose wait is cut goes on and lands
 * **Given:** a record `enqueue`d with the broker not answering: queued at once.
 * **When:** the wait on its `Delivery` is cut, and the broker answers later.
