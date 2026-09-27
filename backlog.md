@@ -102,6 +102,8 @@ the first and `504` for the second, depend on that split.
 topic's metadata does not arrive, the JVM arm refuses the record and the native arm queues it.
 [B-76](docs/backlog/B-76-enqueue-without-metadata.md) makes the native arm keep the promise; the owner chose
 that over correcting the promise to the measurement.
+It does since 2026-09-27: the native `enqueue` waits for the topic's metadata, up to `max.block.ms`, as the Java
+client does, and both arms refuse alike. Stage 16 is closed again.
 
 ### Stage 17: numbered publishes
 
@@ -158,13 +160,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-76](docs/backlog/B-76-enqueue-without-metadata.md) `[~]` | Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says | P0 | M | B-74 |
+No open tasks.
 
-## Closed (75)
+## Closed (76)
 
 **It builds, and a test can fail**
 
@@ -290,6 +290,7 @@ verdict.
 
 - [B-73](docs/backlog/B-73-a-cancelled-send.md) `[x]` - A cancelled send: what the contract promises, measured on both arms
 - [B-74](docs/backlog/B-74-a-cut-wait-says-whether-the-record-was-queued.md) `[x]` - A caller whose wait was cut can tell 'never queued' from 'queued, outcome unknown'
+- [B-76](docs/backlog/B-76-enqueue-without-metadata.md) `[x]` - Native enqueue refuses a record whose topic has no metadata within max.block.ms, as the contract says
 
 **A consumer can name the build it depends on**
 
