@@ -132,10 +132,18 @@ class PollAfterRebalanceTest {
         }
         val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to bootstrap, "linger.ms" to "5"))
         try {
+            // Record 0 of each partition ALONE and acknowledged, before any burst (B-79). A burst into a topic created a
+            // moment before gets the Java client stuck: it re-sends the first batch of one partition, sequence 0, after
+            // the broker has accepted later ones, and the broker refuses it as out of order until `delivery.timeout.ms`
+            // expires it. Measured with the Java client alone, no kafkakn: 7 bursts of 10 lost their first batch or more.
+            // One acknowledged record per partition first: 10 of 10 clean on both arms.
+            for (partition in 0..1) {
+                producer.send(ProducerRecord(topic, ByteArray(RECORD_BYTES) { 0 }, partition = partition))
+            }
             // In parallel, a batch at a time: one send awaited after another took minutes for this many.
             for (batch in 0 until PER_PARTITION / BATCH) {
                 coroutineScope {
-                    for (index in batch * BATCH until (batch + 1) * BATCH) {
+                    for (index in maxOf(1, batch * BATCH) until (batch + 1) * BATCH) {
                         for (partition in 0..1) {
                             launch {
                                 producer.send(
