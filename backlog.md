@@ -124,7 +124,9 @@ chose native following the oracle, and [B-80](docs/backlog/B-80-native-forgets-t
 did it. The day's whole-suite runs found two harness defects. A fixture
 topic in the wrong shape was kept silently ([B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md)). A fill
 that expires its records on a loaded machine ([B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md)) is also
-measured before it is touched.
+measured before it is touched. It was not load. The Java client's idempotent producer gets a burst into a freshly created
+topic stuck, and the Java client alone reproduces it. The fill now acknowledges one record per partition first.
+Stage 18 closed on 2026-09-28.
 
 ### Kill criteria for stage 4
 
@@ -174,13 +176,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[~]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
+No open tasks.
 
-## Closed (79)
+## Closed (80)
 
 **It builds, and a test can fail**
 
@@ -316,6 +316,7 @@ verdict.
 
 - [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[x]` - A stopped broker and a known topic: the JVM refuses the record, native queues it
 - [B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md) `[x]` - A fixture topic in the wrong shape stops the harness, instead of failing the suite for the wrong reason
+- [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[x]` - PollAfterRebalanceTest's JVM fill expires its records: the Java client's burst into a fresh topic
 - [B-80](docs/backlog/B-80-native-forgets-topics-when-every-broker-is-down.md) `[x]` - Native forgets the topics it described when every broker is down, as the Java client's rebootstrap does
 
 <!-- END INDEX -->
