@@ -60,6 +60,23 @@ internal actual fun brokerPaused(paused: Boolean) {
     check(!paused || exit == 0) { "docker could not pause the broker" }
 }
 
+internal actual fun brokerStopped(stopped: Boolean) {
+    val command =
+        if (stopped) {
+            listOf(
+                "docker",
+                "stop",
+                "-t",
+                "1",
+                "kafkakn-broker",
+            )
+        } else {
+            listOf("docker", "start", "kafkakn-broker")
+        }
+    val exit = ProcessBuilder(command).redirectErrorStream(true).start().waitFor()
+    check(exit == 0) { "docker could not ${if (stopped) "stop" else "start"} the broker" }
+}
+
 internal actual fun adminFailFastConfig(): Map<String, String> =
     mapOf(
         "default.api.timeout.ms" to "5000",

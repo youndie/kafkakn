@@ -176,7 +176,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[ ]` | A stopped broker and a known topic: the JVM refuses the record, native queues it | P1 | M | B-76 |
+| [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[?]` | A stopped broker and a known topic: the JVM refuses the record, native queues it | P1 | M | B-76 |
 | [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[ ]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
 
 ## Closed (77)

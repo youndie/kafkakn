@@ -87,6 +87,13 @@ internal expect fun parkedSendCount(): Int
 internal expect fun brokerPaused(paused: Boolean)
 
 /**
+ * B-77: stops or starts the fixture broker's container (`docker stop -t 1`, `docker start`). A stopped broker refuses
+ * connections, where a paused one ([brokerPaused]) holds them open and answers nothing, and the two arms were seen
+ * to answer differently. Only when the runner asks, with `KAFKAKN_BROKER_STOP`.
+ */
+internal expect fun brokerStopped(stopped: Boolean)
+
+/**
  * The topic this arm accounts on, **per arm and fresh for the run**.
  *
  * The accounting oracle is the topic's end offsets, and a delta is only attributable while nothing
