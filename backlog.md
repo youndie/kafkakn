@@ -114,6 +114,16 @@ mostik noticing. [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) 
 publish a number of its own, the way `sborka` numbers its own publishes: the head from `gradle.properties`,
 the run number on the tail.
 
+### Stage 18: what the consumer and the harness found
+
+**Opened 2026-09-27 at the owner's request.** [mostik](https://github.com/youndie/mostik) found that with the broker
+stopped and a topic already known, the JVM refuses the record and native queues it
+([B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md)). This is measured first and decided after, since
+why the Java client refuses is not yet known. The day's whole-suite runs found two harness defects. A fixture
+topic in the wrong shape was kept silently ([B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md)). A fill
+that expires its records on a loaded machine ([B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md)) is also
+measured before it is touched.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -154,6 +164,7 @@ verdict.
 | `stage-15-a-consumer-of-our-own` | A service that uses it, for an hour | `kafkakn-soak`: an exactly-once service on both arms, killed and frozen at random, with its output and memory measured. |
 | `stage-16-a-deadline-on-send` | A caller can bound `send` and know what it left behind | What a cancelled `send` means for its record, measured on both arms, and a way to tell "never queued" from "queued, outcome unknown". |
 | `stage-17-numbered-publishes` | A consumer can name the build it depends on | Every publish gets a version of its own, is never overwritten, and is tagged at the commit it was built from. |
+| `stage-18-what-the-consumer-and-the-harness-found` | What mostik and a day of whole-suite runs turned up | The arms disagreeing on a stopped broker, measured before it is decided; a fixture that can no longer be in the wrong shape silently; a flaky fill under load, measured before it is touched. |
 
 ## Marks
 
@@ -161,11 +172,14 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (2)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[ ]` | A stopped broker and a known topic: the JVM refuses the record, native queues it | P1 | M | B-76 |
+| [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[ ]` | PollAfterRebalanceTest's JVM fill expires its records in whole-suite runs on a loaded machine | P2 | S | - |
 
-## Closed (76)
+## Closed (77)
 
 **It builds, and a test can fail**
 
@@ -296,6 +310,10 @@ No open tasks.
 **A consumer can name the build it depends on**
 
 - [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) `[x]` - Every publish gets a number of its own
+
+**What mostik and a day of whole-suite runs turned up**
+
+- [B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md) `[x]` - A fixture topic in the wrong shape stops the harness, instead of failing the suite for the wrong reason
 
 <!-- END INDEX -->
 
