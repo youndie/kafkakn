@@ -464,6 +464,18 @@ internal class NativeKafkaProducer(
     private val knownTopics = AtomicReference<Set<String>>(emptySet())
 
     /**
+     * For tests of the platform seam: [topic] is treated as described, as if the cluster had answered for it and
+     * then gone away. That is the one state in which librdkafka holds records it cannot deliver since B-76, and
+     * reaching it for real takes a broker that answers once and then stops.
+     */
+    internal fun describedAlready(topic: String) {
+        while (true) {
+            val known = knownTopics.value
+            if (knownTopics.compareAndSet(known, known + topic)) return
+        }
+    }
+
+    /**
      * The wait for a topic's metadata in progress, one per topic. A burst of `enqueue` calls to a new topic asks the
      * cluster once, and the others wait for that answer. The value is what the cluster last said, or null.
      */
