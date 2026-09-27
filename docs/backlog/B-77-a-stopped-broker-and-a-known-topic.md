@@ -1,7 +1,7 @@
 ---
 id: B-77
 title: "A stopped broker and a known topic: the JVM refuses the record, native queues it"
-status: open
+status: wip
 priority: P1
 size: M
 stage: stage-18-what-the-consumer-and-the-harness-found
