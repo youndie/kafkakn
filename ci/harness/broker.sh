@@ -24,6 +24,37 @@ kc() { docker exec "$CONTAINER" "$@"; }
 # producer piped into an exec with no stdin reads EOF, exits zero and writes nothing.
 kci() { docker exec -i "$CONTAINER" "$@"; }
 
+# A fixture topic, created if absent and REFUSED if it exists in another shape (B-78).
+#
+# `--create --if-not-exists` alone keeps whatever is there. On 2026-09-27 `kafkakn` had one partition where the
+# suite assumes three, and the first sign was ExplicitPartitionTest failing on both arms in a whole-suite run with
+# "Unknown partition" - a fixture defect that reads as a library one. Nothing here recreates the topic: a topic
+# of this name may hold what someone else is reading. The message says how to remove it.
+#
+#   ensure_topic <name> <partitions> [--config key=value ...]
+ensure_topic() {
+    local name=$1 partitions=$2
+    shift 2
+    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists --topic "$name" \
+        --partitions "$partitions" --replication-factor 1 "$@" >/dev/null 2>&1
+    local described have wrong=
+    described=$(kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$name" 2>/dev/null)
+    have=$(printf '%s\n' "$described" | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -1)
+    [ "$have" = "$partitions" ] || wrong="${have:-no} partitions, not $partitions"
+    while [ $# -gt 0 ]; do
+        if [ "$1" = --config ]; then
+            printf '%s\n' "$described" | head -1 | grep -q -- "[:,] *$2\(,\|\$\| \)" || wrong="${wrong:+$wrong; }no $2"
+            shift
+        fi
+        shift
+    done
+    [ -z "$wrong" ] && return 0
+    echo "  FIXTURE TOPIC $name IS NOT THE ONE THE SUITE ASSUMES: $wrong." >&2
+    echo "  Remove it and run again:" >&2
+    echo "    docker exec $CONTAINER /opt/kafka/bin/kafka-topics.sh --bootstrap-server $BOOTSTRAP --delete --topic $name" >&2
+    return 1
+}
+
 case "${1:-}" in
   up|tls-up)
     # ONE fixture with BOTH listeners, always. The alternative - a plaintext mode and a TLS mode -
@@ -54,14 +85,15 @@ case "${1:-}" in
     }
     # The fixture's own topics, the ones the suite assumes rather than the ones a script names for a
     # run. Here once rather than in every script that runs the suite: there are six of those.
-    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
-        --topic kafkakn-logappend --partitions "$PARTITIONS" --replication-factor 1 \
-        --config message.timestamp.type=LogAppendTime >/dev/null 2>&1
+    # The suite's two defaults, `testTopic` and `strictTopic`: checked here, where every runner passes, because
+    # the runners call `topic` and `strict-topic` behind `| head -1`, which throws their status away.
+    ensure_topic kafkakn "$PARTITIONS" || exit 1
+    ensure_topic kafkakn-strict 1 --config min.insync.replicas=2 || exit 1
+    ensure_topic kafkakn-logappend "$PARTITIONS" --config message.timestamp.type=LogAppendTime || exit 1
     # B-29's topic: seven partitions, a count nothing else here has, so a description of the wrong
     # topic cannot pass for this one. Created here because the suite's default names it - §2.18 is
     # what a default nobody creates costs, and B-29 paid it again in its own full-suite run.
-    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
-        --topic kafkakn-metadata --partitions 7 --replication-factor 1 >/dev/null 2>&1
+    ensure_topic kafkakn-metadata 7 || exit 1
     # B-36's topic: one partition holding twenty records written by the Kafka distribution's own client
     # (ci/harness/Records.java) - null keys, a tombstone, bytes that are not UTF-8, duplicate header
     # names. Written once: only when the partition is empty, so every run reads the same twenty.
@@ -80,17 +112,15 @@ case "${1:-}" in
             sleep 1
         done
     fi
-    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
-        --topic kafkakn-consume --partitions 1 --replication-factor 1 --config retention.ms=-1 >/dev/null 2>&1
+    ensure_topic kafkakn-consume 1 --config retention.ms=-1 || exit 1
     if [ "$(bash "$0" offsets kafkakn-consume)" = "0" ]; then
         bash "$0" records write kafkakn-consume >/dev/null || { echo "  could not write kafkakn-consume" >&2; exit 1; }
     fi
     # B-47's topic: compacted, one partition (Records.java dumps partition 0), with segments that roll after
     # a second and a cleaner that takes any dirty ratio. With the broker's defaults a segment lives a week,
     # and a tombstone's effect would be invisible to any run shorter than that.
-    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists \
-        --topic kafkakn-compact --partitions 1 --replication-factor 1 --config cleanup.policy=compact \
-        --config segment.ms=1000 --config min.cleanable.dirty.ratio=0.001 >/dev/null 2>&1
+    ensure_topic kafkakn-compact 1 --config cleanup.policy=compact --config segment.ms=1000 \
+        --config min.cleanable.dirty.ratio=0.001 || exit 1
     # SCRAM credentials (B-32), on every `up`: they live in the metadata log, which a recreated
     # container does not have. `--alter` replaces, so running it on a broker that has them is a no-op
     # in effect. PLAIN's users are in the JAAS file and need nothing here.
@@ -180,20 +210,20 @@ case "${1:-}" in
     docker compose -f "$COMPOSE" -f "$TLS_COMPOSE" down < /dev/null >/dev/null 2>&1
     ;;
   topic)
-    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" \
-        --create --if-not-exists --topic "$2" \
-        --partitions "$PARTITIONS" --replication-factor 1 >/dev/null 2>&1
+    ensure_topic "$2" "$PARTITIONS"
+    shaped=$?
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$2" 2>/dev/null
+    exit "$shaped"
     ;;
   strict-topic)
     # min.insync.replicas=2 on a single-broker cluster: a valid `acks=all` is then refused by the
     # BROKER with NOT_ENOUGH_REPLICAS, while acks=1 succeeds. That is what proves the setting
     # travels - an invalid value proves nothing, because the JVM client refuses it locally before
     # any broker sees it (B-06).
-    kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" \
-        --create --if-not-exists --topic "$2" --partitions 1 --replication-factor 1 \
-        --config min.insync.replicas=2 >/dev/null 2>&1
+    ensure_topic "$2" 1 --config min.insync.replicas=2
+    shaped=$?
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$2" 2>/dev/null
+    exit "$shaped"
     ;;
   offsets)
     # The summed end offsets of every partition: the oracle for "how many records actually landed".
