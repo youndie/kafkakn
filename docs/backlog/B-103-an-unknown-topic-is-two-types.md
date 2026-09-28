@@ -1,7 +1,7 @@
 ---
 id: B-103
 title: "describeTopics of an unknown topic throws a different type on each arm"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found
