@@ -37,6 +37,7 @@ interface KafkaProducer {
     suspend fun metrics(): ProducerMetrics                         // B-41
     suspend fun flush()
     suspend fun close()
+    suspend fun close(timeout: Duration)                           // B-91
 }
 
 fun kafkaProducer(config: ProducerConfig): KafkaProducer   // expect
@@ -557,12 +558,28 @@ queued, the broker was made unreachable, `close()` was called, and the topic was
 | stopped (connections refused) | 118 s | 307 s | threw, the same types | none |
 
 - **How long: `delivery.timeout.ms` on the JVM (120 s by default), `message.timeout.ms` on native (300 s).** `close`
-  flushes, and the flush ends when every record is acknowledged or has timed out. kafkakn bounds it no further.
+  flushes, and the flush ends when every record is acknowledged or has timed out. `close()` bounds it no further;
+  `close(timeout)` does (below).
 - **A timed-out record is "outcome unknown" when it was in flight.** With the broker paused, the request had been
   sent. Both clients gave up and reported it failed, and the broker wrote it when it answered again. A failed
   `await()` does not mean "not written" in general: it means that for a record that was never sent, and "possibly
   written" for one in flight. Neither client tells the two apart in what `await()` throws. This is the same line
   the "never queued" / "outcome unknown" split draws one step earlier.
+
+**`close(timeout)` is the bound** ([B-91](../backlog/B-91-close-with-a-timeout.md)). Records acknowledged within
+`timeout` are acknowledged. Every record that is not fails its `Delivery.await()` with
+**`ClosedBeforeAcknowledgedException`** on both arms: never sent, or in flight and possibly written. On the JVM it is
+the client's own `close(Duration)`, whose force close fails every unacknowledged batch with *"Producer is closed
+forcefully."* (the cause). On native it is a flush for `timeout`, then `rd_kafka_purge` of the queue and of what is
+in flight (`_PURGE_QUEUE`, `_PURGE_INFLIGHT`), then the release. `close()` is unchanged.
+
+*Measured* 2026-09-28 (`ci/b-91/run.sh`, five records queued, `close(3 s)`):
+
+| the broker | JVM `close` | native `close` | every `await()` | the topic afterwards |
+|---|---|---|---|---|
+| paused | 3 010 ms | 3 002 ms | `ClosedBeforeAcknowledgedException` | all five written: they were in flight |
+| stopped | 3 008 ms | 3 002 ms | `ClosedBeforeAcknowledgedException` | none |
+| answering (`CloseWithTimeoutTest`) | at once with nothing outstanding; 20 records queued all landed | the same | landed | — |
 
 ## Configuration
 
@@ -843,6 +860,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | another producer took the `transactional.id` | every later call throws `ProducerFencedException`, on both arms |
 | no room in the queue, or no metadata, within `max.block.ms` | `enqueue` (and so `send`) throws `RecordNotQueuedException`, on both arms: never queued. Measured: room 2026-09-26 (B-74), metadata 2026-09-27 (B-76) |
 | `sendOffsetsToTransaction` with group metadata the group has moved past | `StaleGroupMetadataException`, on both arms; abort and read again from the group's commit |
+| a record not acknowledged when `close(timeout)` ran out | its `Delivery.await()` throws `ClosedBeforeAcknowledgedException`, on both arms: never sent, or in flight and possibly written (B-91) |
 | producer closed | `send` throws `IllegalStateException` |
 
 Error **text** is not part of the contract; error **type** and the fact that something is thrown at

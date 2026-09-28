@@ -1,7 +1,7 @@
 ---
 id: B-91
 title: "close(timeout) on both arms: what is not acknowledged in time fails, and may have been written"
-status: wip
+status: done
 priority: P1
 size: M
 stage: stage-20-what-waited-for-a-caller
@@ -31,3 +31,21 @@ timed out while in flight may have been written. The owner chose on 2026-09-28 t
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.kt`,
   `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt`,
   `kafkakn-core/src/jvmMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.jvm.kt`.
+
+## Findings (2026-09-28)
+
+*Measured*, `ci/b-91/run.sh` on the Linux box. Five records queued, then `close(3 s)`:
+
+| the broker | JVM | native | answers | the topic afterwards |
+|---|---|---|---|---|
+| paused | 3 010 ms | 3 002 ms | 5 × `ClosedBeforeAcknowledgedException` | `warm t-0 … t-4`: in flight, written |
+| stopped | 3 008 ms | 3 002 ms | 5 × `ClosedBeforeAcknowledgedException` | `warm` |
+
+Before: 158 and 301 s paused, 118 and 307 s stopped (B-83). With the broker answering, `close(10 s)` with nothing
+outstanding returned at once, and 20 queued records all landed, on both arms. The arms agree on every observation.
+
+- The JVM recognises its force close by exact class and text, `KafkaException` *"Producer is closed forcefully."*
+  (`RecordAccumulator.abortIncompleteBatches`, kafka-clients 4.3.1, line 1146), so that another failure arriving
+  during the close keeps its own type.
+- Mutants, both killed by `CloseWithBrokerGoneTest.close_with_a_timeout_gives_up_on_what_is_not_acknowledged`: native
+  reporting a purged record as `KafkaProduceException`, and the JVM not recognising its force close.

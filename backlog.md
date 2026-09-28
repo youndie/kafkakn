@@ -143,7 +143,7 @@ contracts that still said *not measured* ([B-82](docs/backlog/B-82-a-commit-of-a
 [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md)), which waited for a caller. The soak on the KIP-848
 protocol ([B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md)). linuxArm64 was asked about the same day and
 stays as decided on 2026-09-25: not published, not in CI.
-By 2026-09-28 every item of the stage but B-83 was done. B-83 is a `question` for the owner: how `close` is bounded.
+By 2026-09-28 the stage was done. For B-83 the owner chose `close(timeout)`, built in [B-91](docs/backlog/B-91-close-with-a-timeout.md).
 
 ### Kill criteria for stage 4
 
@@ -195,13 +195,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-91](docs/backlog/B-91-close-with-a-timeout.md) `[~]` | close(timeout) on both arms: what is not acknowledged in time fails, and may have been written | P1 | M | B-83 |
+No open tasks.
 
-## Closed (90)
+## Closed (91)
 
 **It builds, and a test can fail**
 
@@ -355,6 +353,7 @@ verdict.
 - [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[x]` - deleteRecords to the high watermark, without reading it first
 - [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[x]` - kafkakn-soak for an hour on the KIP-848 consumer protocol
 - [B-90](docs/backlog/B-90-the-assignment-test-reads-before-the-growth-is-visible.md) `[x]` - B-87's test read the topic before the growth was visible, and failed once on CI
+- [B-91](docs/backlog/B-91-close-with-a-timeout.md) `[x]` - close(timeout) on both arms: what is not acknowledged in time fails, and may have been written
 
 <!-- END INDEX -->
 
