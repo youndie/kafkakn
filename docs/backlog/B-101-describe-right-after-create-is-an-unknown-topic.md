@@ -1,7 +1,7 @@
 ---
 id: B-101
 title: "AdminPartitionsTest reads a topic it has just created and is told it is unknown (native, one suite run)"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found

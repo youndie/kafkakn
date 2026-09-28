@@ -210,7 +210,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-101](docs/backlog/B-101-describe-right-after-create-is-an-unknown-topic.md) `[ ]` | AdminPartitionsTest reads a topic it has just created and is told it is unknown (native, one suite run) | P1 | S | - |
+| [B-101](docs/backlog/B-101-describe-right-after-create-is-an-unknown-topic.md) `[~]` | AdminPartitionsTest reads a topic it has just created and is told it is unknown (native, one suite run) | P1 | S | - |
 | [B-102](docs/backlog/B-102-a-jvm-poll-returned-before-its-timeout.md) `[ ]` | A JVM poll(3 s) returned empty after 2.54 s by the monotonic clock (one suite run on the Linux box) | P1 | S | - |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 | [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
