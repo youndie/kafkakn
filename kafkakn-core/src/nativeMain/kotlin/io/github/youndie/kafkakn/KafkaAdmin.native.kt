@@ -51,6 +51,7 @@ import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_ISOLATION_LEVEL_READ_COMMITTED
 import rdkafka.RD_KAFKA_ISOLATION_LEVEL_READ_UNCOMMITTED
+import rdkafka.RD_KAFKA_OFFSET_END
 import rdkafka.RD_KAFKA_OFFSET_INVALID
 import rdkafka.RD_KAFKA_OFFSET_SPEC_EARLIEST
 import rdkafka.RD_KAFKA_OFFSET_SPEC_LATEST
@@ -685,6 +686,14 @@ internal class NativeKafkaAdmin(
 
     override suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
         requireCommittable(beforeOffsets)
+        return deleteBefore(beforeOffsets)
+    }
+
+    // `RD_KAFKA_OFFSET_END`, -1: librdkafka's "before the high watermark" for DeleteRecords.
+    override suspend fun deleteAllRecords(partitions: List<TopicPartition>): Map<TopicPartition, Long> =
+        deleteBefore(partitions.associateWith { RD_KAFKA_OFFSET_END.toLong() })
+
+    private suspend fun deleteBefore(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
         val watermarks =
             request(
                 RD_KAFKA_ADMIN_OP_DELETERECORDS,

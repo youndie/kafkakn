@@ -137,6 +137,13 @@ public interface KafkaAdmin {
      */
     public suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long>
 
+    /**
+     * Deletes every record written so far in each of [partitions], without reading where each ends first
+     * ([B-88](../../../../../../../docs/backlog/B-88-delete-records-to-the-high-watermark.md)): both clients' "before the
+     * high watermark", `-1`, under a name. Returns the new low watermarks, which are the ends. Not undone.
+     */
+    public suspend fun deleteAllRecords(partitions: List<TopicPartition>): Map<TopicPartition, Long>
+
     /** Releases the client. */
     public suspend fun close()
 }

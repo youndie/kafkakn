@@ -68,6 +68,29 @@ class AdminDeleteRecordsTest {
             }
         }
 
+    /**
+     * [B-88](../../../../../../../docs/backlog/B-88-delete-records-to-the-high-watermark.md): every record written so
+     * far, without reading where each partition ends first. Afterwards each partition starts where it ends.
+     */
+    @Test
+    fun every_record_so_far_is_deleted_without_reading_the_end_first() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val topic = seededTopic("kafkakn-deleted-all")
+                val partitions = listOf(TopicPartition(topic, 1), TopicPartition(topic, 0))
+                withAdmin { admin ->
+                    val watermarks = admin.deleteAllRecords(partitions)
+                    val earliest = admin.listOffsets(partitions, OffsetSpec.Earliest)
+                    val latest = admin.listOffsets(partitions, OffsetSpec.Latest)
+                    recordArmFact("records.all.topic", topic)
+                    recordObservation("records.all", render(watermarks))
+                    recordObservation("records.all.earliest", render(earliest.mapValues { it.value ?: -1 }))
+                    assertEquals("0:10 1:5", render(watermarks), "the low watermarks are the ends, in partition order")
+                    assertEquals(latest, earliest, "each partition starts where it ends")
+                }
+            }
+        }
+
     /** Ten records in partition 0, five in partition 1. */
     private suspend fun seededTopic(prefix: String): String {
         val topic = "$prefix-$armName-${randomSuffix()}"

@@ -164,6 +164,14 @@ describes the cluster. On both arms, and checked with the broker's own tools
   `IllegalArgumentException` on both arms, and the topic keeps its partitions.
 * **Automated:** `AdminPartitionsTest` on both arms, held against the broker's tools by `ci/b-62/run.sh`.
 
+### Scenario: Every record so far is deleted without reading the end first
+* **Given:** a topic whose partitions hold 10 and 5 records.
+* **When:** each arm deletes all records of both partitions.
+* **Then:** the returned low watermarks are `0:10 1:5`, and each partition's earliest equals its end, by
+  `kafka-get-offsets.sh`.
+* **Automated:** `AdminDeleteRecordsTest.every_record_so_far_is_deleted_without_reading_the_end_first`, by
+  `ci/b-88/run.sh`.
+
 ### Scenario: Records before an offset are deleted, and the answer is the broker's low watermark
 * **Given:** a topic with ten records in partition 0 and five in partition 1.
 * **When:** each arm deletes partition 0 before 4, then before 2, then up to its end.
