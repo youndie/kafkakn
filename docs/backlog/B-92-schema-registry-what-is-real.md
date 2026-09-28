@@ -1,7 +1,7 @@
 ---
 id: B-92
 title: "Schema Registry: what is real on both targets, measured before anything is built"
-status: open
+status: question
 priority: P1
 size: M
 stage: stage-21-schema-registry
@@ -33,3 +33,25 @@ the items after this one are adjusted to what is found.
 - AC: every point above answered in `docs/research/research-architecture.md` with the address it was read at or the
   run it was measured in, and the items after this one adjusted to it.
 - Anchors: `docs/research/research-architecture.md`.
+
+## Findings (2026-09-28)
+
+Everything the item asked is answered in the research document, §2.29, with addresses. In short: JSON Schema and
+Protobuf through kotlinx on both targets (`ProtoBufSchemaGenerator` is common code, experimental); Avro is out, since
+its Kotlin library is JVM-only; the wire format is magic 0 and a 4-byte id, plus message indexes for Protobuf; the
+oracle is Confluent's Apache-2.0 serializers in a harness; the registry fixture runs; the code goes in a module of
+its own. And one finding that changes the next items: **Ktor's CIO client has no TLS on Kotlin/Native.**
+
+## Question for the owner
+
+A registry served over HTTPS cannot be reached from native through CIO. Which transport?
+
+1. **The module takes a Ktor `HttpClient`, with CIO as the default** (recommended). The module depends on
+   `ktor-client-core` and CIO, which covers HTTP on both arms and HTTPS on the JVM. A native caller who needs HTTPS
+   passes `HttpClient(Curl)` and takes libcurl as a runtime dependency by their own choice. The suite runs HTTPS on
+   native through Curl, as a test dependency only. kafkakn's own binaries gain nothing.
+2. **Curl by default on native.** HTTPS works out of the box. Every native binary that uses the module then needs
+   libcurl on the target, and its `ldd` grows by libcurl and whatever TLS library that libcurl brings.
+3. **HTTPS written here over the OpenSSL already linked into the native bundle.** No new runtime dependency and the
+   same `ldd`. But it is an HTTP client and certificate verification of this project's own, the kind of
+   security-critical code the rest of kafkakn has avoided writing by delegating to the clients underneath.

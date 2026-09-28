@@ -1179,6 +1179,49 @@ What the second Linux target took:
   `compare-arms.sh`, finding no file, said that the arm had not been compared. The writer now creates the
   directory and fails when it cannot write.
 
+### 2.29 Schema Registry, read before it is built (B-92)
+
+The owner asked on 2026-09-28 for Schema Registry support through kotlinx.serialization. What was read and run
+before any of it was written:
+
+| Fact | Where verified |
+|---|---|
+| `kotlinx-serialization-protobuf` is published for `linuxX64` at the portfolio's version, 1.11.0 | `org.jetbrains.kotlinx:kotlinx-serialization-protobuf-linuxx64:1.11.0` on Maven Central; the version is sborka's (`catalog/sborka.versions.toml`, `serialization = "1.11.0"`) |
+| `ProtoBufSchemaGenerator` is in its **common** code, `@ExperimentalSerializationApi`, and writes a `.proto` from `SerialDescriptor`s | `kotlinx-serialization-protobuf-1.11.0-sources.jar!/commonMain/kotlinx/serialization/protobuf/schema/ProtoBufSchemaGenerator.kt`, lines 41–76 |
+| Avro's Kotlin library is JVM-only: `avro4k-core` 2.12.0 has one variant, `jvm` | `com.github.avro-kotlin.avro4k:avro4k-core:2.12.0` `.module` file on Maven Central |
+| The registry's serializers are Apache 2.0, from `packages.confluent.io`, at 8.3.2 | `io.confluent:kafka-protobuf-serializer:8.3.2` POM, `<license>` |
+| The wire format, by default: magic `0x00`, the schema id as a 4-byte big-endian int, the payload | `kafka-schema-serializer-8.3.2-sources.jar!/io/confluent/kafka/serializers/schema/id/SchemaId.java`, lines 35–84 (`MAGIC_BYTE_V0`, `ID_SIZE`, `idToBytes`); the default id serializer is `PrefixSchemaIdSerializer` (`AbstractKafkaSchemaSerDeConfig`, `VALUE_SCHEMA_ID_SERIALIZER_DEFAULT`) |
+| Two alternatives exist and are not the default: magic `0x01` with a 16-byte GUID, and the id in a record header | the same `SchemaId.java` (`MAGIC_BYTE_V1`, `guidToBytes`); `HeaderSchemaIdSerializer.java` |
+| For Protobuf, the message indexes follow the id: `[0]` is one varint `0`, anything else its count and then each index as varints | `kafka-protobuf-provider-8.3.2-sources.jar!/io/confluent/kafka/schemaregistry/protobuf/MessageIndexes.java`, lines 27–58 |
+| Ktor's CIO client is published for `linuxX64` at the portfolio's 3.5.2 and depends on `ktor-network-tls`, which is too; the Curl engine depends on libcurl | the `.module` files of `io.ktor:ktor-client-cio-linuxx64:3.5.2`, `ktor-network-tls-linuxx64:3.5.2`, `ktor-client-curl-linuxx64:3.5.2` |
+| The registry image is `confluentinc/cp-schema-registry:8.3.2`, under the Confluent Community License, used here as a fixture only | Docker Hub tag `8.3.2` |
+
+**Decisions, and what was rejected:**
+
+- **JSON Schema and Protobuf, not Avro.** Avro has no Kotlin Multiplatform library, and writing Avro's binary encoding
+  from a descriptor is a codec of its own. It waits for a caller who needs it.
+- **Protobuf through `ProtoBufSchemaGenerator`,** accepting that it is experimental: the alternative is writing
+  `.proto` generation by hand. The item that builds it pins what the generator produces for the types it covers.
+- **JSON Schema generated here from `SerialDescriptor`,** because no library for kotlinx does it. The descriptor holds
+  what a schema needs: names, kinds, element types, nullability, optional elements.
+- **Written as magic `0x00` and a 4-byte id. Read the same way**, and a record carrying magic `0x01` or no magic is
+  refused with a type that names it. GUIDs and header ids wait for a caller.
+- **The oracle is the registry's own serializers on the JVM,** run as a harness program of their own, like
+  `ci/harness/Records.java`: bytes kafkakn writes must be read by them, and theirs by kafkakn, on both arms. Their
+  Apache 2.0 licence lets the harness use them. They are never a dependency of anything published.
+- **A module of its own, `kafkakn-schema-registry`,** so that `kafkakn-core` does not gain an HTTP client.
+- *Measured* 2026-09-28, `ci/b-92/run.sh` on the Linux box:
+  - **The registry fixture runs.** `cp-schema-registry:8.3.2`, on the host network (the broker advertises
+    `127.0.0.1`) and port 18081 (the box is shared), answered `/subjects` with `[]` after 5 s. It reported version
+    8.3.2.
+  - **HTTP from Kotlin/Native through Ktor's CIO client works:** `200 []` from the registry.
+  - **HTTPS does not, at all:** every `https://` URL failed with *"TLS sessions are not supported on Native
+    platform"*, a public one included. `ktor-network-tls` is published for `linuxX64` and does not implement TLS
+    there. So the obvious transport cannot reach a registry served over HTTPS, which is how registries are served
+    outside a laptop.
+  - The CIO probe binary is 4.1 MB, and its `ldd` adds `libresolv`, `libutil` and `libcrypt` to a kafkakn binary's.
+    All three are glibc's own.
+
 ## 4. Risks, with the machinery that would catch them
 
 **A wrong wire assumption that both arms share.** The differential oracle catches disagreement
