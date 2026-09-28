@@ -206,15 +206,16 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (3)
+## Open (4)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-100](docs/backlog/B-100-poll-drops-records-given-up-mid-drain.md) `[~]` | The native poll handed over 486 records of a partition a callback took inside that poll: drop them | P1 | S | - |
+| [B-101](docs/backlog/B-101-describe-right-after-create-is-an-unknown-topic.md) `[ ]` | AdminPartitionsTest reads a topic it has just created and is told it is unknown (native, one suite run) | P1 | S | - |
+| [B-102](docs/backlog/B-102-a-jvm-poll-returned-before-its-timeout.md) `[ ]` | A JVM poll(3 s) returned empty after 2.54 s by the monotonic clock (one suite run on the Linux box) | P1 | S | - |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 | [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
 
-## Closed (97)
+## Closed (98)
 
 **It builds, and a test can fail**
 
@@ -348,6 +349,7 @@ verdict.
 
 **What mostik and a day of whole-suite runs turned up**
 
+- [B-100](docs/backlog/B-100-poll-drops-records-given-up-mid-drain.md) `[x]` - The native poll handed over 486 records of a partition a callback took inside that poll: drop them
 - [B-77](docs/backlog/B-77-a-stopped-broker-and-a-known-topic.md) `[x]` - A stopped broker and a known topic: the JVM refuses the record, native queues it
 - [B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md) `[x]` - A fixture topic in the wrong shape stops the harness, instead of failing the suite for the wrong reason
 - [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[x]` - PollAfterRebalanceTest's JVM fill expires its records: the Java client's burst into a fresh topic

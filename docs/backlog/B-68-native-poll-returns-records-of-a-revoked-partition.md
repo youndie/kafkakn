@@ -108,3 +108,11 @@ again, and choose between 1 and 3 by what the counter shows.
   `pids.max=256`. The test worker inherited the limit, `PollAfterRebalanceTest`'s parallel fill hit
   `pthread_create` EAGAIN, and `runTest` could not cancel. Runs made with `GRADLE_OPTS=-Dorg.gradle.daemon=false`
   get a daemon of their own.
+
+## Seen again (2026-09-28): B-100
+
+The counter moved where this item said it would be read: a `suite` run on a GitHub-hosted runner failed
+`PollAfterRebalanceTest` on native with 487 strays and `poll.rebalance.mid.drain=1/486`. By the owner's rule, "2,
+then by the result", the result is option 1, and
+[B-100](B-100-poll-drops-records-given-up-mid-drain.md) makes it. This item stays `dropped` as the record of why
+nothing was changed on 2026-09-26.

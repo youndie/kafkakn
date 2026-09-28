@@ -1,7 +1,7 @@
 ---
 id: B-100
 title: "The native poll handed over 486 records of a partition a callback took inside that poll: drop them"
-status: wip
+status: done
 priority: P1
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found
@@ -40,3 +40,16 @@ That is fixed in the loop's watcher, not here.
   that poll's callbacks, and replaces the "once, unexplained" note with what was measured.
 - Anchors: `kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaConsumer.native.kt`,
   `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/PollAfterRebalanceTest.kt`.
+
+## Findings
+
+- **Done, 2026-09-29.** The native `drain` drops, through `dropGivenUp`, the records it had collected for partitions a
+  callback took inside that `poll`, and B-68's counter adds up what it dropped.
+- **The filter's test, `NativeDrainGivenUpTest`:** red against a stub that dropped nothing, green with the filter.
+  Mutant after the commit, the `removeAll` taken out:
+  `NativeDrainGivenUpTest.records_collected_for_a_partition_a_callback_took_are_dropped_and_the_rest_kept` failed.
+- **The whole suite on the Linux box (`ci/suite/run.sh`):** `PollAfterRebalanceTest` green on both arms, strays 0,
+  the counter `0/0`: the rebalance did not land mid-drain in that run, as it almost never does. What the fix does
+  when it does is the filter's test, not this run.
+- **The same run was red on two other tests,** neither in the consumer's drain: native `AdminPartitionsTest` read a
+  just-created topic as unknown (B-101), and a JVM `poll(3 s)` returned after 2.54 s (B-102). Filed, not folded in.
