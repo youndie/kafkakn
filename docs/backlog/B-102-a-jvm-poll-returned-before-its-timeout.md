@@ -1,7 +1,7 @@
 ---
 id: B-102
 title: "A JVM poll(3 s) returned empty after 2.54 s by the monotonic clock (one suite run on the Linux box)"
-status: open
+status: wip
 priority: P1
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found
