@@ -1,7 +1,7 @@
 ---
 id: B-89
 title: "kafkakn-soak for an hour on the KIP-848 consumer protocol"
-status: open
+status: wip
 priority: P3
 size: M
 stage: stage-20-what-waited-for-a-caller

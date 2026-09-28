@@ -199,7 +199,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[?]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
-| [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[ ]` | kafkakn-soak for an hour on the KIP-848 consumer protocol | P3 | M | - |
+| [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[~]` | kafkakn-soak for an hour on the KIP-848 consumer protocol | P3 | M | - |
 
 ## Closed (88)
 
