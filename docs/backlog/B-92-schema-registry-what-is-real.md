@@ -1,7 +1,7 @@
 ---
 id: B-92
 title: "Schema Registry: what is real on both targets, measured before anything is built"
-status: open
+status: wip
 priority: P1
 size: M
 stage: stage-21-schema-registry
