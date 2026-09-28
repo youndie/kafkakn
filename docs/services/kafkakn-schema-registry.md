@@ -37,6 +37,11 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
   output in the wire format. `decode` reads the id, checks the schema it names is JSON Schema, and decodes with the
   reader's type. *Measured* (`ci/b-94/run.sh`): Confluent's `KafkaJsonSchemaDeserializer`, validating, reads kafkakn's
   bytes, and kafkakn reads what `KafkaJsonSchemaSerializer` writes, on both arms.
+- **`registry.protobufSerde<T>(subject)`** ([B-95](../backlog/B-95-protobuf-serde.md)) registers the proto2 `.proto`
+  that kotlinx's `ProtoBufSchemaGenerator` writes for `T`, and frames `ProtoBuf`'s output with the message indexes
+  `[0]`. The overload that takes a `ProtoBuf` is `@ExperimentalSerializationApi`, as kotlinx marks it; the default one
+  asks nothing of the caller. *Measured* (`ci/b-95/run.sh`): Confluent's `KafkaProtobufDeserializer` reads kafkakn's
+  bytes, and kafkakn reads what `KafkaProtobufSerializer` writes, on both arms.
 
 ## Quirks
 
@@ -44,6 +49,9 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
   (`OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL`, found by B-93's first control). A schema without
   `"additionalProperties": false` can therefore not gain even an optional field. B-94's generated schemas have to be
   closed for a type to evolve, and B-96 measures it.
+- **A sealed root leaves no mark in the generated `.proto`.** The generator writes a `KotlinxSerializationPolymorphic`
+  message only for polymorphism below the root, so a check on the schema's text let a sealed type through (B-95).
+  The serde walks the descriptor instead.
 - **The registry leaves `schemaType` out for Avro,** its default, so a schema read back without one is Avro, which
   this module does not read. It says so rather than guessing.
 
@@ -55,5 +63,6 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
 | its suite | `kafkakn-schema-registry/src/commonTest/kotlin/io/github/youndie/kafkakn/schema/` |
 | the runner that counts requests at the registry | `ci/b-93/run.sh` |
 | the JSON Schema generator and serde | `kafkakn-schema-registry/src/commonMain/kotlin/io/github/youndie/kafkakn/schema/JsonSchemaGenerator.kt`, `JsonSchemaSerde.kt` |
-| the oracle harness | `ci/b-94/oracle/` |
+| the Protobuf serde | `kafkakn-schema-registry/src/commonMain/kotlin/io/github/youndie/kafkakn/schema/ProtobufSerde.kt` |
+| the oracle harness, both formats | `ci/b-94/oracle/` |
 | the fixture registry | `ci/broker/docker-compose.yml` |

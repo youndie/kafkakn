@@ -19,6 +19,8 @@ kotlin {
             implementation(wip.kotlinx.coroutines.core)
             implementation(libs.ktor.client.cio)
             implementation(wip.kotlinx.serialization.json)
+            // B-95: at the portfolio's serialization version, read from its catalogue so the number lives in one place.
+            api("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:${wip.versions.serialization.get()}")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

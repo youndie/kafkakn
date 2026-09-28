@@ -22,8 +22,8 @@ with the schema generated from the type and registered once
 ([stage 21](../../backlog.md); research §2.29).
 
 **Built and measured:** the registry client ([B-93](../backlog/B-93-a-registry-client.md)) and JSON Schema
-([B-94](../backlog/B-94-json-schema-serde.md)), on both arms. ***Target***: Protobuf (B-95), evolution (B-96), HTTPS
-on native (B-98), and the module's publication (B-99).
+([B-94](../backlog/B-94-json-schema-serde.md)) and Protobuf ([B-95](../backlog/B-95-protobuf-serde.md)), on both
+arms. ***Target***: evolution (B-96), HTTPS on native (B-98), and the module's publication (B-99).
 
 ## 2. Business rules
 
@@ -34,6 +34,8 @@ on native (B-98), and the module's publication (B-99).
 - A type with no schema here (polymorphic, contextual, recursive) is refused when its serde is made, not at the first
   record.
 - Written as magic `0x00` and a 4-byte big-endian id. Read the same way, and anything else is refused by name.
+- Protobuf adds the message indexes after the id, always `[0]`: the generated `.proto` has the root type's message
+  first. A record naming any other message is refused, because this reader's type is the root.
 
 ## 3. Code anchors
 
@@ -66,7 +68,24 @@ on native (B-98), and the module's publication (B-99).
 * **Then:** equal both ways, on both arms.
 * **Automated:** `JsonSchemaOracleTest` with `ci/b-94/oracle`, by `ci/b-94/run.sh`.
 
+### Scenario: A @Serializable type round-trips as Protobuf
+* **Given:** the same `Order`.
+* **When:** it is encoded and decoded through `registry.protobufSerde<Order>(valueSubject(topic))`.
+* **Then:** the bytes are magic 0, the id the registry gave the generated `.proto`, the message index `0x00`, and the
+  payload, and decode to the same value. The root type is the schema's first message. A sealed type is refused when
+  the serde is made.
+* **Automated:** `ProtobufSerdeTest`, in the suite.
+
+### Scenario: The registry's own Protobuf serializers read kafkakn's bytes, and kafkakn reads theirs
+* **Given:** three `Order`s.
+* **When:** kafkakn encodes them and Confluent's `KafkaProtobufDeserializer` reads them; and Confluent's
+  `KafkaProtobufSerializer` writes them as messages of the generated `.proto`, and kafkakn decodes them.
+* **Then:** equal both ways, on both arms, where an empty list or map equals an absent one: Protobuf gives such a
+  field no presence.
+* **Automated:** `ProtobufOracleTest` with `ci/b-94/oracle`, by `ci/b-95/run.sh`.
+
 ## 5. Out of scope
 
 Avro, which has no Kotlin Multiplatform library (B-92). Schema ids by GUID or in a record header, which the registry
-offers and does not default to. Polymorphic types, until a caller needs one.
+offers and does not default to. Polymorphic types, in either format, until a caller needs one. A Protobuf record
+naming a message other than the schema's first.
