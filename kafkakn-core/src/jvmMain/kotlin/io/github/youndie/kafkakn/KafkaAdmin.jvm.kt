@@ -8,6 +8,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.ConfigEntry
 import org.apache.kafka.clients.admin.ListGroupsOptions
+import org.apache.kafka.clients.admin.ListOffsetsOptions
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
@@ -23,6 +24,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
 import org.apache.kafka.clients.admin.OffsetSpec as ApacheOffsetSpec
+import org.apache.kafka.common.IsolationLevel as ApacheIsolationLevel
 import org.apache.kafka.common.TopicPartition as ApacheTopicPartition
 import org.apache.kafka.common.errors.GroupNotEmptyException as ApacheGroupNotEmptyException
 import org.apache.kafka.common.errors.TopicExistsException as ApacheTopicExistsException
@@ -172,6 +174,7 @@ internal class JvmKafkaAdmin(
     override suspend fun listOffsets(
         partitions: List<TopicPartition>,
         spec: OffsetSpec,
+        isolation: IsolationLevel,
     ): Map<TopicPartition, Long?> {
         val asked =
             when (spec) {
@@ -185,6 +188,12 @@ internal class JvmKafkaAdmin(
                 delegate
                     .listOffsets(
                         partitions.associate { ApacheTopicPartition(it.topic, it.partition) to asked },
+                        ListOffsetsOptions(
+                            when (isolation) {
+                                IsolationLevel.ReadUncommitted -> ApacheIsolationLevel.READ_UNCOMMITTED
+                                IsolationLevel.ReadCommitted -> ApacheIsolationLevel.READ_COMMITTED
+                            },
+                        ),
                     ).all()
             }
         return partitions.sortedWith(PARTITION_ORDER).associateWith { partition ->

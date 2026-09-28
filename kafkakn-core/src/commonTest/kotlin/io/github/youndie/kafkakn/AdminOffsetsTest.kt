@@ -151,6 +151,64 @@ class AdminOffsetsTest {
             }
         }
 
+    /**
+     * [B-85](../../../../../../../docs/backlog/B-85-list-offsets-read-committed.md): `listOffsets` read committed. Two
+     * records committed in a transaction (offsets 0 and 1, its marker at 2), then three more in a transaction left open
+     * (3 to 5). Read uncommitted, the end is 6. Read committed, it is 3: the last stable offset, where the open
+     * transaction starts, and what a read-committed reader reaches.
+     */
+    @Test
+    fun latest_read_committed_stops_where_an_open_transaction_starts() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val topic = "kafkakn-isolation-$armName-${randomSuffix()}"
+                val partition = TopicPartition(topic, 0)
+                withAdmin { it.createTopics(listOf(NewTopic(topic, 1, 1))) }
+                val producer =
+                    kafkaProducer(
+                        ProducerConfig(
+                            "bootstrap.servers" to bootstrap,
+                            "transactional.id" to "$topic-txn",
+                            "acks" to "all",
+                        ),
+                    )
+                try {
+                    producer.initTransactions()
+                    producer.beginTransaction()
+                    repeat(
+                        2,
+                    ) { producer.send(ProducerRecord(topic, "committed-$it".encodeToByteArray(), partition = 0)) }
+                    producer.commitTransaction()
+                    producer.beginTransaction()
+                    repeat(3) { producer.send(ProducerRecord(topic, "open-$it".encodeToByteArray(), partition = 0)) }
+                    withAdmin { admin ->
+                        val uncommitted =
+                            admin.listOffsets(
+                                listOf(partition),
+                                OffsetSpec.Latest,
+                                IsolationLevel.ReadUncommitted,
+                            )
+                        val committed =
+                            admin.listOffsets(
+                                listOf(partition),
+                                OffsetSpec.Latest,
+                                IsolationLevel.ReadCommitted,
+                            )
+                        val byDefault = admin.listOffsets(listOf(partition), OffsetSpec.Latest)
+                        val answer =
+                            "uncommitted=${uncommitted[partition]} committed=${committed[partition]} " +
+                                "default=${byDefault[partition]}"
+                        recordArmFact("admin.offsets.isolation.topic", topic)
+                        recordObservation("admin.offsets.isolation", answer)
+                        assertEquals("uncommitted=6 committed=3 default=6", answer)
+                    }
+                    producer.abortTransaction()
+                } finally {
+                    producer.close()
+                }
+            }
+        }
+
     /** A new topic of [PARTITIONS] partitions: five records in 0, three in 1, none in 2, a [STEP] apart from [BASE]. */
     private suspend fun seededTopic(prefix: String): String {
         val topic = "$prefix-$armName-${randomSuffix()}"
