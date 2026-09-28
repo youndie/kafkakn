@@ -1,7 +1,7 @@
 ---
 id: B-99
 title: "Publish kafkakn-schema-registry beside kafkakn-core"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-21-schema-registry

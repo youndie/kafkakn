@@ -212,7 +212,7 @@ verdict.
 |---|---|---|---|---|
 | [B-103](docs/backlog/B-103-an-unknown-topic-is-two-types.md) `[ ]` | describeTopics of an unknown topic throws a different type on each arm | P2 | S | - |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
-| [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
+| [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[~]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
 
 ## Closed (100)
 
