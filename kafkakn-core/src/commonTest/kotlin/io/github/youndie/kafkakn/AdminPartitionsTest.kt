@@ -73,6 +73,35 @@ class AdminPartitionsTest {
             }
         }
 
+    /**
+     * [B-87](../../../../../../../docs/backlog/B-87-create-partitions-with-a-replica-assignment.md): new partitions
+     * with a replica assignment. The fixture has one broker, id [BROKER], so `[[BROKER]]` is the assignment it can
+     * check, and one that names a broker the cluster does not have is the refusal worth measuring.
+     */
+    @Test
+    fun new_partitions_land_on_the_broker_named_and_an_unknown_broker_is_refused() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val topic = "kafkakn-assigned-$armName-${randomSuffix()}"
+                withAdmin { admin ->
+                    admin.createTopics(listOf(NewTopic(topic, 1, 1)))
+                    admin.createPartitions(topic, 2, assignment = listOf(listOf(BROKER)))
+                    val grown = admin.describeTopics(listOf(topic)).getValue(topic)
+                    val added = grown.single { it.partition == 1 }
+                    val refused = outcome { admin.createPartitions(topic, 3, assignment = listOf(listOf(NO_BROKER))) }
+                    val after = admin.describeTopics(listOf(topic)).getValue(topic).size
+                    recordArmFact("partitions.assigned.topic", topic)
+                    recordArmFact("partitions.assigned.refused.said", refused)
+                    recordObservation("partitions.assigned.replicas", added.replicas.toString())
+                    recordObservation("partitions.assigned.refused", refused.substringBefore(":"))
+                    recordObservation("partitions.assigned.after", after.toString())
+                    assertEquals(listOf(BROKER), added.replicas)
+                    assertEquals("threw IllegalArgumentException", refused.substringBefore(":"))
+                    assertEquals(2, after, "the refused growth changed nothing")
+                }
+            }
+        }
+
     /** The partition each of [KEYS] went to, written by a producer made now. */
     private suspend fun partitionsOf(topic: String): List<Int> {
         val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"))
@@ -107,6 +136,10 @@ class AdminPartitionsTest {
 
     private companion object {
         const val GROWN_TO = 4
+
+        /** The fixture's one broker. */
+        const val BROKER = 1
+        const val NO_BROKER = 99
         val KEYS = (0 until 8).map { "key-$it" }
         val VISIBLE_WITHIN = 10.seconds
         val RETRY = 100.milliseconds

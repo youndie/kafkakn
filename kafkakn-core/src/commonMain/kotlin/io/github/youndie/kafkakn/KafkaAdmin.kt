@@ -117,10 +117,16 @@ public interface KafkaAdmin {
      * [IllegalArgumentException]. **Keyed records move:** the partitioner maps a key by the partition count,
      * so records written after the growth can land on a different partition from the same key's earlier ones,
      * and per-key order across the growth is lost. That is Kafka's, and this library does not hide it.
+     *
+     * [assignment], when given, names the replicas of each new partition in order, as broker ids, the first of each
+     * the preferred leader ([B-87](../../../../../../../docs/backlog/B-87-create-partitions-with-a-replica-assignment.md)).
+     * Without it the broker places them. One that names a broker the cluster does not have is refused with
+     * [IllegalArgumentException], and the topic is unchanged.
      */
     public suspend fun createPartitions(
         topic: String,
         totalCount: Int,
+        assignment: List<List<Int>>? = null,
     )
 
     /**

@@ -665,7 +665,7 @@ interface KafkaAdmin {
     suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> // B-61
     suspend fun alterTopicConfigs(name: String, set: Map<String, String>, delete: List<String>,
                                   append: Map<String, String>, subtract: Map<String, String>)   // B-61, B-86
-    suspend fun createPartitions(topic: String, totalCount: Int)                                     // B-62
+    suspend fun createPartitions(topic: String, totalCount: Int, assignment: List<List<Int>>?)       // B-62, B-87
     suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long>  // B-63
     suspend fun close()
 }
@@ -787,6 +787,12 @@ member of the controller quorum; on the fixture both arms reported node 1.
 - `createPartitions(topic, totalCount)` grows a topic to `totalCount`. A count equal to or below the current one
   is refused by the broker (`INVALID_PARTITIONS`, 37) with **`IllegalArgumentException` on both arms**, and the
   topic is unchanged. The Java client's `InvalidPartitionsException` is the cause on the JVM.
+- `assignment` ([B-87](../backlog/B-87-create-partitions-with-a-replica-assignment.md)) names each new partition's
+  replicas as broker ids, the first the preferred leader. *Measured* (`ci/b-87/run.sh`, one broker, id 1):
+  `[[1]]` puts the new partition on broker 1, as `kafka-topics.sh --describe` shows, on both arms. An assignment
+  naming broker 99 is refused (`INVALID_REPLICA_ASSIGNMENT`, 39: *"The manual partition assignment includes broker
+  99, but no such broker is registered"*) with `IllegalArgumentException` on both arms, and the topic keeps its
+  partitions.
 - **Keyed records move, and this library does not hide it.** The partitioner maps a key by the partition
   count, so a key's records written after the growth can land on a different partition from its earlier
   ones, and per-key order across the growth is lost. Measured: eight keys that all sat in partition 0 of a

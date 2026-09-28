@@ -6,6 +6,7 @@ import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.convert
@@ -58,6 +59,7 @@ import rdkafka.RD_KAFKA_RESOURCE_TOPIC
 import rdkafka.RD_KAFKA_RESP_ERR_GROUP_SUBSCRIBED_TO_TOPIC
 import rdkafka.RD_KAFKA_RESP_ERR_INVALID_CONFIG
 import rdkafka.RD_KAFKA_RESP_ERR_INVALID_PARTITIONS
+import rdkafka.RD_KAFKA_RESP_ERR_INVALID_REPLICA_ASSIGNMENT
 import rdkafka.RD_KAFKA_RESP_ERR_NON_EMPTY_GROUP
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR_OFFSET_OUT_OF_RANGE
@@ -144,8 +146,10 @@ import rdkafka.rd_kafka_MemberDescription_assignment
 import rdkafka.rd_kafka_MemberDescription_client_id
 import rdkafka.rd_kafka_MemberDescription_consumer_id
 import rdkafka.rd_kafka_MemberDescription_host
+import rdkafka.rd_kafka_NewPartitions_destroy
 import rdkafka.rd_kafka_NewPartitions_destroy_array
 import rdkafka.rd_kafka_NewPartitions_new
+import rdkafka.rd_kafka_NewPartitions_set_replica_assignment
 import rdkafka.rd_kafka_NewPartitions_t
 import rdkafka.rd_kafka_NewTopic_destroy_array
 import rdkafka.rd_kafka_NewTopic_new
@@ -624,6 +628,7 @@ internal class NativeKafkaAdmin(
     override suspend fun createPartitions(
         topic: String,
         totalCount: Int,
+        assignment: List<List<Int>>?,
     ) {
         request(
             RD_KAFKA_ADMIN_OP_CREATEPARTITIONS,
@@ -634,6 +639,23 @@ internal class NativeKafkaAdmin(
                     val grown =
                         rd_kafka_NewPartitions_new(topic, totalCount.convert(), errstr, ERRSTR.convert())
                             ?: throw IllegalArgumentException("createPartitions: $topic: ${errstr.toKString()}")
+                    assignment?.forEachIndexed { index, replicas ->
+                        val ids = allocArray<IntVar>(replicas.size)
+                        replicas.forEachIndexed { at, id -> ids[at] = id }
+                        val err =
+                            rd_kafka_NewPartitions_set_replica_assignment(
+                                grown,
+                                index,
+                                ids,
+                                replicas.size.convert(),
+                                errstr,
+                                ERRSTR.convert(),
+                            )
+                        if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                            rd_kafka_NewPartitions_destroy(grown)
+                            throw IllegalArgumentException("createPartitions: $topic: ${errstr.toKString()}")
+                        }
+                    }
                     val array = allocArray<CPointerVar<rd_kafka_NewPartitions_t>>(1)
                     array[0] = grown
                     try {
@@ -651,8 +673,10 @@ internal class NativeKafkaAdmin(
                         "createPartitions",
                         rd_kafka_CreatePartitions_result_topics(result, count.ptr),
                         count.value.toInt(),
-                        // INVALID_PARTITIONS: a count that does not grow the topic.
-                        refusedArguments = setOf(RD_KAFKA_RESP_ERR_INVALID_PARTITIONS),
+                        // INVALID_PARTITIONS: a count that does not grow the topic. INVALID_REPLICA_ASSIGNMENT: a broker
+                        // the cluster does not have (B-87).
+                        refusedArguments =
+                            setOf(RD_KAFKA_RESP_ERR_INVALID_PARTITIONS, RD_KAFKA_RESP_ERR_INVALID_REPLICA_ASSIGNMENT),
                     )
                 }
             },
