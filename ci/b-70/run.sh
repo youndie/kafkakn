@@ -13,6 +13,7 @@
 #
 #   DURATION=3600 ci/b-70/run.sh        # seconds of trickling input; the default is an hour
 #   EXEMPT=n1 ci/b-70/run.sh            # B-72: keep one slot out of the chaos, and report its memory's slope
+#   GROUP_PROTOCOL=consumer FREEZE_FOR=60 ci/b-70/run.sh   # B-89: the same on the KIP-848 protocol
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -25,6 +26,9 @@ FREEZE_FOR=${FREEZE_FOR:-20}
 PARTITIONS=6
 SLOTS="n1 n2 j1 j2"
 EXEMPT=${EXEMPT:-}
+# B-89: `consumer` runs the group on KIP-848. Its session is the broker's, 45 s by default, so a freeze past it is
+# FREEZE_FOR=60 there, where the classic protocol's 10 s session needs only the default.
+GROUP_PROTOCOL=${GROUP_PROTOCOL:-classic}
 CHAOS_SLOTS=$(for s in $SLOTS; do [ "$s" = "$EXEMPT" ] || printf '%s ' "$s"; done)
 STAMP=$(date +%s)
 RUN=/tmp/b70-$STAMP
@@ -47,6 +51,7 @@ say() { echo "[$(date +%T)] $*"; }
 
 echo "=== environment ==="
 date -Is
+echo "  group protocol $GROUP_PROTOCOL, chaos every ${CHAOS_EVERY}s, freezes of ${FREEZE_FOR}s"
 echo "  run directory $RUN; input $INPUT ($PARTITIONS partitions), output $OUTPUT, group $GROUP"
 
 echo
@@ -69,7 +74,8 @@ start() { # <slot>
     esac
     # A scope of its own: this box is shared, and one runaway instance must not take other sessions' work with it.
     systemd-run --user --scope --quiet -p MemoryMax=1G -p MemorySwapMax=0 -p TasksMax=512 -- \
-        env SOAK_INPUT="$INPUT" SOAK_OUTPUT="$OUTPUT" SOAK_GROUP="$GROUP" SOAK_SLOT="$slot" "${cmd[@]}" \
+        env SOAK_INPUT="$INPUT" SOAK_OUTPUT="$OUTPUT" SOAK_GROUP="$GROUP" SOAK_SLOT="$slot" \
+            SOAK_GROUP_PROTOCOL="$GROUP_PROTOCOL" "${cmd[@]}" \
         >> "$RUN/$slot.log" 2>&1 &
     PID[$slot]=$!
     echo "$(now) $slot start ${PID[$slot]}" >> "$RUN/events.txt"
