@@ -1,7 +1,7 @@
 ---
 id: B-86
 title: "alterTopicConfigs appends to and subtracts from list-valued keys"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-20-what-waited-for-a-caller

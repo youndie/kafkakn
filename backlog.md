@@ -199,7 +199,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[?]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
-| [B-86](docs/backlog/B-86-append-and-subtract-topic-configs.md) `[ ]` | alterTopicConfigs appends to and subtracts from list-valued keys | P3 | S | - |
+| [B-86](docs/backlog/B-86-append-and-subtract-topic-configs.md) `[~]` | alterTopicConfigs appends to and subtracts from list-valued keys | P3 | S | - |
 | [B-87](docs/backlog/B-87-create-partitions-with-a-replica-assignment.md) `[ ]` | createPartitions takes a replica assignment for the new partitions | P3 | S | - |
 | [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[ ]` | deleteRecords to the high watermark, without reading it first | P3 | S | - |
 | [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[ ]` | kafkakn-soak for an hour on the KIP-848 consumer protocol | P3 | M | - |
