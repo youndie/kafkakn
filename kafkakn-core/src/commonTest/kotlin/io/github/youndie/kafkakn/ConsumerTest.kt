@@ -177,7 +177,7 @@ class ConsumerTest {
             // Each arm's client counts the timeout on its own clock: kafka-clients on the wall clock
             // (`Timer.update()` reads `Time.SYSTEM.milliseconds()`, `System.currentTimeMillis`), the native drain on the
             // monotonic one. A host whose wall clock jumps forward ends a JVM poll early by the monotonic clock: 2.54 s
-            // of 3 once, on a box whose wall clock jumped 720 ms in one 100 ms step (B-102). Waited is either clock.
+            // of 3 once, on a box whose wall clock moved 820 ms in one 100 ms step (B-102). Waited is either clock.
             val wallWaited = wallNow() - wallStarted
             recordArmFact(
                 "consume.wait.ms",

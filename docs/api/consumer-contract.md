@@ -104,6 +104,13 @@ class ConsumerRecord(                                       // B-36
   JVM bounds a batch by `max.poll.records` (500); librdkafka returns one message per call, so the
   native arm drains up to the same 500 per `poll`. `max.poll.records` itself is a JVM key, refused on
   native by the configuration rule.
+- **Each arm counts `timeout` on a different clock** ([B-102](../backlog/B-102-a-jvm-poll-returned-before-its-timeout.md)).
+  kafka-clients 4.3.1 counts it on the wall clock: `ClassicKafkaConsumer` holds `Time.SYSTEM`, whose `milliseconds()`
+  is `System.currentTimeMillis()`, and `poll` runs on `time.timer(timeout)` (`ClassicKafkaConsumer.java:175, 641`,
+  `SystemTime.java:35`, `Timer.java:142`). The native drain counts it on the monotonic clock. So on a host whose wall
+  clock jumps forward, an empty JVM `poll` returns early by the jump. *Measured* on the build box: a `poll(3 s)` on the
+  JVM returned empty after 2.54 s by the monotonic clock, and the box's wall clock moved 820 ms in one 100 ms step
+  (`ci/b-102/Clocks.java`). Nothing in this library corrects it, which would make the JVM arm disagree with its client.
 - **`value` is nullable**: a null value is a tombstone, whoever wrote it. `ProducerRecord.value` has
   been nullable too since [B-47](../backlog/B-47-a-producer-can-write-a-tombstone.md); until then this
   library could read a tombstone and not write one.
