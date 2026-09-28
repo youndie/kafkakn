@@ -5,7 +5,7 @@ status: open
 priority: P2
 size: S
 stage: stage-21-schema-registry
-epic: feature-produce-a-record
+epic: feature-schema-registry
 blocked_by: [B-94]
 ---
 
