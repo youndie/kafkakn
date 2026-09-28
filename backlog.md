@@ -210,7 +210,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-92](docs/backlog/B-92-schema-registry-what-is-real.md) `[~]` | Schema Registry: what is real on both targets, measured before anything is built | P1 | M | - |
+| [B-92](docs/backlog/B-92-schema-registry-what-is-real.md) `[?]` | Schema Registry: what is real on both targets, measured before anything is built | P1 | M | - |
 | [B-93](docs/backlog/B-93-a-registry-client.md) `[ ]` | A Schema Registry client on both targets: register, look up, cache | P1 | M | B-92 |
 | [B-94](docs/backlog/B-94-json-schema-serde.md) `[ ]` | A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer | P1 | M | B-93 |
 | [B-95](docs/backlog/B-95-protobuf-serde.md) `[ ]` | A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer | P2 | M | B-93 |

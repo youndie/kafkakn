@@ -1210,7 +1210,17 @@ before any of it was written:
   `ci/harness/Records.java`: bytes kafkakn writes must be read by them, and theirs by kafkakn, on both arms. Their
   Apache 2.0 licence lets the harness use them. They are never a dependency of anything published.
 - **A module of its own, `kafkakn-schema-registry`,** so that `kafkakn-core` does not gain an HTTP client.
-- *Measured*, `ci/b-92/run.sh`: HTTP and HTTPS through CIO on native, and the registry fixture. See below.
+- *Measured* 2026-09-28, `ci/b-92/run.sh` on the Linux box:
+  - **The registry fixture runs.** `cp-schema-registry:8.3.2`, on the host network (the broker advertises
+    `127.0.0.1`) and port 18081 (the box is shared), answered `/subjects` with `[]` after 5 s. It reported version
+    8.3.2.
+  - **HTTP from Kotlin/Native through Ktor's CIO client works:** `200 []` from the registry.
+  - **HTTPS does not, at all:** every `https://` URL failed with *"TLS sessions are not supported on Native
+    platform"*, a public one included. `ktor-network-tls` is published for `linuxX64` and does not implement TLS
+    there. So the obvious transport cannot reach a registry served over HTTPS, which is how registries are served
+    outside a laptop.
+  - The CIO probe binary is 4.1 MB, and its `ldd` adds `libresolv`, `libutil` and `libcrypt` to a kafkakn binary's.
+    All three are glibc's own.
 
 ## 4. Risks, with the machinery that would catch them
 
