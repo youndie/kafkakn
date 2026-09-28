@@ -37,9 +37,16 @@ ensure_topic() {
     shift 2
     kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --if-not-exists --topic "$name" \
         --partitions "$partitions" --replication-factor 1 "$@" >/dev/null 2>&1
-    local described have wrong=
-    described=$(kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$name" 2>/dev/null)
-    have=$(printf '%s\n' "$described" | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -1)
+    local described have wrong= tries=0
+    # A topic created a moment ago is not described yet on a broker that has just started: the first describe
+    # answered nothing, every run, on a fresh fixture (B-97). Asked again for up to 15 s before it counts as a shape.
+    while :; do
+        described=$(kc /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --describe --topic "$name" 2>/dev/null)
+        have=$(printf '%s\n' "$described" | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -1)
+        [ -n "$have" ] || [ "$tries" -ge 15 ] && break
+        tries=$((tries + 1))
+        sleep 1
+    done
     [ "$have" = "$partitions" ] || wrong="${have:-no} partitions, not $partitions"
     while [ $# -gt 0 ]; do
         if [ "$1" = --config ]; then
@@ -67,6 +74,15 @@ case "${1:-}" in
     # subject is dead makes every test above it meaningless, so the only evidence accepted here is
     # the broker answering a request.
     bash "$HERE/../broker/certs.sh" || exit 1
+    # A container of this name left by the project's old, unnamed Compose project (`broker`, B-97) is this
+    # repository's own. It is removed so that the named project can create it. One of any other project is not ours
+    # to remove, and is left, with the reason printed.
+    owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER" 2>/dev/null || true)
+    case "$owner" in
+        "" | kafkakn) ;;
+        broker) docker rm -f "$CONTAINER" > /dev/null && echo "  removed $CONTAINER left by the unnamed project 'broker'" ;;
+        *) echo "  $CONTAINER belongs to Compose project '$owner', not kafkakn - left alone" >&2; exit 1 ;;
+    esac
     docker compose -f "$COMPOSE" -f "$TLS_COMPOSE" up -d --wait < /dev/null >/dev/null 2>&1
     answered=
     for _ in $(seq 1 30); do

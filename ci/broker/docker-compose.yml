@@ -7,6 +7,12 @@
 # The tag is pinned. A moving tag silently re-points the environment between runs, and then every
 # number taken against it describes an unknown broker.
 
+# THE PROJECT'S NAME, AND NOT THE DIRECTORY'S (B-97). Without it Compose names the project after this file's
+# directory, `broker`. mostik keeps its fixture at the same path, with a service of the same name, on the same box, so
+# the two were one Compose service: whichever repository brought its broker up last removed the other's. It was found
+# when this repository's broker vanished after the box rebooted, and bringing it back recreated mostik's.
+name: kafkakn
+
 services:
   broker:
     image: apache/kafka:4.3.1
