@@ -48,8 +48,9 @@ public interface KafkaAdmin {
 
     /**
      * The broker's offset for each of [partitions] under [spec], the answer `kafka-get-offsets.sh` prints:
-     * where the partition starts, the offset after its last record, or the first offset at or after a
-     * timestamp. Null only for [OffsetSpec.Timestamp] when no record is that late. Read uncommitted, as both
+     * where the partition starts, the offset after its last record, the first offset at or after a
+     * timestamp, or the record with the highest timestamp. Null for [OffsetSpec.Timestamp] when no record is that
+     * late, and for [OffsetSpec.MaxTimestamp] when the partition has no records. Read uncommitted, as both
      * clients default to: the end counts records of a transaction still open.
      */
     public suspend fun listOffsets(
@@ -171,16 +172,20 @@ public enum class GroupState {
     }
 }
 
-/**
- * Which offset [KafkaAdmin.listOffsets] asks for: both clients' `OffsetSpec` and `rd_kafka_OffsetSpec_t`,
- * without the max-timestamp variant, which answers a different question.
- */
+/** Which offset [KafkaAdmin.listOffsets] asks for: both clients' `OffsetSpec` and `rd_kafka_OffsetSpec_t`. */
 public sealed interface OffsetSpec {
     /** The earliest offset the broker still has. */
     public data object Earliest : OffsetSpec
 
     /** The offset after the last record: the partition's end. */
     public data object Latest : OffsetSpec
+
+    /**
+     * The offset of the record with the highest timestamp, which is not the last record when records are written
+     * with timestamps of their own. Null for a partition with no records
+     * ([B-84](../../../../../../../docs/backlog/B-84-list-offsets-for-the-max-timestamp.md)).
+     */
+    public data object MaxTimestamp : OffsetSpec
 
     /** The first offset whose record's timestamp is at or after [timestamp], in milliseconds since the epoch. */
     public data class Timestamp(

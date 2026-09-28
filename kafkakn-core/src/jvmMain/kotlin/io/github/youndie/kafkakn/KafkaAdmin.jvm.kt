@@ -177,6 +177,7 @@ internal class JvmKafkaAdmin(
             when (spec) {
                 OffsetSpec.Earliest -> ApacheOffsetSpec.earliest()
                 OffsetSpec.Latest -> ApacheOffsetSpec.latest()
+                OffsetSpec.MaxTimestamp -> ApacheOffsetSpec.maxTimestamp()
                 is OffsetSpec.Timestamp -> ApacheOffsetSpec.forTimestamp(spec.timestamp)
             }
         val answered =

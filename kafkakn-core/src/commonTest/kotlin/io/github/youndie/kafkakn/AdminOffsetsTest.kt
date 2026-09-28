@@ -108,6 +108,49 @@ class AdminOffsetsTest {
             }
         }
 
+    /**
+     * [B-84](../../../../../../../docs/backlog/B-84-list-offsets-for-the-max-timestamp.md): `OffsetSpec.MaxTimestamp`, the
+     * offset of the record with the highest timestamp. The timestamps here are not in offset order, so the answer is
+     * neither the end nor the last record: 1 in a partition written at [BASE], [BASE] + 5 [STEP], [BASE] + 2 [STEP].
+     * An empty partition is the other half, recorded for the arms to be compared on.
+     */
+    @Test
+    fun the_offset_of_the_highest_timestamp_is_the_brokers() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val topic = "kafkakn-max-timestamp-$armName-${randomSuffix()}"
+                withAdmin { it.createTopics(listOf(NewTopic(topic, 2, 1, mapOf("retention.ms" to "-1")))) }
+                val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to bootstrap, "acks" to "all"))
+                try {
+                    for (step in listOf(0L, 5L, 2L)) {
+                        producer.send(
+                            ProducerRecord(
+                                topic,
+                                "at-$step".encodeToByteArray(),
+                                partition = 0,
+                                timestamp =
+                                    BASE + step * STEP,
+                            ),
+                        )
+                    }
+                } finally {
+                    producer.close()
+                }
+                withAdmin { admin ->
+                    val answer =
+                        rendered(
+                            admin.listOffsets(
+                                listOf(TopicPartition(topic, 0), TopicPartition(topic, 1)),
+                                OffsetSpec.MaxTimestamp,
+                            ),
+                        )
+                    recordArmFact("admin.offsets.max.topic", topic)
+                    recordObservation("admin.offsets.max", answer)
+                    assertEquals("0:1 1:none", answer)
+                }
+            }
+        }
+
     /** A new topic of [PARTITIONS] partitions: five records in 0, three in 1, none in 2, a [STEP] apart from [BASE]. */
     private suspend fun seededTopic(prefix: String): String {
         val topic = "$prefix-$armName-${randomSuffix()}"

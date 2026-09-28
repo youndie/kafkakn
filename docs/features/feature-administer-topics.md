@@ -92,6 +92,13 @@ describes the cluster. On both arms, and checked with the broker's own tools
   prints nothing. A group that does not exist has no offsets. Both arms answer alike.
 * **Automated:** `AdminOffsetsTest` on both arms, held against the broker's tools by `ci/b-59/run.sh`.
 
+### Scenario: The offset of the highest timestamp is the broker's, not the end
+* **Given:** a partition written with timestamps out of offset order (t, t+5 s, t+2 s), and an empty partition.
+* **When:** each arm lists their offsets with `OffsetSpec.MaxTimestamp`.
+* **Then:** `0:1 1:none`, on both arms, as `kafka-get-offsets.sh --time -3` prints.
+* **Automated:** `AdminOffsetsTest.the_offset_of_the_highest_timestamp_is_the_brokers`, held against the tool by
+  `ci/b-84/run.sh`.
+
 ### Scenario: An empty group's offsets are moved, and a member that joins reads from there
 * **Given:** a group that committed offset 2 of partition 0 and has no member left.
 * **When:** its offsets are moved to 7, and a member joins afterwards.

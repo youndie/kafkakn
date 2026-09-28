@@ -715,7 +715,11 @@ member of the controller quorum; on the fixture both arms reported node 1.
 - `listOffsets(partitions, spec)` is the broker's offset under `OffsetSpec.Earliest`, `Latest` (the offset
   after the last record) or `Timestamp(ms)` (the first record at or after it). **Null means no record is that
   late**, where both clients answer -1 and `kafka-get-offsets.sh` prints nothing for the partition. Read
-  uncommitted, the default of both. The max-timestamp spec is left out: it answers a different question.
+  uncommitted, the default of both. `OffsetSpec.MaxTimestamp`
+  ([B-84](../backlog/B-84-list-offsets-for-the-max-timestamp.md)) is the offset of the record with the highest
+  timestamp, which is not the last record when records carry timestamps of their own. It is null for a partition
+  with no records, where `kafka-get-offsets.sh --time -3` prints nothing. *Measured* (`ci/b-84/run.sh`): a
+  partition written at t, t+5 s, t+2 s answers 1 on both arms, as the tool does.
 - **Lag is the caller's subtraction**, `listOffsets(…, Latest)` minus the commit. It is not a call of its own:
   a derived number the library could get subtly wrong, and one line for the caller.
 - *Measured* (`ci/b-59/run.sh`): on each arm's own topic and group, the commits are what

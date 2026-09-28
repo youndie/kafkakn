@@ -49,6 +49,7 @@ import rdkafka.RD_KAFKA_CONF_UNKNOWN
 import rdkafka.RD_KAFKA_OFFSET_INVALID
 import rdkafka.RD_KAFKA_OFFSET_SPEC_EARLIEST
 import rdkafka.RD_KAFKA_OFFSET_SPEC_LATEST
+import rdkafka.RD_KAFKA_OFFSET_SPEC_MAX_TIMESTAMP
 import rdkafka.RD_KAFKA_RESOURCE_TOPIC
 import rdkafka.RD_KAFKA_RESP_ERR_GROUP_SUBSCRIBED_TO_TOPIC
 import rdkafka.RD_KAFKA_RESP_ERR_INVALID_CONFIG
@@ -997,6 +998,7 @@ internal class NativeKafkaAdmin(
             when (spec) {
                 OffsetSpec.Earliest -> RD_KAFKA_OFFSET_SPEC_EARLIEST.toLong()
                 OffsetSpec.Latest -> RD_KAFKA_OFFSET_SPEC_LATEST.toLong()
+                OffsetSpec.MaxTimestamp -> RD_KAFKA_OFFSET_SPEC_MAX_TIMESTAMP.toLong()
                 is OffsetSpec.Timestamp -> spec.timestamp
             }
         val answered =
