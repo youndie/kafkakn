@@ -19,6 +19,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.errors.InvalidPartitionsException
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.errors.UnknownMemberIdException
 import java.util.Properties
@@ -259,13 +260,23 @@ internal class JvmKafkaAdmin(
     override suspend fun createPartitions(
         topic: String,
         totalCount: Int,
+        assignment: List<List<Int>>?,
     ) {
+        val grown =
+            if (assignment ==
+                null
+            ) {
+                NewPartitions.increaseTo(totalCount)
+            } else {
+                NewPartitions.increaseTo(totalCount, assignment)
+            }
         try {
-            answer(
-                "createPartitions",
-            ) { delegate.createPartitions(mapOf(topic to NewPartitions.increaseTo(totalCount))).all() }
+            answer("createPartitions") { delegate.createPartitions(mapOf(topic to grown)).all() }
         } catch (refused: InvalidPartitionsException) {
             // The broker's INVALID_PARTITIONS, a count that does not grow the topic: one type on both arms (B-62).
+            throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
+        } catch (refused: InvalidReplicaAssignmentException) {
+            // INVALID_REPLICA_ASSIGNMENT, a broker the cluster does not have: the same type (B-87).
             throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
         }
     }
