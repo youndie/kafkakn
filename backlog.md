@@ -143,7 +143,7 @@ contracts that still said *not measured* ([B-82](docs/backlog/B-82-a-commit-of-a
 [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md)), which waited for a caller. The soak on the KIP-848
 protocol ([B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md)). linuxArm64 was asked about the same day and
 stays as decided on 2026-09-25: not published, not in CI.
-By 2026-09-28 every item of the stage but B-83 was done. B-83 is a `question` for the owner: how `close` is bounded.
+By 2026-09-28 the stage was done. For B-83 the owner chose `close(timeout)`, built in [B-91](docs/backlog/B-91-close-with-a-timeout.md).
 
 ### Kill criteria for stage 4
 
@@ -195,13 +195,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[?]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
+No open tasks.
 
-## Closed (89)
+## Closed (91)
 
 **It builds, and a test can fail**
 
@@ -347,6 +345,7 @@ verdict.
 **What was put off, taken up**
 
 - [B-82](docs/backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md) `[x]` - A commit of a partition the member does not hold, under a subscription
+- [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[x]` - How long close takes with records queued and the broker gone, on both arms
 - [B-84](docs/backlog/B-84-list-offsets-for-the-max-timestamp.md) `[x]` - listOffsets answers OffsetSpec.MaxTimestamp on both arms
 - [B-85](docs/backlog/B-85-list-offsets-read-committed.md) `[x]` - listOffsets takes an isolation level
 - [B-86](docs/backlog/B-86-append-and-subtract-topic-configs.md) `[x]` - alterTopicConfigs appends to and subtracts from list-valued keys
@@ -354,6 +353,7 @@ verdict.
 - [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[x]` - deleteRecords to the high watermark, without reading it first
 - [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[x]` - kafkakn-soak for an hour on the KIP-848 consumer protocol
 - [B-90](docs/backlog/B-90-the-assignment-test-reads-before-the-growth-is-visible.md) `[x]` - B-87's test read the topic before the growth was visible, and failed once on CI
+- [B-91](docs/backlog/B-91-close-with-a-timeout.md) `[x]` - close(timeout) on both arms: what is not acknowledged in time fails, and may have been written
 
 <!-- END INDEX -->
 

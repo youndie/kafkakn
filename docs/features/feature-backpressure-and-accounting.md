@@ -105,6 +105,15 @@ drops records ([research §2.7](../research/research-architecture.md)).
 * **Automated:** `StoppedBrokerTest.a_record_enqueued_while_every_broker_is_down_is_answered_alike_on_both_arms`,
   read against the broker by `ci/b-77/run.sh` in both strategies.
 
+### Scenario: close with a timeout keeps its bound and names what it gave up on
+* **Given:** five records queued, and the broker paused or stopped.
+* **When:** the producer is closed with a timeout of 3 s.
+* **Then:** `close` returns after about 3 s on both arms, and every record's `await()` throws
+  `ClosedBeforeAcknowledgedException`. With the broker paused the records were in flight and are in the topic once
+  it answers again; with it stopped, none is.
+* **Automated:** `CloseWithBrokerGoneTest.close_with_a_timeout_gives_up_on_what_is_not_acknowledged`, both variants,
+  by `ci/b-91/run.sh`; `CloseWithTimeoutTest` with the broker answering, in the suite.
+
 ### Scenario: A queued record whose wait is cut goes on and lands
 * **Given:** a record `enqueue`d with the broker not answering: queued at once.
 * **When:** the wait on its `Delivery` is cut, and the broker answers later.

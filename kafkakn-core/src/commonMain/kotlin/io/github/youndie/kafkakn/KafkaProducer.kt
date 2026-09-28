@@ -1,5 +1,7 @@
 package io.github.youndie.kafkakn
 
+import kotlin.time.Duration
+
 /** A record [KafkaProducer.enqueue] has queued, and the broker's answer for it still to come. */
 public interface Delivery {
     /**
@@ -16,6 +18,19 @@ public interface Delivery {
  * on the JVM, and on native it is kafkakn's own wait for room that ran out.
  */
 public class RecordNotQueuedException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
+
+/**
+ * [KafkaProducer.close] with a timeout gave up on this record before the broker acknowledged it
+ * ([B-91](../../../../../../../docs/backlog/B-91-close-with-a-timeout.md)). It was **never sent, or it was in flight and
+ * may have been written**: a record whose request reached a broker that had not yet answered can be in the topic
+ * afterwards, measured in B-83. Neither client can always tell the two apart, so this type does not either, and
+ * trying again may write it twice. One type on both arms: on the JVM the Java client's *"Producer is closed
+ * forcefully."* is the [cause], and on native it is librdkafka's purge.
+ */
+public class ClosedBeforeAcknowledgedException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
@@ -127,8 +142,19 @@ public interface KafkaProducer {
      * suspend, and the two ways to fit into it are both wrong here: blocking a thread inside
      * `close` on a runtime built around coroutines, or dropping records that are still in flight.
      * A record accepted by [send] before [close] is either acknowledged or its `send` throws.
+     *
+     * With the broker gone this waits for each client's own delivery timeout: 2 minutes on the JVM, 5 on native
+     * (B-83). [close] with a timeout is the bound.
      */
     public suspend fun close()
+
+    /**
+     * Like [close], bounded by [timeout] ([B-91](../../../../../../../docs/backlog/B-91-close-with-a-timeout.md)).
+     * Records acknowledged within it are acknowledged. Every record that is not fails its [Delivery.await] with
+     * [ClosedBeforeAcknowledgedException], never silently, and may have been written if it was in flight. The call
+     * returns about [timeout] later at most, plus the time the client takes to let go.
+     */
+    public suspend fun close(timeout: Duration)
 }
 
 /** Creates a producer. The implementation is the platform's: librdkafka on native, the official client on the JVM. */

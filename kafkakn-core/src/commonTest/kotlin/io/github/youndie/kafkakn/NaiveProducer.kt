@@ -1,6 +1,7 @@
 package io.github.youndie.kafkakn
 
 import kotlinx.coroutines.sync.Semaphore
+import kotlin.time.Duration
 
 /**
  * The defect, on purpose: a producer that counts an enqueue refusal and moves on.
@@ -69,6 +70,8 @@ internal class NaiveProducer(
     override suspend fun flush() = delegate.flush()
 
     override suspend fun close() = delegate.close()
+
+    override suspend fun close(timeout: Duration) = delegate.close(timeout)
 }
 
 /**
