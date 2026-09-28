@@ -5,7 +5,7 @@ status: done
 priority: P1
 size: M
 stage: stage-21-schema-registry
-epic: feature-produce-a-record
+epic: feature-schema-registry
 blocked_by: []
 ---
 

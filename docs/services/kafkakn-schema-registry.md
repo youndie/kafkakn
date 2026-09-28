@@ -32,6 +32,12 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
   is one request, and under two subjects it is two. A mutant that ignored the cache was caught by that count on both
   arms.
 
+- **`registry.jsonSchemaSerde<T>(subject)`** ([B-94](../backlog/B-94-json-schema-serde.md)) generates a closed
+  draft-07 JSON Schema from `T`'s descriptor when it is made, registers it on the first `encode`, and frames `Json`'s
+  output in the wire format. `decode` reads the id, checks the schema it names is JSON Schema, and decodes with the
+  reader's type. *Measured* (`ci/b-94/run.sh`): Confluent's `KafkaJsonSchemaDeserializer`, validating, reads kafkakn's
+  bytes, and kafkakn reads what `KafkaJsonSchemaSerializer` writes, on both arms.
+
 ## Quirks
 
 - **Under `BACKWARD`, the registry's default, a property added to an open JSON Schema is incompatible**
@@ -48,4 +54,6 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
 | the client | `kafkakn-schema-registry/src/commonMain/kotlin/io/github/youndie/kafkakn/schema/SchemaRegistry.kt` |
 | its suite | `kafkakn-schema-registry/src/commonTest/kotlin/io/github/youndie/kafkakn/schema/` |
 | the runner that counts requests at the registry | `ci/b-93/run.sh` |
+| the JSON Schema generator and serde | `kafkakn-schema-registry/src/commonMain/kotlin/io/github/youndie/kafkakn/schema/JsonSchemaGenerator.kt`, `JsonSchemaSerde.kt` |
+| the oracle harness | `ci/b-94/oracle/` |
 | the fixture registry | `ci/broker/docker-compose.yml` |

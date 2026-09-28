@@ -43,7 +43,7 @@ Every document on disk, listed once. `[x]` written, `[ ]` planned.
 - [x] [producer-contract](api/producer-contract.md) — the `expect` surface, what each call promises, and the five things both actuals must agree on
 - [x] [consumer-contract](api/consumer-contract.md) — designed before it is built: the threading each client demands, the shape, twenty defaults read from both artefacts, and what the first consumer will not do; all *target*
 
-### Features (6)
+### Features (7)
 
 - [x] [feature-produce-a-record](features/feature-produce-a-record.md) — hand over a record, learn where it landed; the whole library in one call
 - [x] [feature-backpressure-and-accounting](features/feature-backpressure-and-accounting.md) — the defect this project is shaped around, and the reconciliation that catches it
@@ -51,4 +51,5 @@ Every document on disk, listed once. `[x]` written, `[ ]` planned.
 - [x] [feature-administer-topics](features/feature-administer-topics.md) — create, delete and describe topics, describe the cluster, each read back with the broker's own tools
 - [x] [feature-consume-records](features/feature-consume-records.md) — assign, seek, poll, groups, commits and the rebalance listener, against a third party's records
 - [x] [feature-exactly-once](features/feature-exactly-once.md) — read, process and write with the progress committed in the output's transaction, across stops
+- [x] [feature-schema-registry](features/feature-schema-registry.md) — a `@Serializable` type in and out of the registry's wire format, held against the registry's own serializers
 
