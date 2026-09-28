@@ -74,6 +74,12 @@ Three coordinates, because a KMP module has one per target: `kafkakn-core` (meta
 `kafkakn-core-jvm`, `kafkakn-core-linuxx64`. The native one carries librdkafka and its TLS stack
 **inside the klib**, so a downstream link needs no configuration of its own.
 
+**Schema Registry** is a second module under the same version
+([B-99](docs/backlog/B-99-publish-the-schema-registry-module.md)):
+`implementation("io.github.youndie.kafkakn:kafkakn-schema-registry:0.1.0.<n>")`, three coordinates again. A
+`@Serializable` type in, bytes the registry's own serializers read out, as JSON Schema or Protobuf
+([docs/services/kafkakn-schema-registry.md](docs/services/kafkakn-schema-registry.md)).
+
 **The Kotlin version is part of the instructions, not a detail.** A klib carries metadata that a
 build on another compiler refuses, so `2.4.20` above is the version this is known to work with rather
 than a placeholder. `send` suspends, and the coroutines runtime arrives with the dependency — the
@@ -167,7 +173,8 @@ is surface, not implementation.
 | **The KIP-848 protocol as the default** | not planned: the default stays the clients' own `classic`. What is in: a rebalance listener ([B-50](docs/backlog/B-50-a-rebalance-listener.md)), a `Flow` over `poll` ([B-54](docs/backlog/B-54-a-flow-over-poll.md)), cooperative rebalancing ([B-55](docs/backlog/B-55-cooperative-rebalancing.md)) and static membership, measured with fencing as one exception ([B-56](docs/backlog/B-56-static-membership.md)), are in, and so is the KIP-848 group protocol as a value the caller chooses ([B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md)). A consumer that assigns and seeks ([B-36](docs/backlog/B-36-assign-and-poll.md)) and joins groups with manual commits ([B-37](docs/backlog/B-37-consumer-groups.md)) is in, built to a contract designed first ([B-35](docs/backlog/B-35-the-consumer-designed-first.md)) — and a group with one member on each arm is measured |
 | **`linuxArm64` as a shipped target** | not planned: not published and not run in CI, by decision. It is built on request (`-Pkafkakn.linuxArm64`) and run on arm64 hardware since [B-39](docs/backlog/B-39-linux-arm64.md): the native suite passes there and agrees with the JVM arm (93 tests, 17 observations, measured 2026-09-25). Its binaries need glibc 2.17, the same as x64, and have been run on it ([B-44](docs/backlog/B-44-arm64-glibc-floor.md)) |
 | **macOS as a shipped target** | not published. `macosArm64` exists for contributors since [B-40](docs/backlog/B-40-macos-for-contributors.md), declared only on a Mac: the native suite runs there against the broker and agrees with the JVM arm (92 tests, 17 observations, measured 2026-09-25). No `macosX64`, no Windows, no `musl` |
-| **Schema Registry, Streams, Windows, `musl`** | not planned. The first two are in neither client underneath, so they are not a gap between kafkakn and what it wraps |
+| **HTTPS to a Schema Registry from native beside kafkakn-core** | an open question ([B-98](docs/backlog/B-98-https-to-the-registry.md)). Ktor's Curl engine carries its own static OpenSSL, and a binary with both it and `kafkakn-core` does not link. The JVM reaches HTTPS through CIO; a native service reaches a registry over HTTP |
+| **Avro, Streams, Windows, `musl`** | not planned. Avro has no Kotlin Multiplatform library; Streams is in neither client underneath, so it is not a gap between kafkakn and what it wraps |
 
 ## Documentation
 
