@@ -4,8 +4,16 @@
 //                                                     validating it against its schema, as one JSON line
 //   Oracle write <registry> <topic> <schema> <lines> each line "...\t<json>": that JSON under that schema, as the
 //                                                     serializer writes it, one hex line
+//   Oracle read-proto, write-proto                    the same with KafkaProtobufDeserializer and KafkaProtobufSerializer
+//                                                     (B-95); the schema is a .proto, the JSON Protobuf's JSON mapping
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
+import com.google.protobuf.util.JsonFormat;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
@@ -47,7 +55,30 @@ public class Oracle {
                     }
                 }
             }
-            default -> throw new IllegalArgumentException("read or write, not " + args[0]);
+            case "read-proto" -> {
+                try (KafkaProtobufDeserializer<Message> deserializer = new KafkaProtobufDeserializer<>()) {
+                    deserializer.configure(Map.of("schema.registry.url", registry), false);
+                    JsonFormat.Printer printer = JsonFormat.printer().preservingProtoFieldNames().omittingInsignificantWhitespace();
+                    for (String line : Files.readAllLines(Path.of(args[3]))) {
+                        if (line.isBlank()) continue;
+                        Message read = deserializer.deserialize(topic, hex.parseHex(line.split("\t")[0]));
+                        System.out.println(printer.print(read));
+                    }
+                }
+            }
+            case "write-proto" -> {
+                ProtobufSchema schema = new ProtobufSchema(Files.readString(Path.of(args[3])));
+                try (KafkaProtobufSerializer<Message> serializer = new KafkaProtobufSerializer<>()) {
+                    serializer.configure(Map.of("schema.registry.url", registry), false);
+                    for (String line : Files.readAllLines(Path.of(args[4]))) {
+                        if (line.isBlank()) continue;
+                        DynamicMessage.Builder builder = DynamicMessage.newBuilder(schema.toDescriptor());
+                        JsonFormat.parser().merge(line.split("\t")[1], builder);
+                        System.out.println(hex.formatHex(serializer.serialize(topic, builder.build())));
+                    }
+                }
+            }
+            default -> throw new IllegalArgumentException("read, write, read-proto or write-proto, not " + args[0]);
         }
     }
 }
