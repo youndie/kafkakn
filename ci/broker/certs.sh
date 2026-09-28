@@ -76,6 +76,7 @@ if [ -z "${FORCE:-}" ] && [ -s "$OUT/ca.pem" ] && [ -s "$OUT/broker.keystore.p12
     echo "  certificates already in $OUT, and the broker's is valid for another day - kept"
     derive_pkcs1
     write_jaas
+    chmod 644 "$OUT/broker.keystore.p12"
     exit 0
 fi
 
@@ -137,7 +138,10 @@ mv wrong-client.plain.key wrong-client.key
 rm -f client.plain.key ./*.csr
 
 # The broker container does not run as root and has to be able to read these.
-chmod 644 ./*.pem key-password keystore-password
+# The keystore too: openssl writes it 0600, and the broker runs as the image's `appuser`, uid 1000. On the build
+# box the owner is uid 1000 as well, so it read the file anyway. On a CI runner the owner is uid 1001, and the
+# broker could not open its own keystore (B-81).
+chmod 644 ./*.pem key-password keystore-password broker.keystore.p12
 
 # A fixture that produced nothing must not look like one that worked.
 for f in ca.pem broker.keystore.p12 wrong-ca.pem client.pem client.key wrong-client.pem wrong-client.key; do
@@ -233,9 +237,11 @@ sasl_props client-sasl-plain-wrong.properties SASL_PLAINTEXT PLAIN alice not-the
 sasl_props client-sasl-scram256.properties SASL_PLAINTEXT SCRAM-SHA-256 alice alice-secret
 sasl_props client-sasl-scram256-wrong.properties SASL_PLAINTEXT SCRAM-SHA-256 alice not-the-password
 sasl_props client-sasl-ssl-scram512.properties SASL_SSL SCRAM-SHA-512 alice alice-secret
-chmod 644 ./*.properties ./*.pem ./*.conf client.key wrong-client.key
-
+# The JAAS file and the PKCS#1 keys are written by the same two functions the kept branch calls, and BEFORE this
+# chmod, which names `*.conf`. For a week they came after it, so a first generation, on a machine that had never
+# had certificates, failed here. The build box always took the kept branch. CI's first run found it (B-81).
 derive_pkcs1
 write_jaas
+chmod 644 ./*.properties ./*.pem ./*.conf client.key wrong-client.key
 echo "  certificates in $OUT: ca.pem, broker.keystore.p12, wrong-ca.pem, client.pem, wrong-client.pem"
 echo "  the right CA verifies the broker, the wrong CA does not - both checked, not assumed"

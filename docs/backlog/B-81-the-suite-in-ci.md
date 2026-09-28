@@ -1,0 +1,54 @@
+---
+id: B-81
+title: "CI runs the whole suite on both arms against the fixture broker"
+status: done
+priority: P1
+size: M
+stage: stage-19-the-suite-in-ci
+blocked_by: [B-78]
+---
+
+# B-81 — CI runs the whole suite on both arms against the fixture broker
+
+Until now the suite ran only by hand, on a build box, through each item's own runner. The `check` workflow ran the
+documents and the formatter. So "the loop merges on green" read a green that had not run a single test. It was
+backed by whatever the person or the loop happened to run on the box that day, on a shared machine whose state
+(a fixture topic of the wrong shape, B-78) could decide the result.
+
+- **The decision and its reason.** One script, `ci/suite/run.sh`, run by a person and by a new `suite` workflow,
+  on every pull request and every push to `main`. It brings the fixture broker up with all its listeners and asks
+  each listener to refuse what it must. Then it runs `jvmTest` and `linuxX64Test` whole, with `--continue`, and
+  diffs the arms' observations. The repository is public, so the standard runners cost nothing. The C bundle, the
+  Kotlin/Native toolchain and Gradle's caches are cached. Tests that pause or stop the broker stay behind their
+  switches. Their items' runners are where they run.
+- AC: the script fails when an arm ran fewer than `MIN_TESTS` tests, and when fewer than `MIN_OBSERVATIONS`
+  observations were compared. A suite that compiled nothing, or skipped its way through, is not green.
+- AC: the workflow is green on its own pull request, on the runner, with the counts in its log.
+- AC: a positive control. A commit that breaks one assertion turns the workflow red and names that test. It is
+  reverted before merge.
+- AC: `CLAUDE.md`'s "Checks" section says what CI runs now.
+- Anchors: `ci/suite/run.sh`, `.github/workflows/suite.yaml`.
+
+## Findings
+
+- **CI's first run found a fixture defect the build box could not.** `ci/broker/certs.sh` failed on a machine that
+  had never had certificates: `chmod: cannot access './*.conf'`. Since 2026-09-25, the JAAS file has been written
+  by `write_jaas`, which the full generation called only after the `chmod` naming `*.conf`. The build box's
+  certificates predated that and always took the "kept" branch. Reproduced on the box in an empty
+  `KAFKAKN_TLS_DIR` (exit 1, the same line), and fixed by writing the file first (exit 0, 30 files, the JAAS file
+  present).
+- **And a second: the broker could not read its keystore on the runner.** `certs.sh` leaves
+  `broker.keystore.p12` at 0600, and the broker runs as the image's `appuser`, uid 1000. The build box's user is uid
+  1000 too, so the owner and the reader matched by accident. The runner's is 1001. The keystore is now 0644, a
+  password-protected fixture file. The workflow prints the broker's log on failure, since `broker.sh` shows three
+  lines of it.
+- **And a third: the fixture needed a jar before anything had fetched it.** `broker.sh up` writes `kafkakn-consume`
+  with `Records.java` on the kafka-clients jar in Gradle's cache. On a fresh runner there is none. The runner now
+  compiles the JVM tests before bringing the broker up.
+- **Green on the runner** (run 36410272456): JVM 163 tests and native 152, no failures, 100 observations each, and
+  the arms agree. The fixture's three listeners refused what they must. The whole suite took 12 min 49 s.
+- **The positive control** (run 36411889447): `CLOSE_MS = 0` in `EnqueueMetadataTest`, then reverted. Red, one failure
+  per arm, `EnqueueMetadataTest.a_record_for_a_cluster_that_does_not_answer_is_not_queued_within_max_block_ms` on both,
+  *"close took 61 ms"* and *"close took 0 ms"*, read from the uploaded reports. It also showed that the runner did not
+  print the name: its grep wanted the testcase and its failure on one line, and the report puts them on two. The
+  runner now parses the reports.
