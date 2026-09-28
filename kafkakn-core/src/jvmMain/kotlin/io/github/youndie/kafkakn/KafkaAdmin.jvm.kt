@@ -33,6 +33,9 @@ import org.apache.kafka.common.errors.TopicExistsException as ApacheTopicExistsE
 /** The JVM arm of the admin client: `Admin`, delegated to, as the producer is. */
 public actual fun kafkaAdmin(config: AdminConfig): KafkaAdmin = JvmKafkaAdmin(config)
 
+/** The DeleteRecords protocol's "before the high watermark", which the Java client passes through (B-88). */
+private const val HIGH_WATERMARK = -1L
+
 internal class JvmKafkaAdmin(
     config: AdminConfig,
 ) : KafkaAdmin {
@@ -283,6 +286,14 @@ internal class JvmKafkaAdmin(
 
     override suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
         requireCommittable(beforeOffsets)
+        return deleteBefore(beforeOffsets)
+    }
+
+    // `RecordsToDelete.beforeOffset(-1)`: the protocol's HIGH_WATERMARK, which the broker reads as "before the end".
+    override suspend fun deleteAllRecords(partitions: List<TopicPartition>): Map<TopicPartition, Long> =
+        deleteBefore(partitions.associateWith { HIGH_WATERMARK })
+
+    private suspend fun deleteBefore(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
         val watermarks =
             delegate
                 .deleteRecords(
