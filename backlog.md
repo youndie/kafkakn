@@ -145,6 +145,16 @@ protocol ([B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md)). linuxA
 stays as decided on 2026-09-25: not published, not in CI.
 By 2026-09-28 the stage was done. For B-83 the owner chose `close(timeout)`, built in [B-91](docs/backlog/B-91-close-with-a-timeout.md).
 
+### Stage 21: Schema Registry
+
+**Opened 2026-09-28 at the owner's request, for an elegant solution through kotlinx.serialization.** It reverses the
+decision that kept Schema Registry out. [B-92](docs/backlog/B-92-schema-registry-what-is-real.md) measures first:
+which formats are real on both targets, the wire format, the registry's own serializers as the oracle, and HTTP on
+native. Then [B-93](docs/backlog/B-93-a-registry-client.md) builds the client,
+[B-94](docs/backlog/B-94-json-schema-serde.md) JSON Schema, [B-95](docs/backlog/B-95-protobuf-serde.md) Protobuf, and
+[B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) handles evolution. It all lives in a module of its own,
+so `kafkakn-core` gains no HTTP client.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -188,6 +198,7 @@ verdict.
 | `stage-18-what-the-consumer-and-the-harness-found` | What mostik and a day of whole-suite runs turned up | The arms disagreeing on a stopped broker, measured before it is decided; a fixture that can no longer be in the wrong shape silently; a flaky fill under load, measured before it is touched. |
 | `stage-19-the-suite-in-ci` | Green means the tests ran | The whole suite, both arms, against the fixture broker, on every pull request and every push to main. |
 | `stage-20-what-waited-for-a-caller` | What was put off, taken up | Two measurements the contracts left open (a commit outside the assignment under a subscription, `close` with the broker gone), the admin client's remaining options, and the soak on KIP-848. |
+| `stage-21-schema-registry` | A `@Serializable` type in, bytes the registry's other clients read out | What is real on both targets first, then a registry client, JSON Schema and Protobuf held against the registry's official deserializers, and schema evolution. |
 
 ## Marks
 
@@ -195,9 +206,15 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (5)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-92](docs/backlog/B-92-schema-registry-what-is-real.md) `[ ]` | Schema Registry: what is real on both targets, measured before anything is built | P1 | M | - |
+| [B-93](docs/backlog/B-93-a-registry-client.md) `[ ]` | A Schema Registry client on both targets: register, look up, cache | P1 | M | B-92 |
+| [B-94](docs/backlog/B-94-json-schema-serde.md) `[ ]` | A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer | P1 | M | B-93 |
+| [B-95](docs/backlog/B-95-protobuf-serde.md) `[ ]` | A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer | P2 | M | B-93 |
+| [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[ ]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
 
 ## Closed (91)
 
@@ -407,7 +424,10 @@ had been *not planned*. The KIP-848 protocol, static membership and cooperative 
 *out of scope* for the consumer. Both are now stages 12 and 13. The order still puts the group
 protocols after the rebalance listener ([B-50](docs/backlog/B-50-a-rebalance-listener.md)), which they
 change, and administration after the consumer features it describes. **ACLs, OIDC token fetching,
-Schema Registry and Streams stay out.**
+Schema Registry and Streams stay out.** Schema Registry came in on 2026-09-28 at the owner's request (stage 21).
+**ACLs were asked about the same day and stay out.** A service rarely grants its own rights; operators do, with
+Kafka's tools or their platform's. Measuring them honestly would put an authorizer and `super.users` on the fixture
+broker under the whole suite. They wait for a consumer that has to provision its own access.
 
 **Reposilite is enough; Maven Central is not planned** (the owner, 2026-09-25). The question of Maven
 Central was put again once the backlog closed, and answered: no. **Amended 2026-09-27, by the owner:**
