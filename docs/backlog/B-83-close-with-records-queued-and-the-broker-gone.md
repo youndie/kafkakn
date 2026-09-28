@@ -1,7 +1,7 @@
 ---
 id: B-83
 title: "How long close takes with records queued and the broker gone, on both arms"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-20-what-waited-for-a-caller
