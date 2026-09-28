@@ -838,6 +838,18 @@ member of the controller quorum; on the fixture both arms reported node 1.
 - *Measured* (`ci/b-63/run.sh`): each arm's returned watermarks are what `kafka-get-offsets.sh --time -2`
   reports.
 
+**A topic created or grown is not described at once
+([B-101](../backlog/B-101-describe-right-after-create-is-an-unknown-topic.md)).** `createTopics` and
+`createPartitions` return on the controller's answer; the broker's own description, which `describeTopics` reads,
+shows the change a moment later. That is Kafka's, not either arm's: the Java client and librdkafka agree.
+- *Measured* (`ci/b-101/run.sh`, 200 rounds per arm, one broker): described at once after `createTopics`, 199 of 200
+  new topics were *unknown* on each arm, and every one was visible within 134 ms, typically 25 to 35 ms. Described at
+  once after growing a visible topic, the old count came back in 6 of 200 rounds on the JVM and 21 of 200 on native,
+  and the new one within 38 ms.
+- A caller that describes what it has just created waits for it. The suite does (`AdminPartitionsTest`), bounded.
+- **The unknown topic is not one type across the arms:** the Java client's `UnknownTopicOrPartitionException` on the
+  JVM, `KafkaAdminException` on native ([B-103](../backlog/B-103-an-unknown-topic-is-two-types.md)).
+
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
 the same rule that keeps a producer from being checked by its own consumer.
