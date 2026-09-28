@@ -210,7 +210,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-94](docs/backlog/B-94-json-schema-serde.md) `[ ]` | A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer | P1 | M | B-93 |
+| [B-94](docs/backlog/B-94-json-schema-serde.md) `[~]` | A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer | P1 | M | B-93 |
 | [B-95](docs/backlog/B-95-protobuf-serde.md) `[ ]` | A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer | P2 | M | B-93 |
 | [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[ ]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |

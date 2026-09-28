@@ -1,7 +1,7 @@
 ---
 id: B-94
 title: "A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer"
-status: open
+status: wip
 priority: P1
 size: M
 stage: stage-21-schema-registry
