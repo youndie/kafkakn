@@ -1,0 +1,58 @@
+# The whole suite, on both arms, against the fixture broker (B-81).
+#
+# Until B-81 the suite ran only by hand, on a build box, through each item's own runner. `check` ran the documents
+# and the formatter, and "merge on green" read a green that had not run a single test. This job is that missing half:
+# `ci/suite/run.sh`, the same script a person runs, on every pull request and every push to main.
+#
+# The repository is public, so GitHub's standard runners cost nothing here. What costs time is cached: the C bundle
+# (built in a manylinux2014 container, minutes), the Kotlin/Native toolchain, and Gradle's own caches.
+name: suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The same key as `publish`: the bundle changes only when the librdkafka version or its build does.
+      - id: bundle
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/kafkakn
+          key: kafkakn-c-bundle-${{ hashFiles('gradle/libs.versions.toml', 'ci/librdkafka/**') }}
+
+      - if: steps.bundle.outputs.cache-hit != 'true'
+        run: bash ci/librdkafka/build.sh
+
+      # The Kotlin/Native toolchain and its dependencies, a few hundred megabytes fetched on the first native task.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
+
+      - run: bash ci/suite/run.sh
+
+      # What a red run needs to be read without rerunning it: every report, both arms, and the arms' observations.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: suite-reports
+          path: |
+            kafkakn-core/build/test-results/
+            kafkakn-core/build/reports/tests/
+            kafkakn-core/build/observations/
+          retention-days: 14

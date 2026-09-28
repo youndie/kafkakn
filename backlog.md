@@ -128,6 +128,12 @@ measured before it is touched. It was not load. The Java client's idempotent pro
 topic stuck, and the Java client alone reproduces it. The fill now acknowledges one record per partition first.
 Stage 18 closed on 2026-09-28.
 
+### Stage 19: the suite in CI
+
+**Opened 2026-09-28 at the owner's request.** Every check until now ran on a build box by hand, and "merge on
+green" read a workflow that ran documents and the formatter. [B-81](docs/backlog/B-81-the-suite-in-ci.md) runs the
+whole suite, on both arms, against the fixture broker, on GitHub's runners.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -169,6 +175,7 @@ verdict.
 | `stage-16-a-deadline-on-send` | A caller can bound `send` and know what it left behind | What a cancelled `send` means for its record, measured on both arms, and a way to tell "never queued" from "queued, outcome unknown". |
 | `stage-17-numbered-publishes` | A consumer can name the build it depends on | Every publish gets a version of its own, is never overwritten, and is tagged at the commit it was built from. |
 | `stage-18-what-the-consumer-and-the-harness-found` | What mostik and a day of whole-suite runs turned up | The arms disagreeing on a stopped broker, measured before it is decided; a fixture that can no longer be in the wrong shape silently; a flaky fill under load, measured before it is touched. |
+| `stage-19-the-suite-in-ci` | Green means the tests ran | The whole suite, both arms, against the fixture broker, on every pull request and every push to main. |
 
 ## Marks
 
@@ -176,9 +183,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (1)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-81](docs/backlog/B-81-the-suite-in-ci.md) `[~]` | CI runs the whole suite on both arms against the fixture broker | P1 | M | B-78 |
 
 ## Closed (80)
 

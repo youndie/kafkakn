@@ -154,9 +154,13 @@ make check          # the documents
 ```
 
 **Two halves, and CI runs both** ([B-14](docs/backlog/B-14-ci-workflow.md)): `make check` needs
-python and takes a second, `ktlintCheck` needs a JDK and takes a minute. Neither runs the suite —
-that needs the C bundle and a broker, and every item's own `ci/b-NN/run.sh` is what runs it on the
-Linux box.
+python and takes a second, `ktlintCheck` needs a JDK and takes a minute.
+
+**And the suite, since [B-81](docs/backlog/B-81-the-suite-in-ci.md).** The `suite` workflow runs
+`ci/suite/run.sh` on every pull request and every push to `main`. It brings the fixture broker up, checks that its
+listeners refuse what they must, runs `jvmTest` and `linuxX64Test` whole, and diffs the arms. A green `suite` is
+part of "merge on green". What it cannot run stays with each item's own `ci/b-NN/run.sh` on the Linux box: tests
+that pause or stop the broker, soaks, and measurements.
 
 The formatter is the portfolio's, pinned by `io.github.youndie.sborka.lint`, and its rule set is not
 only about layout: it refuses a `catch (e: Throwable)` that swallows `CancellationException`, and it
