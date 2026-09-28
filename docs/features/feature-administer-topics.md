@@ -99,6 +99,13 @@ describes the cluster. On both arms, and checked with the broker's own tools
 * **Automated:** `AdminOffsetsTest.the_offset_of_the_highest_timestamp_is_the_brokers`, held against the tool by
   `ci/b-84/run.sh`.
 
+### Scenario: Read committed, the end stops where an open transaction starts
+* **Given:** a partition with two records committed in a transaction (its marker at 2) and three in a transaction
+  still open.
+* **When:** each arm lists its `Latest` offset read uncommitted, read committed, and by default.
+* **Then:** 6, 3 and 6, on both arms.
+* **Automated:** `AdminOffsetsTest.latest_read_committed_stops_where_an_open_transaction_starts`, by `ci/b-85/run.sh`.
+
 ### Scenario: An empty group's offsets are moved, and a member that joins reads from there
 * **Given:** a group that committed offset 2 of partition 0 and has no member left.
 * **When:** its offsets are moved to 7, and a member joins afterwards.
