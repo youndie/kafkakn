@@ -46,6 +46,8 @@ import rdkafka.RD_KAFKA_CONFIG_SOURCE_DYNAMIC_TOPIC_CONFIG
 import rdkafka.RD_KAFKA_CONFIG_SOURCE_STATIC_BROKER_CONFIG
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
+import rdkafka.RD_KAFKA_ISOLATION_LEVEL_READ_COMMITTED
+import rdkafka.RD_KAFKA_ISOLATION_LEVEL_READ_UNCOMMITTED
 import rdkafka.RD_KAFKA_OFFSET_INVALID
 import rdkafka.RD_KAFKA_OFFSET_SPEC_EARLIEST
 import rdkafka.RD_KAFKA_OFFSET_SPEC_LATEST
@@ -61,6 +63,7 @@ import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
 import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
 import rdkafka.rd_kafka_AdminOptions_destroy
 import rdkafka.rd_kafka_AdminOptions_new
+import rdkafka.rd_kafka_AdminOptions_set_isolation_level
 import rdkafka.rd_kafka_AdminOptions_t
 import rdkafka.rd_kafka_AlterConfigOpType_t
 import rdkafka.rd_kafka_AlterConsumerGroupOffsets
@@ -993,6 +996,7 @@ internal class NativeKafkaAdmin(
     override suspend fun listOffsets(
         partitions: List<TopicPartition>,
         spec: OffsetSpec,
+        isolation: IsolationLevel,
     ): Map<TopicPartition, Long?> {
         val asked =
             when (spec) {
@@ -1013,6 +1017,16 @@ internal class NativeKafkaAdmin(
                         partitions.forEach { partition ->
                             rd_kafka_topic_partition_list_add(list, partition.topic, partition.partition)!!
                                 .pointed.offset = asked
+                        }
+                        val level =
+                            when (isolation) {
+                                IsolationLevel.ReadUncommitted -> RD_KAFKA_ISOLATION_LEVEL_READ_UNCOMMITTED
+                                IsolationLevel.ReadCommitted -> RD_KAFKA_ISOLATION_LEVEL_READ_COMMITTED
+                            }
+                        rd_kafka_AdminOptions_set_isolation_level(options, level)?.let { refused ->
+                            val said = rd_kafka_error_string(refused)?.toKString()
+                            rd_kafka_error_destroy(refused)
+                            throw KafkaAdminException("listOffsets: the isolation level was refused: $said")
                         }
                         rd_kafka_ListOffsets(handle, list, options, queue)
                     } finally {

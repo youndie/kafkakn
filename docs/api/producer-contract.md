@@ -715,7 +715,10 @@ member of the controller quorum; on the fixture both arms reported node 1.
 - `listOffsets(partitions, spec)` is the broker's offset under `OffsetSpec.Earliest`, `Latest` (the offset
   after the last record) or `Timestamp(ms)` (the first record at or after it). **Null means no record is that
   late**, where both clients answer -1 and `kafka-get-offsets.sh` prints nothing for the partition. Read
-  uncommitted, the default of both. `OffsetSpec.MaxTimestamp`
+  uncommitted by default, as in both clients. `IsolationLevel.ReadCommitted`
+  ([B-85](../backlog/B-85-list-offsets-read-committed.md)) makes `Latest` the last stable offset, where the first
+  open transaction starts. *Measured* (`ci/b-85/run.sh`): two records committed in a transaction and three left
+  open answer 6 read uncommitted and 3 read committed, on both arms. `OffsetSpec.MaxTimestamp`
   ([B-84](../backlog/B-84-list-offsets-for-the-max-timestamp.md)) is the offset of the record with the highest
   timestamp, which is not the last record when records carry timestamps of their own. It is null for a partition
   with no records, where `kafka-get-offsets.sh --time -3` prints nothing. *Measured* (`ci/b-84/run.sh`): a

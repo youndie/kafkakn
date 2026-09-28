@@ -50,12 +50,17 @@ public interface KafkaAdmin {
      * The broker's offset for each of [partitions] under [spec], the answer `kafka-get-offsets.sh` prints:
      * where the partition starts, the offset after its last record, the first offset at or after a
      * timestamp, or the record with the highest timestamp. Null for [OffsetSpec.Timestamp] when no record is that
-     * late, and for [OffsetSpec.MaxTimestamp] when the partition has no records. Read uncommitted, as both
-     * clients default to: the end counts records of a transaction still open.
+     * late, and for [OffsetSpec.MaxTimestamp] when the partition has no records.
+     *
+     * [isolation] is how transactions are read, uncommitted by default as in both clients: then the end counts the
+     * records of a transaction still open. Read committed, [OffsetSpec.Latest] is the last stable offset, where the
+     * first open transaction starts, and what a read-committed reader reaches
+     * ([B-85](../../../../../../../docs/backlog/B-85-list-offsets-read-committed.md)).
      */
     public suspend fun listOffsets(
         partitions: List<TopicPartition>,
         spec: OffsetSpec,
+        isolation: IsolationLevel = IsolationLevel.ReadUncommitted,
     ): Map<TopicPartition, Long?>
 
     /**
@@ -170,6 +175,15 @@ public enum class GroupState {
             return entries.firstOrNull { it.name == normalised } ?: UNKNOWN
         }
     }
+}
+
+/** How [KafkaAdmin.listOffsets] reads transactions: the `isolation.level` of both clients' consumers. */
+public enum class IsolationLevel {
+    /** Every record written, including those of a transaction still open or later aborted. */
+    ReadUncommitted,
+
+    /** Only records of committed transactions: the end is the last stable offset. */
+    ReadCommitted,
 }
 
 /** Which offset [KafkaAdmin.listOffsets] asks for: both clients' `OffsetSpec` and `rd_kafka_OffsetSpec_t`. */
