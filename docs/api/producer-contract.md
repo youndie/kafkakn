@@ -667,6 +667,7 @@ interface KafkaAdmin {
                                   append: Map<String, String>, subtract: Map<String, String>)   // B-61, B-86
     suspend fun createPartitions(topic: String, totalCount: Int, assignment: List<List<Int>>?)       // B-62, B-87
     suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long>  // B-63
+    suspend fun deleteAllRecords(partitions: List<TopicPartition>): Map<TopicPartition, Long>        // B-88
     suspend fun close()
 }
 ```
@@ -812,7 +813,11 @@ member of the controller quorum; on the fixture both arms reported node 1.
 - An offset past the end is refused by the broker (`OFFSET_OUT_OF_RANGE`, 1) with
   **`IllegalArgumentException` on both arms**, and nothing is deleted. On the JVM, the cause is the Java
   client's `OffsetOutOfRangeException`. A negative offset is refused before any request, as for a commit.
-  Both clients read -1 as "the high watermark", which is not offered.
+  Both clients read -1 as "the high watermark". That is offered under a name, not as a number:
+  `deleteAllRecords(partitions)` ([B-88](../backlog/B-88-delete-records-to-the-high-watermark.md)) deletes every
+  record written so far without reading the ends first, and returns the new low watermarks, which are the ends.
+  *Measured* (`ci/b-88/run.sh`): partitions of 10 and 5 records return `0:10 1:5`, and `kafka-get-offsets.sh`
+  prints the same for `--time -2` and `-1`, on both arms.
 - *Measured* (`ci/b-63/run.sh`): each arm's returned watermarks are what `kafka-get-offsets.sh --time -2`
   reports.
 
