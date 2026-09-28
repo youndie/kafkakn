@@ -11,3 +11,12 @@ internal val registryUrl: String get() = env("KAFKAKN_REGISTRY") ?: "http://127.
 
 /** This run's name, so the runner can find the run's own requests in the registry's log. */
 internal val run: String get() = env("KAFKAKN_RUN") ?: "local"
+
+/** A file's lines, for what the runner hands between the suite and the oracle harness. */
+internal expect fun readLines(path: String): List<String>
+
+/** Writes [lines] to [path], replacing it. */
+internal expect fun writeLines(
+    path: String,
+    lines: List<String>,
+)

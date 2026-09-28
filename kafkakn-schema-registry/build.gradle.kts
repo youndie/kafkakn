@@ -3,6 +3,8 @@
 // client (B-92). The transport is a Ktor `HttpClient`, CIO by default; a native caller who needs HTTPS passes Curl.
 plugins {
     alias(wip.plugins.kotlinMultiplatform)
+    // For the suite's `@Serializable` types; the module itself only reads descriptors.
+    alias(wip.plugins.kotlinSerialization)
     id("io.github.youndie.sborka.kmp")
     id("io.github.youndie.sborka.lint")
 }
