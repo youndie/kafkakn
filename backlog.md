@@ -206,10 +206,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (2)
+## Open (3)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
+| [B-100](docs/backlog/B-100-poll-drops-records-given-up-mid-drain.md) `[~]` | The native poll handed over 486 records of a partition a callback took inside that poll: drop them | P1 | S | - |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 | [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
 
