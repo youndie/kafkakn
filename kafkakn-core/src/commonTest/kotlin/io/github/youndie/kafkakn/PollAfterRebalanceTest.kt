@@ -23,10 +23,10 @@ import kotlin.time.TimeSource
  * The rebalance reaches A inside a `poll`. Every record A is handed afterwards must be of a partition A holds,
  * and none may come from before A gave the partitions up, as the Java client guarantees.
  *
- * **It did not reproduce B-68's defect**, fast or slow: librdkafka serves a rebalance ahead of the records
- * queued before it, so a stray needs the rebalance to arrive while a `poll` is part-way through collecting,
- * which a member here almost never is. It stays as the guard for the ordinary rebalance. The defect itself
- * is reproduced, and its fix held, by `ci/b-68/run.sh`, which freezes a member again and again.
+ * **It rarely reaches B-68's defect:** a stray needs the rebalance to arrive while a native `poll` is part-way
+ * through collecting, which a member here almost never is. Once it did, on a GitHub-hosted runner: 486 records of
+ * partition 0, with B-68's counter at 1/486, which is what B-100 fixed. The filtering itself is
+ * `NativeDrainGivenUpTest`'s; this stays the guard for the ordinary rebalance on both arms.
  */
 class PollAfterRebalanceTest {
     @Test

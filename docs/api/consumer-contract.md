@@ -358,13 +358,17 @@ effect before the partition's first record. On the JVM it is `seek` on the lane'
     native.
   - The time from `onLost` to `onAssigned` varied from 40 ms to 3 s on the JVM, and was about 100 ms on
     native. Nothing here depends on it.
-  - **Once, unexplained:** a native member resuming from a lost session was handed one record of a partition
-    it had just lost (B-65: 1 in about 26 native freezes). The JVM had none. The mechanism suspected in
-    [B-68](../backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md) was instrumented and never
-    occurred: records collected in a `poll` before a callback in that same `poll` took their partition.
-    The count was 0 over 16 freezes and an ordinary rebalance, and a positive control showed that the counter
-    moves. It was not fixed, since nothing measured says what to fix. `ci/b-68/run.sh` and `ci/b-65/run.sh`
-    still record native strays, with the counter beside them, should one appear again.
+  - **`poll` returns only records of partitions held after that poll's callbacks, on both arms.** The Java
+    client drops a revoked partition's fetched records. The native `poll` collects across several
+    `rd_kafka_consumer_poll` calls, and a callback can run in a later one, so it drops what it had collected for
+    the partitions that callback took ([B-100](../backlog/B-100-poll-drops-records-given-up-mid-drain.md)).
+    - How it was found: a native member resuming from a lost session was handed one record of a partition it
+      had just lost (B-65, 1 in about 26 freezes). [B-68](../backlog/B-68-native-poll-returns-records-of-a-revoked-partition.md)
+      counted the suspected mechanism and saw 0 over 16 freezes and an ordinary rebalance, so nothing was fixed.
+    - Then the `suite` workflow, on a GitHub-hosted runner, had `PollAfterRebalanceTest` fail on native with 487
+      strays, partition 0 from offset 1500, and the counter at 1 callback and 486 records: the mechanism, seen.
+    - The filtering is tested by `NativeDrainGivenUpTest`; `PollAfterRebalanceTest`, `ci/b-68/run.sh` and
+      `ci/b-65/run.sh` stay the integration guards, with the counter beside the strays.
 
 ### Static membership ([B-56](../backlog/B-56-static-membership.md))
 

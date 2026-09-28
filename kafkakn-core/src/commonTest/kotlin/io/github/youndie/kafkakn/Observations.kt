@@ -68,8 +68,8 @@ internal expect fun backpressureWaitCount(): Long
 
 /**
  * B-68's instrument: "rebalances/records", the rebalance callbacks that took partitions inside a native `poll`
- * after it had collected records, and how many of those records were of the partitions taken. "-" on the JVM,
- * whose client does not collect across its callbacks and has no such counter to read.
+ * after it had collected records, and how many of those records were of the partitions taken, which it drops
+ * (B-100). "-" on the JVM, whose client does not collect across its callbacks and has no such counter to read.
  */
 internal expect fun givenUpMidDrain(): String
 
