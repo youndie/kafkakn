@@ -199,7 +199,7 @@ verdict.
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[?]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
-| [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[ ]` | deleteRecords to the high watermark, without reading it first | P3 | S | - |
+| [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[~]` | deleteRecords to the high watermark, without reading it first | P3 | S | - |
 | [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[ ]` | kafkakn-soak for an hour on the KIP-848 consumer protocol | P3 | M | - |
 
 ## Closed (86)

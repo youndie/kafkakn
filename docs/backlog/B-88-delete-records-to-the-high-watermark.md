@@ -1,7 +1,7 @@
 ---
 id: B-88
 title: "deleteRecords to the high watermark, without reading it first"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-20-what-waited-for-a-caller
