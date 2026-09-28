@@ -17,7 +17,7 @@ date -Is
 uptime
 bash ci/harness/broker.sh up || exit 1
 
-for task in jvmTest linuxX64Test; do
+for task in ${TASKS:-jvmTest linuxX64Test}; do
     arm=jvm; [ "$task" = linuxX64Test ] && arm=linuxX64
     echo
     echo "=== $arm, $ROUNDS rounds ==="
