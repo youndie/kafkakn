@@ -142,7 +142,7 @@ class EnqueueMetadataTest {
         const val NOWHERE = "127.0.0.1:1"
         const val MAX_BLOCK_MS = 1_000L
         const val LONG_BLOCK_MS = 20_000L
-        const val CLOSE_MS = 10_000L
+        const val CLOSE_MS = 0L
         val CREATE_AFTER = 2.seconds
     }
 }
