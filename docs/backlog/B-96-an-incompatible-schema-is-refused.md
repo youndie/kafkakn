@@ -1,7 +1,7 @@
 ---
 id: B-96
 title: "A schema the subject's compatibility refuses is one typed exception, before any record is sent"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-21-schema-registry

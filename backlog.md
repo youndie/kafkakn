@@ -210,7 +210,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[ ]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
+| [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[~]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 | [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
 
