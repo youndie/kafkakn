@@ -32,13 +32,19 @@ internal suspend fun runSoak(env: (String) -> String?) {
     val output = env("SOAK_OUTPUT") ?: error("SOAK_OUTPUT")
     val group = env("SOAK_GROUP") ?: error("SOAK_GROUP")
     val slot = env("SOAK_SLOT") ?: error("SOAK_SLOT")
+    // B-89: the group protocol, classic by default. Under KIP-848 (`consumer`) the session is the broker's
+    // (`group.consumer.session.timeout.ms`), and the Java client refuses `session.timeout.ms` from the member.
+    val protocol = env("SOAK_GROUP_PROTOCOL") ?: "classic"
     val consumer =
         kafkaConsumer(
             ConsumerConfig(
-                "bootstrap.servers" to bootstrap,
-                "group.id" to group,
-                "auto.offset.reset" to "earliest",
-                "session.timeout.ms" to (env("SOAK_SESSION_MS") ?: "10000"),
+                buildMap {
+                    put("bootstrap.servers", bootstrap)
+                    put("group.id", group)
+                    put("auto.offset.reset", "earliest")
+                    put("group.protocol", protocol)
+                    if (protocol == "classic") put("session.timeout.ms", env("SOAK_SESSION_MS") ?: "10000")
+                },
             ),
         )
     val producer =

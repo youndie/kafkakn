@@ -56,6 +56,16 @@ every input record appears in the committed output exactly once.
 * **Automated:** `ExactlyOnceTest.every_input_record_reaches_the_output_exactly_once_across_stops` on
   each arm, counted through `kafka-console-consumer` by `ci/b-38/run.sh`.
 
+### Scenario: An exactly-once service survives an hour of kills and freezes, on either group protocol
+* **Given:** `kafkakn-soak`, an exactly-once read-process-write service, four instances in one group (two native,
+  two JVM), with input trickling in for an hour.
+* **When:** every 45 s one instance is killed and restarted, or frozen past its session and woken.
+* **Then:** under `read_committed`, every input record is in the output exactly once, the group's commits reach
+  every input partition's end, and native memory does not grow. The same on the classic protocol (B-70) and on
+  KIP-848 (B-89).
+* **Automated:** `ci/b-70/run.sh`, and `GROUP_PROTOCOL=consumer FREEZE_FOR=60 ci/b-70/run.sh` for KIP-848, counted
+  with the Java client.
+
 ## 5. Out of scope
 
 A built-in read-process-write loop: the loop is the caller's, and the test shows one. Exactly-once across
