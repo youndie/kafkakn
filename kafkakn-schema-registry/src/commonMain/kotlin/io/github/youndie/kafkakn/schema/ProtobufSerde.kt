@@ -2,6 +2,9 @@ package io.github.youndie.kafkakn.schema
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PolymorphicKind
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlinx.serialization.protobuf.schema.ProtoBufSchemaGenerator
 import kotlinx.serialization.serializer
@@ -14,7 +17,7 @@ import kotlinx.serialization.serializer
  * [schema] is the `.proto` kotlinx's `ProtoBufSchemaGenerator` writes for the type, proto2, made when this is made. The
  * generator writes the root type's message first (it walks the types breadth-first from the root), so the record's
  * message indexes are `[0]`, which the wire format writes as one `0x00` between the id and the payload (research
- * §2.29). A polymorphic type, which the generator can only express as an artificial wrapper message, is refused.
+ * §2.29). A polymorphic or contextual type is refused when this is made.
  */
 @OptIn(ExperimentalSerializationApi::class)
 public class ProtobufSerde<T> internal constructor(
@@ -26,8 +29,27 @@ public class ProtobufSerde<T> internal constructor(
     public val schema: String = ProtoBufSchemaGenerator.generateSchemaText(serializer.descriptor)
 
     init {
-        require(POLYMORPHIC !in schema) {
-            "${serializer.descriptor.serialName}: a polymorphic type has no Protobuf schema here yet; a concrete class does"
+        requireConcrete(serializer.descriptor, emptySet())
+    }
+
+    /**
+     * Refuses a polymorphic or contextual type anywhere in the tree. Read off the descriptor, not the schema's text:
+     * for a sealed root the generator writes no `KotlinxSerializationPolymorphic` message at all, measured when a text
+     * check let one through.
+     */
+    private fun requireConcrete(
+        descriptor: SerialDescriptor,
+        seen: Set<String>,
+    ) {
+        require(descriptor.kind !is PolymorphicKind && descriptor.kind != SerialKind.CONTEXTUAL) {
+            "${descriptor.serialName}: ${descriptor.kind} types have no Protobuf schema here yet; a concrete class does"
+        }
+        if (descriptor.serialName in seen) return
+        (0 until descriptor.elementsCount).forEach {
+            requireConcrete(
+                descriptor.getElementDescriptor(it),
+                seen + descriptor.serialName,
+            )
         }
     }
 
@@ -52,8 +74,6 @@ public class ProtobufSerde<T> internal constructor(
     }
 
     private companion object {
-        /** The name of the artificial message the generator writes for a polymorphic type. */
-        const val POLYMORPHIC = "KotlinxSerializationPolymorphic"
         const val ROOT_INDEX: Byte = 0
     }
 }
@@ -93,17 +113,24 @@ internal object MessageIndexes {
     private const val MAX_SHIFT = 28
 }
 
-/** A Protobuf serde for [serializer]'s type under [subject]: `valueSubject(topic)` for a topic's values. */
+/**
+ * A Protobuf serde for [serializer]'s type under [subject]: `valueSubject(topic)` for a topic's values. It encodes with
+ * kotlinx's default `ProtoBuf`, so a caller takes on nothing experimental; the overload that takes a `ProtoBuf` does.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 public fun <T> SchemaRegistry.protobufSerde(
     subject: String,
     serializer: KSerializer<T>,
-    protoBuf: ProtoBuf = ProtoBuf,
+): ProtobufSerde<T> = ProtobufSerde(this, subject, serializer, ProtoBuf)
+
+/** As the overload without it, with a `ProtoBuf` of the caller's: kotlinx marks that configuration experimental. */
+@ExperimentalSerializationApi
+public fun <T> SchemaRegistry.protobufSerde(
+    subject: String,
+    serializer: KSerializer<T>,
+    protoBuf: ProtoBuf,
 ): ProtobufSerde<T> = ProtobufSerde(this, subject, serializer, protoBuf)
 
 /** A Protobuf serde for [T] under [subject]: `registry.protobufSerde<Order>(valueSubject("orders"))`. */
-@OptIn(ExperimentalSerializationApi::class)
-public inline fun <reified T> SchemaRegistry.protobufSerde(
-    subject: String,
-    protoBuf: ProtoBuf = ProtoBuf,
-): ProtobufSerde<T> = protobufSerde(subject, serializer<T>(), protoBuf)
+public inline fun <reified T> SchemaRegistry.protobufSerde(subject: String): ProtobufSerde<T> =
+    protobufSerde(subject, serializer<T>())
