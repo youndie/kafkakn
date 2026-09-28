@@ -18,6 +18,7 @@ SASL_SSL_BOOTSTRAP=${SASL_SSL_BOOTSTRAP:-127.0.0.1:9097}
 CONTAINER=kafkakn-broker
 BOOTSTRAP=${BOOTSTRAP:-127.0.0.1:9092}
 PARTITIONS=${PARTITIONS:-3}
+REGISTRY=${REGISTRY:-http://127.0.0.1:18081}
 
 kc() { docker exec "$CONTAINER" "$@"; }
 # -i belongs BEFORE the container name. `docker exec <name> -i` makes "-i" the command, and a
@@ -82,6 +83,13 @@ case "${1:-}" in
         "" | kafkakn) ;;
         broker) docker rm -f "$CONTAINER" > /dev/null && echo "  removed $CONTAINER left by the unnamed project 'broker'" ;;
         *) echo "  $CONTAINER belongs to Compose project '$owner', not kafkakn - left alone" >&2; exit 1 ;;
+    esac
+    # The same for the registry: B-92 measured it with `docker run`, a container of this name and no project.
+    owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' kafkakn-registry 2>/dev/null || echo absent)
+    case "$owner" in
+        absent | kafkakn) ;;
+        "") docker rm -f kafkakn-registry > /dev/null && echo "  removed kafkakn-registry left by docker run (B-92)" ;;
+        *) echo "  kafkakn-registry belongs to Compose project '$owner', not kafkakn - left alone" >&2; exit 1 ;;
     esac
     docker compose -f "$COMPOSE" -f "$TLS_COMPOSE" up -d --wait < /dev/null >/dev/null 2>&1
     answered=
@@ -152,7 +160,17 @@ case "${1:-}" in
         if kc /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$SSL_BOOTSTRAP" \
                 --command-config /etc/kafka/secrets/client-ssl.properties >/dev/null 2>&1; then
             echo "  broker answers over TLS on $SSL_BOOTSTRAP"
-            exit 0
+            # B-93: and the registry, which stores its schemas in the broker and so answers only after it.
+            for _ in $(seq 1 60); do
+                if curl -sf "$REGISTRY/subjects" > /dev/null 2>&1; then
+                    echo "  registry answers on $REGISTRY"
+                    exit 0
+                fi
+                sleep 1
+            done
+            echo "  REGISTRY DID NOT ANSWER on $REGISTRY - here is why:" >&2
+            docker logs kafkakn-registry 2>&1 | grep -iE "error|exception" | tail -3 >&2
+            exit 1
         fi
         sleep 2
     done

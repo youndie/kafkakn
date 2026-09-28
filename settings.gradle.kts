@@ -3,6 +3,8 @@ rootProject.name = "kafkakn"
 include(":kafkakn-core")
 // B-70: this project's own consumer, for the soak run. Not published.
 include(":kafkakn-soak")
+// B-93: Schema Registry through kotlinx.serialization, beside the core so that the core gains no HTTP client.
+include(":kafkakn-schema-registry")
 
 pluginManagement {
     repositories {

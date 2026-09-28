@@ -38,3 +38,18 @@ services:
       # succeeds and proves nothing; the scenario "an unknown topic is an error, not a silence"
       # cannot even be written.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+  # B-93: the Schema Registry the kafkakn-schema-registry module is measured against. The registry's own server, at
+  # the version whose serializers are the oracle (B-92). On the host network because the broker advertises
+  # 127.0.0.1, and on 18081, not 8081, because the box is shared.
+  registry:
+    image: confluentinc/cp-schema-registry:8.3.2
+    container_name: kafkakn-registry
+    network_mode: host
+    depends_on:
+      - broker
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: "127.0.0.1"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:18081"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "PLAINTEXT://127.0.0.1:9092"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: "1"
