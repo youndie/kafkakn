@@ -30,12 +30,7 @@ class AdminPartitionsTest {
 
                     admin.createPartitions(topic, GROWN_TO)
                     val started = TimeSource.Monotonic.markNow()
-                    while (admin.describeTopics(listOf(topic)).getValue(topic).size != GROWN_TO) {
-                        check(
-                            started.elapsedNow() < VISIBLE_WITHIN,
-                        ) { "still not $GROWN_TO partitions after $VISIBLE_WITHIN" }
-                        delay(RETRY)
-                    }
+                    describedOnce(admin, topic) { it.size == GROWN_TO }
                     recordArmFact("partitions.visible.after.ms", started.elapsedNow().inWholeMilliseconds.toString())
 
                     // A new producer, so its metadata is the grown topic's. The same keys, now spread by four.
@@ -86,15 +81,10 @@ class AdminPartitionsTest {
                 withAdmin { admin ->
                     admin.createTopics(listOf(NewTopic(topic, 1, 1)))
                     admin.createPartitions(topic, 2, assignment = listOf(listOf(BROKER)))
-                    // The growth reaches the broker's description a moment later, as in the test above: read at once,
-                    // partition 1 was missing on the JVM in one CI run (B-90).
-                    val started = TimeSource.Monotonic.markNow()
-                    var grown = admin.describeTopics(listOf(topic)).getValue(topic)
-                    while (grown.none { it.partition == 1 }) {
-                        check(started.elapsedNow() < VISIBLE_WITHIN) { "partition 1 not visible after $VISIBLE_WITHIN" }
-                        delay(RETRY)
-                        grown = admin.describeTopics(listOf(topic)).getValue(topic)
-                    }
+                    // The topic and its growth reach the broker's description a moment after the controller answered:
+                    // partition 1 was missing on the JVM in one CI run (B-90), the topic itself on native in another
+                    // (B-101).
+                    val grown = describedOnce(admin, topic) { described -> described.any { it.partition == 1 } }
                     val added = grown.single { it.partition == 1 }
                     val refused = outcome { admin.createPartitions(topic, 3, assignment = listOf(listOf(NO_BROKER))) }
                     val after = admin.describeTopics(listOf(topic)).getValue(topic).size
@@ -128,6 +118,33 @@ class AdminPartitionsTest {
             use(admin)
         } finally {
             admin.close()
+        }
+    }
+
+    /**
+     * The topic's description once [agreed] holds. `createTopics` and `createPartitions` return on the controller's
+     * answer, and the broker's description shows them a moment later: at once, 199 of 200 new topics were unknown on
+     * both arms, and visible within 134 ms (B-101). So an unknown topic is waited for too, within [VISIBLE_WITHIN].
+     */
+    private suspend fun describedOnce(
+        admin: KafkaAdmin,
+        topic: String,
+        agreed: (List<PartitionInfo>) -> Boolean,
+    ): List<PartitionInfo> {
+        val started = TimeSource.Monotonic.markNow()
+        while (true) {
+            val described =
+                try {
+                    admin.describeTopics(listOf(topic)).getValue(topic)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (thrown: Exception) {
+                    if (!thrown.isUnknownTopic()) throw thrown
+                    null
+                }
+            if (described != null && agreed(described)) return described
+            check(started.elapsedNow() < VISIBLE_WITHIN) { "$topic: not as expected after $VISIBLE_WITHIN: $described" }
+            delay(RETRY)
         }
     }
 

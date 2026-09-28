@@ -75,10 +75,8 @@ class CreateThenDescribeTest {
                 .toString()
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (thrown: KafkaAdminException) {
-            // librdkafka's words, then the Java client's for the same error code, UNKNOWN_TOPIC_OR_PARTITION (3).
-            val said = thrown.message.orEmpty()
-            if ("nknown topic" in said || "does not host this topic" in said) UNKNOWN else "threw $said"
+        } catch (thrown: Exception) {
+            if (thrown.isUnknownTopic()) UNKNOWN else "threw ${thrown::class.simpleName}: ${thrown.message}"
         }
 
     private suspend fun millisUntil(agreed: suspend () -> Boolean): Long {
