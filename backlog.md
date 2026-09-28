@@ -134,6 +134,16 @@ Stage 18 closed on 2026-09-28.
 green" read a workflow that ran documents and the formatter. [B-81](docs/backlog/B-81-the-suite-in-ci.md) runs the
 whole suite, on both arms, against the fixture broker, on GitHub's runners.
 
+### Stage 20: what waited for a caller
+
+**Opened 2026-09-28 at the owner's request: "fill the backlog with what we put off".** Two sentences in the
+contracts that still said *not measured* ([B-82](docs/backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md),
+[B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md)). The admin client's five remaining options
+([B-84](docs/backlog/B-84-list-offsets-for-the-max-timestamp.md) to
+[B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md)), which waited for a caller. The soak on the KIP-848
+protocol ([B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md)). linuxArm64 was asked about the same day and
+stays as decided on 2026-09-25: not published, not in CI.
+
 ### Kill criteria for stage 4
 
 They are written down before the work so that a bad result is a result rather than a
@@ -176,6 +186,7 @@ verdict.
 | `stage-17-numbered-publishes` | A consumer can name the build it depends on | Every publish gets a version of its own, is never overwritten, and is tagged at the commit it was built from. |
 | `stage-18-what-the-consumer-and-the-harness-found` | What mostik and a day of whole-suite runs turned up | The arms disagreeing on a stopped broker, measured before it is decided; a fixture that can no longer be in the wrong shape silently; a flaky fill under load, measured before it is touched. |
 | `stage-19-the-suite-in-ci` | Green means the tests ran | The whole suite, both arms, against the fixture broker, on every pull request and every push to main. |
+| `stage-20-what-waited-for-a-caller` | What was put off, taken up | Two measurements the contracts left open (a commit outside the assignment under a subscription, `close` with the broker gone), the admin client's remaining options, and the soak on KIP-848. |
 
 ## Marks
 
@@ -183,9 +194,18 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (0)
+## Open (8)
 
-No open tasks.
+| Task | | Priority | Size | Blocked by |
+|---|---|---|---|---|
+| [B-82](docs/backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md) `[ ]` | A commit of a partition the member does not hold, under a subscription | P2 | M | - |
+| [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[ ]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
+| [B-84](docs/backlog/B-84-list-offsets-for-the-max-timestamp.md) `[ ]` | listOffsets answers OffsetSpec.MaxTimestamp on both arms | P3 | S | - |
+| [B-85](docs/backlog/B-85-list-offsets-read-committed.md) `[ ]` | listOffsets takes an isolation level | P3 | S | - |
+| [B-86](docs/backlog/B-86-append-and-subtract-topic-configs.md) `[ ]` | alterTopicConfigs appends to and subtracts from list-valued keys | P3 | S | - |
+| [B-87](docs/backlog/B-87-create-partitions-with-a-replica-assignment.md) `[ ]` | createPartitions takes a replica assignment for the new partitions | P3 | S | - |
+| [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[ ]` | deleteRecords to the high watermark, without reading it first | P3 | S | - |
+| [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[ ]` | kafkakn-soak for an hour on the KIP-848 consumer protocol | P3 | M | - |
 
 ## Closed (81)
 
@@ -398,5 +418,5 @@ That adds no release process: a publish is still one workflow run.
 - deleting all records with the high-watermark marker.
 
 Each was left out of its item (B-59, B-61, B-62, B-63) because no test here needs it. None becomes an item
-until a consumer of this library asks for it.
+until a consumer of this library asks for it. **Lifted on 2026-09-28 by the owner**, who asked for what had been put off: they are B-84 to B-88.
 
