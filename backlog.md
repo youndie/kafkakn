@@ -198,7 +198,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-82](docs/backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md) `[ ]` | A commit of a partition the member does not hold, under a subscription | P2 | M | - |
+| [B-82](docs/backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md) `[~]` | A commit of a partition the member does not hold, under a subscription | P2 | M | - |
 | [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[ ]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
 | [B-84](docs/backlog/B-84-list-offsets-for-the-max-timestamp.md) `[ ]` | listOffsets answers OffsetSpec.MaxTimestamp on both arms | P3 | S | - |
 | [B-85](docs/backlog/B-85-list-offsets-read-committed.md) `[ ]` | listOffsets takes an isolation level | P3 | S | - |

@@ -1,7 +1,7 @@
 ---
 id: B-82
 title: "A commit of a partition the member does not hold, under a subscription"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-20-what-waited-for-a-caller
