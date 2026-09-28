@@ -1221,6 +1221,15 @@ before any of it was written:
     outside a laptop.
   - The CIO probe binary is 4.1 MB, and its `ldd` adds `libresolv`, `libutil` and `libcrypt` to a kafkakn binary's.
     All three are glibc's own.
+- *Measured* 2026-09-28, `ci/b-95/run.sh`, on both arms (B-95):
+  - **The generator writes the root type's message first,** so the message indexes are always `[0]`, one byte
+    `0x00`. Confluent's `KafkaProtobufDeserializer` reads kafkakn's bytes and `KafkaProtobufSerializer`'s are read by
+    kafkakn. A mutant that left the index byte out was refused by the deserializer on both arms and failed
+    `ProtobufSerdeTest.a_serializable_type_round_trips_through_the_registry_as_protobuf`.
+  - **A sealed root is invisible in the schema's text.** `KotlinxSerializationPolymorphic` appears only for
+    polymorphism below the root; the refusal reads the descriptor.
+  - **An empty list and an absent one are one record in Protobuf,** which gives a repeated or map field no presence.
+    The comparison says so rather than treating the registry's JSON printer as lossy.
 
 ## 4. Risks, with the machinery that would catch them
 
