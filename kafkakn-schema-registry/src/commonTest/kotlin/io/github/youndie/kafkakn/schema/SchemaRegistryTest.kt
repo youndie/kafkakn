@@ -42,17 +42,25 @@ class SchemaRegistryTest {
             }
         }
 
-    /** The count's positive control: two different schemas under one subject are two requests, whatever the cache. */
+    /**
+     * The count's positive control: the same schema under two subjects is two requests, because the cache is per
+     * subject. Two different schemas under one subject were the first control, and the registry refused the second:
+     * under `BACKWARD`, a property added to an open JSON Schema is incompatible (B-93's findings, and B-94's schemas).
+     */
     @Test
-    fun two_different_schemas_are_two_registrations() =
+    fun the_same_schema_under_two_subjects_is_two_registrations() =
         runTest(timeout = 2.minutes) {
             withContext(Dispatchers.Default) {
-                val subject = valueSubject("kafkakn-sr-control-$arm-$run")
                 val registry = SchemaRegistry(registryUrl)
                 try {
-                    val first = registry.register(subject, ORDER, SchemaType.JSON)
-                    val second = registry.register(subject, ORDER_WITH_NOTE, SchemaType.JSON)
-                    assertEquals(true, first != second, "a different schema, a different id: $first and $second")
+                    val one = registry.register(valueSubject("kafkakn-sr-control-a-$arm-$run"), ORDER, SchemaType.JSON)
+                    val other =
+                        registry.register(
+                            valueSubject("kafkakn-sr-control-b-$arm-$run"),
+                            ORDER,
+                            SchemaType.JSON,
+                        )
+                    assertEquals(one, other, "one schema, one id, whatever the subject")
                 } finally {
                     registry.close()
                 }
@@ -86,8 +94,6 @@ class SchemaRegistryTest {
 
     private companion object {
         const val ORDER = """{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}"""
-        const val ORDER_WITH_NOTE =
-            """{"type":"object","properties":{"id":{"type":"integer"},"note":{"type":"string"}},"required":["id"]}"""
         const val UNKNOWN_ID = 999_999
     }
 }

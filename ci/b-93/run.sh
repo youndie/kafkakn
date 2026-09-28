@@ -33,8 +33,8 @@ echo "=== the registry's own count of this run's registrations ==="
 log=$(docker logs kafkakn-registry 2>&1)
 for arm in jvm linuxX64; do
     cached=$(printf '%s\n' "$log" | grep -c "POST /subjects/kafkakn-sr-cached-$arm-$KAFKAKN_RUN-value/versions")
-    control=$(printf '%s\n' "$log" | grep -c "POST /subjects/kafkakn-sr-control-$arm-$KAFKAKN_RUN-value/versions")
-    printf '  %-9s same schema twice: %s request(s); two different schemas: %s request(s)\n' "$arm" "$cached" "$control"
+    control=$(printf '%s\n' "$log" | grep -cE "POST /subjects/kafkakn-sr-control-[ab]-$arm-$KAFKAKN_RUN-value/versions")
+    printf '  %-9s same schema twice: %s request(s); the same schema under two subjects: %s request(s)\n' "$arm" "$cached" "$control"
     [ "$cached" -eq 1 ] || bad "$arm: the cached registration reached the registry $cached times"
     [ "$control" -eq 2 ] || bad "$arm: the control did not count two requests - the count is not seeing requests"
     id=$(curl -s "$REGISTRY/subjects/kafkakn-sr-cached-$arm-$KAFKAKN_RUN-value/versions/latest" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id"), d.get("schemaType"))')
