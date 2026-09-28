@@ -206,17 +206,18 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (5)
+## Open (6)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-92](docs/backlog/B-92-schema-registry-what-is-real.md) `[?]` | Schema Registry: what is real on both targets, measured before anything is built | P1 | M | - |
-| [B-93](docs/backlog/B-93-a-registry-client.md) `[ ]` | A Schema Registry client on both targets: register, look up, cache | P1 | M | B-92 |
+| [B-93](docs/backlog/B-93-a-registry-client.md) `[~]` | A Schema Registry client on both targets: register, look up, cache | P1 | M | B-92 |
 | [B-94](docs/backlog/B-94-json-schema-serde.md) `[ ]` | A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer | P1 | M | B-93 |
 | [B-95](docs/backlog/B-95-protobuf-serde.md) `[ ]` | A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer | P2 | M | B-93 |
 | [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[ ]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
+| [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
+| [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
 
-## Closed (92)
+## Closed (93)
 
 **It builds, and a test can fail**
 
@@ -374,6 +375,7 @@ verdict.
 
 **A `@Serializable` type in, bytes the registry's other clients read out**
 
+- [B-92](docs/backlog/B-92-schema-registry-what-is-real.md) `[x]` - Schema Registry: what is real on both targets, measured before anything is built
 - [B-97](docs/backlog/B-97-the-fixture-shares-a-compose-project-with-mostik.md) `[x]` - The fixture broker shared a Compose project with mostik's, and a fresh broker failed its own topic check
 
 <!-- END INDEX -->

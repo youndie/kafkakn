@@ -1,7 +1,7 @@
 ---
 id: B-93
 title: "A Schema Registry client on both targets: register, look up, cache"
-status: open
+status: wip
 priority: P1
 size: M
 stage: stage-21-schema-registry
@@ -11,7 +11,8 @@ blocked_by: [B-92]
 
 # B-93 — a Schema Registry client on both targets: register, look up, cache
 
-The part every format needs. `SchemaRegistry(url)` registers a schema under a subject and looks one up by id, and
+The part every format needs. `SchemaRegistry(url, httpClient)` (B-92's decision: a Ktor `HttpClient`, CIO by
+default) registers a schema under a subject and looks one up by id, and
 it caches both, so one record costs no request once its schema is known. Subjects follow Confluent's default,
 `TopicNameStrategy` (`<topic>-value`, `<topic>-key`).
 
