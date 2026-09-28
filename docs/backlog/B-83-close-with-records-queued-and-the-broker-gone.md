@@ -1,7 +1,7 @@
 ---
 id: B-83
 title: "How long close takes with records queued and the broker gone, on both arms"
-status: question
+status: done
 priority: P2
 size: M
 stage: stage-20-what-waited-for-a-caller
@@ -65,3 +65,7 @@ Which of these?
    defaults its partitioner to the Java client's. `close` then takes the same time on both arms. A caller who wants
    it shorter still sets a platform key per arm.
 3. **Leave it.** The contract now states the times, and a service bounds its own shutdown, as kore does for mostik.
+
+## Decision (the owner, 2026-09-28)
+
+**Option 1: `close(timeout)` on both arms.** Done in [B-91](B-91-close-with-a-timeout.md).

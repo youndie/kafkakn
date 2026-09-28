@@ -199,9 +199,9 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[?]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
+| [B-91](docs/backlog/B-91-close-with-a-timeout.md) `[~]` | close(timeout) on both arms: what is not acknowledged in time fails, and may have been written | P1 | M | B-83 |
 
-## Closed (89)
+## Closed (90)
 
 **It builds, and a test can fail**
 
@@ -347,6 +347,7 @@ verdict.
 **What was put off, taken up**
 
 - [B-82](docs/backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md) `[x]` - A commit of a partition the member does not hold, under a subscription
+- [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[x]` - How long close takes with records queued and the broker gone, on both arms
 - [B-84](docs/backlog/B-84-list-offsets-for-the-max-timestamp.md) `[x]` - listOffsets answers OffsetSpec.MaxTimestamp on both arms
 - [B-85](docs/backlog/B-85-list-offsets-read-committed.md) `[x]` - listOffsets takes an isolation level
 - [B-86](docs/backlog/B-86-append-and-subtract-topic-configs.md) `[x]` - alterTopicConfigs appends to and subtracts from list-valued keys
