@@ -1,7 +1,7 @@
 ---
 id: B-81
 title: "CI runs the whole suite on both arms against the fixture broker"
-status: wip
+status: done
 priority: P1
 size: M
 stage: stage-19-the-suite-in-ci
@@ -45,3 +45,10 @@ backed by whatever the person or the loop happened to run on the box that day, o
 - **And a third: the fixture needed a jar before anything had fetched it.** `broker.sh up` writes `kafkakn-consume`
   with `Records.java` on the kafka-clients jar in Gradle's cache. On a fresh runner there is none. The runner now
   compiles the JVM tests before bringing the broker up.
+- **Green on the runner** (run 36410272456): JVM 163 tests and native 152, no failures, 100 observations each, and
+  the arms agree. The fixture's three listeners refused what they must. The whole suite took 12 min 49 s.
+- **The positive control** (run 36411889447): `CLOSE_MS = 0` in `EnqueueMetadataTest`, then reverted. Red, one failure
+  per arm, `EnqueueMetadataTest.a_record_for_a_cluster_that_does_not_answer_is_not_queued_within_max_block_ms` on both,
+  *"close took 61 ms"* and *"close took 0 ms"*, read from the uploaded reports. It also showed that the runner did not
+  print the name: its grep wanted the testcase and its failure on one line, and the report puts them on two. The
+  runner now parses the reports.

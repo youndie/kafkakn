@@ -183,13 +183,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-81](docs/backlog/B-81-the-suite-in-ci.md) `[~]` | CI runs the whole suite on both arms against the fixture broker | P1 | M | B-78 |
+No open tasks.
 
-## Closed (80)
+## Closed (81)
 
 **It builds, and a test can fail**
 
@@ -327,6 +325,10 @@ verdict.
 - [B-78](docs/backlog/B-78-fixture-topics-keep-their-shape.md) `[x]` - A fixture topic in the wrong shape stops the harness, instead of failing the suite for the wrong reason
 - [B-79](docs/backlog/B-79-poll-after-rebalance-under-load.md) `[x]` - PollAfterRebalanceTest's JVM fill expires its records: the Java client's burst into a fresh topic
 - [B-80](docs/backlog/B-80-native-forgets-topics-when-every-broker-is-down.md) `[x]` - Native forgets the topics it described when every broker is down, as the Java client's rebootstrap does
+
+**Green means the tests ran**
+
+- [B-81](docs/backlog/B-81-the-suite-in-ci.md) `[x]` - CI runs the whole suite on both arms against the fixture broker
 
 <!-- END INDEX -->
 

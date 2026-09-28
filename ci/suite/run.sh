@@ -62,10 +62,16 @@ for arm in jvmTest linuxX64Test; do
     printf '  %-14s tests=%-4s failures=%s errors=%s\n' "$arm" "$t" "$f" "$e"
     [ "$t" -ge "$MIN_TESTS" ] || { echo "  $arm ran $t tests, fewer than $MIN_TESTS" >&2; fail=1; }
     [ "$f" -eq 0 ] && [ "$e" -eq 0 ] || fail=1
-    for r in $(grep -l '<failure\|<error' "$RESULTS/$arm"/TEST-*.xml 2>/dev/null); do
-        grep -o 'testcase name="[^"]*"[^>]*>[[:space:]]*<\(failure\|error\) message="[^"]\{0,200\}' "$r" \
-            | sed 's/^/    FAILED /' | head -5
-    done
+    # Each failed test BY NAME: a red run that does not say which test is not evidence of anything. Parsed, not
+    # grepped - in the reports the testcase and its failure are on different lines, and a grep for both on one line
+    # printed nothing on the control run that proved this script can go red.
+    python3 - "$RESULTS/$arm" <<'PY'
+import glob, sys, xml.etree.ElementTree as ET
+for f in sorted(glob.glob(sys.argv[1] + "/TEST-*.xml")):
+    for case in ET.parse(f).getroot().iter("testcase"):
+        for bad in case.findall("failure") + case.findall("error"):
+            print("    FAILED", case.get("classname"), case.get("name"), "|", (bad.get("message") or "")[:200])
+PY
 done
 [ "$gradle" -eq 0 ] || fail=1
 
