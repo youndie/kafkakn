@@ -1,7 +1,7 @@
 ---
 id: B-87
 title: "createPartitions takes a replica assignment for the new partitions"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-20-what-waited-for-a-caller
