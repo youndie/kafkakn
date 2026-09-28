@@ -22,8 +22,9 @@ with the schema generated from the type and registered once
 ([stage 21](../../backlog.md); research §2.29).
 
 **Built and measured:** the registry client ([B-93](../backlog/B-93-a-registry-client.md)) and JSON Schema
-([B-94](../backlog/B-94-json-schema-serde.md)) and Protobuf ([B-95](../backlog/B-95-protobuf-serde.md)), on both
-arms. ***Target***: evolution (B-96), HTTPS on native (B-98), and the module's publication (B-99).
+([B-94](../backlog/B-94-json-schema-serde.md)), Protobuf ([B-95](../backlog/B-95-protobuf-serde.md)) and evolution
+under the subject's compatibility ([B-96](../backlog/B-96-an-incompatible-schema-is-refused.md)), on both arms.
+***Target***: HTTPS on native (B-98), and the module's publication (B-99).
 
 ## 2. Business rules
 
@@ -33,6 +34,8 @@ arms. ***Target***: evolution (B-96), HTTPS on native (B-98), and the module's p
   the registry's default `BACKWARD` compatibility (B-93).
 - A type with no schema here (polymorphic, contextual, recursive) is refused when its serde is made, not at the first
   record.
+- A schema the subject's compatibility refuses is `IncompatibleSchemaException`, with the registry's reason, thrown
+  when the serde registers: at `register()`, or at the first `encode`, before a record exists.
 - Written as magic `0x00` and a 4-byte big-endian id. Read the same way, and anything else is refused by name.
 - Protobuf adds the message indexes after the id, always `[0]`: the generated `.proto` has the root type's message
   first. A record naming any other message is refused, because this reader's type is the root.
@@ -83,6 +86,22 @@ arms. ***Target***: evolution (B-96), HTTPS on native (B-98), and the module's p
 * **Then:** equal both ways, on both arms, where an empty list or map equals an absent one: Protobuf gives such a
   field no presence.
 * **Automated:** `ProtobufOracleTest` with `ci/b-94/oracle`, by `ci/b-95/run.sh`.
+
+### Scenario: A type gains an optional field, and its new version reads the old records
+* **Given:** `Item` registered under a subject at the registry's default, `BACKWARD`.
+* **When:** a version with an added nullable field that defaults to null registers under the same subject.
+* **Then:** it is a second version with an id of its own, and it decodes what the first version wrote, as JSON Schema
+  and as Protobuf, on both arms.
+* **Automated:** `SchemaEvolutionTest.an_optional_field_added_is_accepted_and_reads_what_the_old_type_wrote_as_json_schema`,
+  `..._as_protobuf`, in the suite.
+
+### Scenario: A type loses a required field, and the subject refuses it
+* **Given:** `Item` registered under a subject at `BACKWARD`.
+* **When:** a version without its required `name` registers, or encodes its first record.
+* **Then:** `IncompatibleSchemaException`, status 409, naming the subject and carrying the registry's reason:
+  `PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL` for JSON Schema, `REQUIRED_FIELD_REMOVED` for Protobuf. No record is made.
+* **Automated:** `SchemaEvolutionTest.a_required_field_removed_is_refused_under_backward_as_json_schema`,
+  `..._as_protobuf`, in the suite.
 
 ## 5. Out of scope
 

@@ -27,7 +27,10 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
   It has no TLS on Kotlin/Native (measured in B-92), so a native caller who needs HTTPS passes `HttpClient(Curl)`
   ([B-98](../backlog/B-98-https-to-the-registry.md)).
 - **A refusal is `SchemaRegistryException`,** with the HTTP status and the registry's own error code: `42201` for a
-  schema it cannot read, `40403` for an id it does not have, `409` for an incompatible schema.
+  schema it cannot read, `40403` for an id it does not have. A registration the subject's compatibility refuses (409)
+  is its subclass `IncompatibleSchemaException`, with the subject and the registry's reason
+  ([B-96](../backlog/B-96-an-incompatible-schema-is-refused.md)). Each serde's `register()` meets it at startup; its
+  first `encode` meets it otherwise, before a record exists.
 - *Measured* (`ci/b-93/run.sh`, both arms, counted in the registry's own request log): one schema registered twice
   is one request, and under two subjects it is two. A mutant that ignored the cache was caught by that count on both
   arms.
@@ -48,7 +51,8 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
 - **Under `BACKWARD`, the registry's default, a property added to an open JSON Schema is incompatible**
   (`OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL`, found by B-93's first control). A schema without
   `"additionalProperties": false` can therefore not gain even an optional field. B-94's generated schemas have to be
-  closed for a type to evolve, and B-96 measures it.
+  closed for a type to evolve. B-96 measured both: a closed schema gains an optional field; an open one is refused
+  (`SchemaEvolutionTest.an_open_json_schema_cannot_gain_an_optional_property`).
 - **A sealed root leaves no mark in the generated `.proto`.** The generator writes a `KotlinxSerializationPolymorphic`
   message only for polymorphism below the root, so a check on the schema's text let a sealed type through (B-95).
   The serde walks the descriptor instead.

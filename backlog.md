@@ -206,15 +206,14 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (3)
+## Open (2)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[ ]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 | [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
 
-## Closed (96)
+## Closed (97)
 
 **It builds, and a test can fail**
 
@@ -376,6 +375,7 @@ verdict.
 - [B-93](docs/backlog/B-93-a-registry-client.md) `[x]` - A Schema Registry client on both targets: register, look up, cache
 - [B-94](docs/backlog/B-94-json-schema-serde.md) `[x]` - A @Serializable type as JSON Schema, in the registry's wire format, read by its official deserializer
 - [B-95](docs/backlog/B-95-protobuf-serde.md) `[x]` - A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer
+- [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[x]` - A schema the subject's compatibility refuses is one typed exception, before any record is sent
 - [B-97](docs/backlog/B-97-the-fixture-shares-a-compose-project-with-mostik.md) `[x]` - The fixture broker shared a Compose project with mostik's, and a fresh broker failed its own topic check
 
 <!-- END INDEX -->
