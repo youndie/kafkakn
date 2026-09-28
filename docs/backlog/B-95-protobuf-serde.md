@@ -1,7 +1,7 @@
 ---
 id: B-95
 title: "A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer"
-status: open
+status: wip
 priority: P2
 size: M
 stage: stage-21-schema-registry
