@@ -28,3 +28,12 @@ backed by whatever the person or the loop happened to run on the box that day, o
   reverted before merge.
 - AC: `CLAUDE.md`'s "Checks" section says what CI runs now.
 - Anchors: `ci/suite/run.sh`, `.github/workflows/suite.yaml`.
+
+## Findings
+
+- **CI's first run found a fixture defect the build box could not.** `ci/broker/certs.sh` failed on a machine that
+  had never had certificates: `chmod: cannot access './*.conf'`. Since 2026-09-25, the JAAS file has been written
+  by `write_jaas`, which the full generation called only after the `chmod` naming `*.conf`. The build box's
+  certificates predated that and always took the "kept" branch. Reproduced on the box in an empty
+  `KAFKAKN_TLS_DIR` (exit 1, the same line), and fixed by writing the file first (exit 0, 30 files, the JAAS file
+  present).
