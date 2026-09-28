@@ -1,5 +1,6 @@
 package io.github.youndie.kafkakn
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -44,9 +45,24 @@ class CloseWithTimeoutTest {
                         )
                     }
                 producer.close(TIMEOUT)
-                val landed = deliveries.count { runCatching { it.await() }.isSuccess }
+                val answers =
+                    deliveries.map { delivery ->
+                        try {
+                            delivery.await()
+                            "landed"
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failed: Exception) {
+                            "failed ${failed::class.simpleName}: ${failed.message}"
+                        }
+                    }
+                val landed = answers.count { it == "landed" }
                 recordObservation("close.timeout.landed", "$landed of $RECORDS")
-                assertEquals(RECORDS, landed, "every record acknowledged before close($TIMEOUT) returned")
+                assertEquals(
+                    RECORDS,
+                    landed,
+                    "every record acknowledged before close($TIMEOUT) returned: ${answers.filter { it != "landed" }}",
+                )
             }
         }
 
