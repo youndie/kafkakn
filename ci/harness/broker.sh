@@ -78,14 +78,22 @@ case "${1:-}" in
     # A container of this name left by the project's old, unnamed Compose project (`broker`, B-97) is this
     # repository's own. It is removed so that the named project can create it. One of any other project is not ours
     # to remove, and is left, with the reason printed.
-    owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER" 2>/dev/null || true)
+    # Asked only of a container that exists: of one that does not, `docker inspect -f` still prints an empty line and
+    # fails, and whatever stands in for "absent" then follows that line - on a fresh CI runner that read as a
+    # project nobody named (B-93).
+    owner=absent
+    docker inspect "$CONTAINER" > /dev/null 2>&1 \
+        && owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER")
     case "$owner" in
-        "" | kafkakn) ;;
+        absent | kafkakn) ;;
+        "") docker rm -f "$CONTAINER" > /dev/null && echo "  removed $CONTAINER, which no Compose project owns" ;;
         broker) docker rm -f "$CONTAINER" > /dev/null && echo "  removed $CONTAINER left by the unnamed project 'broker'" ;;
         *) echo "  $CONTAINER belongs to Compose project '$owner', not kafkakn - left alone" >&2; exit 1 ;;
     esac
     # The same for the registry: B-92 measured it with `docker run`, a container of this name and no project.
-    owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' kafkakn-registry 2>/dev/null || echo absent)
+    owner=absent
+    docker inspect kafkakn-registry > /dev/null 2>&1 \
+        && owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' kafkakn-registry)
     case "$owner" in
         absent | kafkakn) ;;
         "") docker rm -f kafkakn-registry > /dev/null && echo "  removed kafkakn-registry left by docker run (B-92)" ;;

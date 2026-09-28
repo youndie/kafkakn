@@ -36,3 +36,6 @@ it caches both, so one record costs no request once its schema is known. Subject
   and B-96 measures evolution on them. The control became the same schema under two subjects.
 - Mutant: `register` ignoring its cache was caught by the runner's count on both arms (*"the cached registration
   reached the registry 2 times"*).
+- **CI's fresh runner found a harness defect:** for a container that does not exist, `docker inspect -f` prints an
+  empty line and fails. The `|| echo absent` then read as a project named `\nabsent`, and `up` refused. The owner is
+  now asked only of a container that exists, and on the box the absent case reads as absent.
