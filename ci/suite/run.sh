@@ -32,6 +32,14 @@ date -Is
 nproc; free -m | sed -n 2p
 
 echo
+echo "=== the JVM test classes first ==="
+# Before the broker, because `broker.sh up` writes the consumer's fixture topic with ci/harness/Records.java on the
+# kafka-clients jar Gradle resolved. On a machine Gradle has never run on, CI's first, there is no such jar yet, and
+# `up` failed with "could not write kafkakn-consume". Compiling the JVM tests resolves it, and is needed anyway.
+./gradlew --no-daemon --console=plain :kafkakn-core:compileTestKotlinJvm 2>&1 | tail -2
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "the JVM test classes did not compile" >&2; exit 1; }
+
+echo
 echo "=== the fixture, and that it can say no ==="
 bash "$H" up || exit 1
 for arm in jvm linuxX64; do bash "$H" topic "$KAFKAKN_ACCOUNTING_TOPIC-$arm" > /dev/null || exit 1; done

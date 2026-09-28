@@ -42,3 +42,6 @@ backed by whatever the person or the loop happened to run on the box that day, o
   1000 too, so the owner and the reader matched by accident. The runner's is 1001. The keystore is now 0644, a
   password-protected fixture file. The workflow prints the broker's log on failure, since `broker.sh` shows three
   lines of it.
+- **And a third: the fixture needed a jar before anything had fetched it.** `broker.sh up` writes `kafkakn-consume`
+  with `Records.java` on the kafka-clients jar in Gradle's cache. On a fresh runner there is none. The runner now
+  compiles the JVM tests before bringing the broker up.
