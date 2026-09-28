@@ -72,9 +72,15 @@ public class JsonSchemaSerde<T> internal constructor(
 ) {
     public val schema: String = JsonSchemaGenerator.generate(serializer.descriptor)
 
+    /**
+     * Registers [schema] under [subject], once, and returns its id: what the first [encode] does, for a caller who
+     * would rather find out at startup that the subject refuses it ([IncompatibleSchemaException]).
+     */
+    public suspend fun register(): Int = registry.register(subject, schema, SchemaType.JSON)
+
     /** [value] as the registry's wire format: magic, the schema's id, and the JSON `Json` writes for it. */
     public suspend fun encode(value: T): ByteArray {
-        val id = registry.register(subject, schema, SchemaType.JSON)
+        val id = register()
         return Wire.frame(id, json.encodeToString(serializer, value).encodeToByteArray())
     }
 

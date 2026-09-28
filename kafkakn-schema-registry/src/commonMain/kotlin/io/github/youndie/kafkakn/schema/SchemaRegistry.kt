@@ -39,11 +39,24 @@ public data class RegisteredSchema(
  * The registry refused or failed a request. [status] is the HTTP status; [errorCode] is the registry's own, when it
  * gave one: `42201` an invalid schema, `40403` a schema id it does not have, `409` an incompatible schema.
  */
-public class SchemaRegistryException(
+public open class SchemaRegistryException(
     public val status: Int,
     public val errorCode: Int?,
     message: String,
 ) : RuntimeException(message)
+
+/**
+ * The registry refused a schema under [subject] because the subject's compatibility level does
+ * ([B-96](../../../../../../../docs/backlog/B-96-an-incompatible-schema-is-refused.md)): `BACKWARD` by default, where
+ * a new schema must read what the previous one wrote. The message is the registry's own, with what it found
+ * incompatible. A serde throws it when it registers, so no record is made with a schema the subject refused.
+ */
+public class IncompatibleSchemaException(
+    public val subject: String,
+    message: String,
+) : SchemaRegistryException(CONFLICT, CONFLICT, message)
+
+private const val CONFLICT = 409
 
 /** The subject a topic's record values are registered under: Confluent's default, `TopicNameStrategy`. */
 public fun valueSubject(topic: String): String = "$topic-value"
@@ -97,7 +110,7 @@ public class SchemaRegistry(
                     }.toString(),
                 )
             }
-        val id = answer(response, "register under $subject").getValue("id").jsonPrimitive.int
+        val id = answer(response, "register under $subject", subject).getValue("id").jsonPrimitive.int
         lock.withLock {
             ids[key] = id
             schemas.getOrPut(id) { RegisteredSchema(id, type, schema) }
@@ -129,18 +142,24 @@ public class SchemaRegistry(
         if (owned) http.close()
     }
 
+    /** The body of a success; otherwise the refusal, typed: a 409 on a registration is the subject's compatibility. */
     private suspend fun answer(
         response: HttpResponse,
         what: String,
+        registering: String? = null,
     ): JsonObject {
         val text = response.bodyAsText()
         val body = jsonOrNull(text)
         if (response.status.isSuccess() && body != null) return body
         val said = body?.get("message")?.jsonPrimitive?.content ?: text.take(MESSAGE)
+        val message = "$what: ${response.status.value} $said"
+        if (registering != null && response.status.value == CONFLICT) {
+            throw IncompatibleSchemaException(registering, message)
+        }
         throw SchemaRegistryException(
             status = response.status.value,
             errorCode = body?.get("error_code")?.jsonPrimitive?.intOrNull,
-            message = "$what: ${response.status.value} $said",
+            message = message,
         )
     }
 

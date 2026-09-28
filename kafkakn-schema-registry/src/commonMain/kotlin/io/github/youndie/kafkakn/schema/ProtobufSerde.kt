@@ -53,9 +53,15 @@ public class ProtobufSerde<T> internal constructor(
         }
     }
 
+    /**
+     * Registers [schema] under [subject], once, and returns its id: what the first [encode] does, for a caller who
+     * would rather find out at startup that the subject refuses it ([IncompatibleSchemaException]).
+     */
+    public suspend fun register(): Int = registry.register(subject, schema, SchemaType.PROTOBUF)
+
     /** [value] as the registry's wire format: magic, the schema's id, the message indexes `[0]`, and its Protobuf bytes. */
     public suspend fun encode(value: T): ByteArray {
-        val id = registry.register(subject, schema, SchemaType.PROTOBUF)
+        val id = register()
         return Wire.frame(id, byteArrayOf(ROOT_INDEX) + protoBuf.encodeToByteArray(serializer, value))
     }
 
