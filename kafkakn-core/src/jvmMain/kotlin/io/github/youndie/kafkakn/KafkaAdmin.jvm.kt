@@ -307,10 +307,14 @@ internal class JvmKafkaAdmin(
         name: String,
         set: Map<String, String>,
         delete: List<String>,
+        append: Map<String, String>,
+        subtract: Map<String, String>,
     ) {
         val changes =
             set.map { (key, value) -> AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.SET) } +
-                delete.map { key -> AlterConfigOp(ConfigEntry(key, null), AlterConfigOp.OpType.DELETE) }
+                delete.map { key -> AlterConfigOp(ConfigEntry(key, null), AlterConfigOp.OpType.DELETE) } +
+                append.map { (key, value) -> AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.APPEND) } +
+                subtract.map { (key, value) -> AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.SUBTRACT) }
         try {
             answer("alterTopicConfigs") {
                 delegate

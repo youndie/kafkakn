@@ -37,8 +37,10 @@ import rdkafka.RD_KAFKA_ADMIN_OP_INCREMENTALALTERCONFIGS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPOFFSETS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTCONSUMERGROUPS
 import rdkafka.RD_KAFKA_ADMIN_OP_LISTOFFSETS
+import rdkafka.RD_KAFKA_ALTER_CONFIG_OP_TYPE_APPEND
 import rdkafka.RD_KAFKA_ALTER_CONFIG_OP_TYPE_DELETE
 import rdkafka.RD_KAFKA_ALTER_CONFIG_OP_TYPE_SET
+import rdkafka.RD_KAFKA_ALTER_CONFIG_OP_TYPE_SUBTRACT
 import rdkafka.RD_KAFKA_CONFIG_SOURCE_DEFAULT_CONFIG
 import rdkafka.RD_KAFKA_CONFIG_SOURCE_DYNAMIC_BROKER_CONFIG
 import rdkafka.RD_KAFKA_CONFIG_SOURCE_DYNAMIC_DEFAULT_BROKER_CONFIG
@@ -740,6 +742,8 @@ internal class NativeKafkaAdmin(
         name: String,
         set: Map<String, String>,
         delete: List<String>,
+        append: Map<String, String>,
+        subtract: Map<String, String>,
     ) {
         request(
             RD_KAFKA_ADMIN_OP_INCREMENTALALTERCONFIGS,
@@ -761,6 +765,12 @@ internal class NativeKafkaAdmin(
                             RD_KAFKA_ALTER_CONFIG_OP_TYPE_DELETE,
                             null,
                         )
+                    }
+                    append.forEach { (key, value) ->
+                        addIncremental(resource, key, RD_KAFKA_ALTER_CONFIG_OP_TYPE_APPEND, value)
+                    }
+                    subtract.forEach { (key, value) ->
+                        addIncremental(resource, key, RD_KAFKA_ALTER_CONFIG_OP_TYPE_SUBTRACT, value)
                     }
                 }) { array ->
                     rd_kafka_IncrementalAlterConfigs(handle, array, 1.convert(), options, queue)

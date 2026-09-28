@@ -141,6 +141,42 @@ class AdminConfigsTest {
         }
 
     /**
+     * [B-86](../../../../../../../docs/backlog/B-86-append-and-subtract-topic-configs.md): `APPEND` and `SUBTRACT` on a
+     * list-valued key. `cleanup.policy=compact`, then `delete` appended, then `compact` subtracted, each read back by
+     * describing the topic. And `APPEND` on a key that is not a list, whose answer is recorded for the arms to agree on.
+     */
+    @Test
+    fun a_list_valued_key_is_appended_to_and_subtracted_from() =
+        runTest(timeout = 2.minutes) {
+            withContext(Dispatchers.Default) {
+                val topic = "kafkakn-configs-list-$armName-${randomSuffix()}"
+                withAdmin { admin ->
+                    admin.createTopics(listOf(NewTopic(topic, 1, 1, mapOf("cleanup.policy" to "compact"))))
+                    admin.alterTopicConfigs(topic, append = mapOf("cleanup.policy" to "delete"))
+                    val appended =
+                        watchedOnce(
+                            admin,
+                            topic,
+                            "append",
+                        ) { it.getValue("cleanup.policy").startsWith("compact,delete/") }
+                    admin.alterTopicConfigs(topic, subtract = mapOf("cleanup.policy" to "compact"))
+                    val subtracted =
+                        watchedOnce(admin, topic, "subtract") { it.getValue("cleanup.policy").startsWith("delete/") }
+                    val notAList = outcome { admin.alterTopicConfigs(topic, append = mapOf("retention.ms" to "1000")) }
+                    val after = watched(admin, topic).getValue("retention.ms")
+                    recordArmFact("configs.list.topic", topic)
+                    recordArmFact("configs.list.not.a.list.said", notAList)
+                    recordObservation("configs.list.appended", appended.getValue("cleanup.policy"))
+                    recordObservation("configs.list.subtracted", subtracted.getValue("cleanup.policy"))
+                    recordObservation("configs.list.not.a.list", notAList.substringBefore(":"))
+                    recordObservation("configs.list.not.a.list.retention", after)
+                    assertEquals("compact,delete/TOPIC", appended.getValue("cleanup.policy"))
+                    assertEquals("delete/TOPIC", subtracted.getValue("cleanup.policy"))
+                }
+            }
+        }
+
+    /**
      * [watched], once it shows [changed]. A change is accepted by the controller and reaches the broker's view
      * of the topic a moment later, so a describe right after the call can still show the old value: seen on
      * the native arm once, and a race on either. How long it took is recorded; a change never seen fails here.
