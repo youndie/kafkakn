@@ -1,7 +1,7 @@
 ---
 id: B-101
 title: "AdminPartitionsTest reads a topic it has just created and is told it is unknown (native, one suite run)"
-status: wip
+status: done
 priority: P1
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found
@@ -27,3 +27,19 @@ The same test failed on the JVM in CI once before (run 36450407379), which is wh
   returns, on both arms.
 - AC: the test waits for what the contract says, and its wait is bounded.
 - Anchors: `kafkakn-core/src/commonTest/kotlin/io/github/youndie/kafkakn/AdminPartitionsTest.kt`.
+
+## Findings
+
+- **Done, 2026-09-29. It is Kafka's, on both arms.** `ci/b-101/run.sh`, 200 rounds per arm (`CreateThenDescribeTest`,
+  which asserts nothing): described at once after `createTopics`, 199 of 200 new topics were unknown on the JVM and
+  199 of 200 on native; all were visible within 74 ms (JVM) and 134 ms (native), typically 25 to 35 ms. After
+  `createPartitions` on a visible topic, the old count came back at once in 6 of 200 (JVM) and 21 of 200 (native),
+  and the new count within 16 and 38 ms. The contract says so under the admin client.
+- **Why the test passed almost always:** it grows the topic before describing it, and the grow call is usually long
+  enough for the topic to reach the broker's description. On 2026-09-29 it was not.
+- **The test waits now,** for an unknown topic as for a missing partition, within the same bound
+  (`describedOnce`). Mutant, the retry on an unknown topic taken out: the test failed by name on native in 1 of 6
+  runs (`AdminPartitionsTest.new_partitions_land_on_the_broker_named_and_an_unknown_broker_is_refused[linuxX64]`),
+  as rare as the original failure. With the wait, 10 of 10 runs green, five per arm.
+- **Found on the way:** the unknown topic is a different type on each arm, and `KafkaAdminException` exists only on
+  native (B-103).
