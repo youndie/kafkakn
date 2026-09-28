@@ -148,6 +148,14 @@ describes the cluster. On both arms, and checked with the broker's own tools
   arms. The valid half of such a call is not applied.
 * **Automated:** `AdminConfigsTest` on both arms, held against the broker's tool by `ci/b-61/run.sh`.
 
+### Scenario: New partitions land on the broker named, and an unknown broker is refused
+* **Given:** a topic of one partition on the fixture's one broker, id 1.
+* **When:** it grows to two with the assignment `[[1]]`, then to three with `[[99]]`.
+* **Then:** partition 1's replicas are `[1]`, as `kafka-topics.sh` shows. The second growth throws
+  `IllegalArgumentException` on both arms, and the topic still has two partitions.
+* **Automated:** `AdminPartitionsTest.new_partitions_land_on_the_broker_named_and_an_unknown_broker_is_refused`, by
+  `ci/b-87/run.sh`.
+
 ### Scenario: A topic grows, and the same keys written after it land elsewhere
 * **Given:** a one-partition topic holding eight keyed records.
 * **When:** it is grown to four partitions, and the same eight keys are written again.
