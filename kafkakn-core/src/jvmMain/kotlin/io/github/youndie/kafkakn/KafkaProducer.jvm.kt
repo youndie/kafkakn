@@ -8,6 +8,8 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 import kotlin.coroutines.resume
+import kotlin.time.Duration
+import kotlin.time.toJavaDuration
 import org.apache.kafka.clients.producer.ProducerConfig as ApacheProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord as ApacheRecord
 import org.apache.kafka.common.errors.ProducerFencedException as ApacheProducerFencedException
@@ -266,6 +268,17 @@ internal class JvmKafkaProducer(
                         notQueued = failure
                     }
 
+                    failure != null && failure.isForcedClose() -> {
+                        // `close(timeout)` ran out and the sender aborted the batch (B-91): never sent, or in flight.
+                        answer.completeExceptionally(
+                            ClosedBeforeAcknowledgedException(
+                                "${record.topic}: not acknowledged before close(timeout) ran out; it may have been " +
+                                    "written if it was in flight",
+                                failure,
+                            ),
+                        )
+                    }
+
                     failure != null -> {
                         answer.completeExceptionally(failure.asFenced() ?: failure)
                     }
@@ -295,6 +308,14 @@ internal class JvmKafkaProducer(
             }
             JvmDelivery(answer)
         }
+
+    /**
+     * The Java client's force close, and nothing else: exactly a `KafkaException` with the text
+     * `RecordAccumulator.abortIncompleteBatches` gives it (kafka-clients 4.3.1, line 1146). A subclass is some other
+     * failure that happened to arrive during the close.
+     */
+    private fun Exception.isForcedClose(): Boolean =
+        this::class == KafkaException::class && message == "Producer is closed forcefully."
 
     private class JvmDelivery(
         private val answer: CompletableDeferred<RecordMetadata>,
@@ -408,6 +429,12 @@ internal class JvmKafkaProducer(
     override suspend fun close() {
         // `close` flushes first, so it inherits the same wait.
         withContext(Dispatchers.IO) { delegate.close() }
+        oauthProvider?.let { OAuthBearerProviders.unregister(it) }
+    }
+
+    override suspend fun close(timeout: Duration) {
+        // The client's own bound: once it passes, the sender is force-closed and every unacknowledged batch fails.
+        withContext(Dispatchers.IO) { delegate.close(timeout.toJavaDuration()) }
         oauthProvider?.let { OAuthBearerProviders.unregister(it) }
     }
 }

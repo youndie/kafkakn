@@ -38,12 +38,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 import platform.posix.size_tVar
 import rdkafka.RD_KAFKA_CONF_OK
 import rdkafka.RD_KAFKA_CONF_UNKNOWN
+import rdkafka.RD_KAFKA_PURGE_F_INFLIGHT
+import rdkafka.RD_KAFKA_PURGE_F_QUEUE
 import rdkafka.RD_KAFKA_RESP_ERR_ILLEGAL_GENERATION
 import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
 import rdkafka.RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN
 import rdkafka.RD_KAFKA_RESP_ERR__FATAL
 import rdkafka.RD_KAFKA_RESP_ERR__FENCED
+import rdkafka.RD_KAFKA_RESP_ERR__PURGE_INFLIGHT
+import rdkafka.RD_KAFKA_RESP_ERR__PURGE_QUEUE
 import rdkafka.RD_KAFKA_RESP_ERR__QUEUE_FULL
 import rdkafka.rd_kafka_abort_transaction
 import rdkafka.rd_kafka_begin_transaction
@@ -82,6 +86,7 @@ import rdkafka.rd_kafka_new
 import rdkafka.rd_kafka_outq_len
 import rdkafka.rd_kafka_poll
 import rdkafka.rd_kafka_produceva
+import rdkafka.rd_kafka_purge
 import rdkafka.rd_kafka_resp_err_t
 import rdkafka.rd_kafka_send_offsets_to_transaction
 import rdkafka.rd_kafka_t
@@ -96,6 +101,7 @@ import rdkafka.rd_kafka_vtype_t
 import rdkafka.rd_kafka_vu_t
 import kotlin.concurrent.AtomicLong
 import kotlin.concurrent.AtomicReference
+import kotlin.time.Duration
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
@@ -280,8 +286,18 @@ private val deliveryReport =
                 // a closed port looks like; the sentence that tells them apart arrived on the error
                 // callback minutes earlier.
                 val why = lastConnectionError.value?.let { "; last broker error: $it" } ?: ""
+                val said = "$topic: ${rd_kafka_err2str(error)?.toKString()}$why"
                 slot.completeExceptionally(
-                    KafkaProduceException("$topic: ${rd_kafka_err2str(error)?.toKString()}$why"),
+                    // Purged by close(timeout) (B-91): `_PURGE_QUEUE` never sent, `_PURGE_INFLIGHT` sent and not answered.
+                    // One type for both, as on the JVM, which cannot tell them apart.
+                    if (error == RD_KAFKA_RESP_ERR__PURGE_QUEUE || error == RD_KAFKA_RESP_ERR__PURGE_INFLIGHT) {
+                        ClosedBeforeAcknowledgedException(
+                            "$said: not acknowledged before close(timeout) ran out; it may have been written if it " +
+                                "was in flight",
+                        )
+                    } else {
+                        KafkaProduceException(said)
+                    },
                 )
             }
         } catch (failure: Throwable) {
@@ -918,6 +934,27 @@ internal class NativeKafkaProducer(
 
     override suspend fun close() {
         flush()
+        release()
+    }
+
+    /**
+     * B-91: flush for [timeout], then purge what is left, queued and in flight, so that each of those records gets a
+     * report, `_PURGE_QUEUE` or `_PURGE_INFLIGHT`, and fails its `await()`. Then the handle is released. Without the
+     * purge, `rd_kafka_destroy` waits for every outstanding record's `message.timeout.ms` (B-83: 5 minutes).
+     */
+    override suspend fun close(timeout: Duration) {
+        withContext(Dispatchers.IO) {
+            rd_kafka_flush(handle, timeout.inWholeMilliseconds.coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
+            if (rd_kafka_outq_len(handle) > 0) {
+                rd_kafka_purge(handle, RD_KAFKA_PURGE_F_QUEUE or RD_KAFKA_PURGE_F_INFLIGHT)
+                // The purged records' reports are served by a poll; a short flush polls until they are.
+                rd_kafka_flush(handle, PURGED_MS)
+            }
+        }
+        release()
+    }
+
+    private fun release() {
         pump.cancel()
         oauthScope.cancel()
         rd_kafka_destroy(handle)
@@ -931,6 +968,9 @@ internal class NativeKafkaProducer(
         /** Longer than any value librdkafka keeps for a single key; a longer one reads as absent. */
         const val CONFIG_VALUE_MAX = 512
         const val FLUSH_MS = 30_000
+
+        /** How long `close(timeout)` polls for the reports of what it purged, which librdkafka produces at once. */
+        const val PURGED_MS = 1_000
         const val STATISTICS_MS = "1000"
 
         /** librdkafka's own default for `socket.timeout.ms`, for a value that somehow reads as absent. */
