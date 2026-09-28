@@ -19,4 +19,6 @@ names a schema for this type, and decodes.
   are decoded by kafkakn, on both arms.
 - AC: the generated schema for a type with nested classes, lists, nullable and default fields is what the registry
   accepts, and a record that does not match it is refused before it is sent.
+- **From B-93:** the generated schema must be closed (`"additionalProperties": false`). An open one cannot gain even
+  an optional property under `BACKWARD`, which is refused as `OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL`.
 - Anchors: `kafkakn-schema-registry/`.

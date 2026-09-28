@@ -19,9 +19,14 @@ kafka-clients = "4.3.1"
 librdkafka = "2.13.0"
 # A moving tag would silently re-point the environment between runs.
 kafka-image = "apache/kafka:4.3.1"
+# kafkakn-schema-registry's HTTP client (B-93). The version B-92 measured: CIO speaks HTTP on both targets and HTTPS on
+# the JVM only, since `ktor-network-tls` has no TLS on Kotlin/Native.
+ktor = "3.5.2"
 
 [libraries]
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 
 [plugins]
 # The module half of the conventions: the coordinate, the toolchain, explicit API, warnings as

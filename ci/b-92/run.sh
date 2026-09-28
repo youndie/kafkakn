@@ -12,7 +12,6 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 cd "$ROOT" || exit 3
 export GRADLE_OPTS=-Dorg.gradle.daemon=false
-REGISTRY_IMAGE=confluentinc/cp-schema-registry:8.3.2
 REGISTRY=http://127.0.0.1:18081
 
 echo "=== environment ==="
@@ -20,20 +19,8 @@ date -Is
 bash ci/harness/broker.sh up > /dev/null || exit 1
 
 echo
-echo "=== the registry fixture ==="
-docker rm -f kafkakn-registry > /dev/null 2>&1
-docker run -d --name kafkakn-registry --network host \
-    -e SCHEMA_REGISTRY_HOST_NAME=127.0.0.1 \
-    -e SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:18081 \
-    -e SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS=PLAINTEXT://127.0.0.1:9092 \
-    -e SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR=1 \
-    "$REGISTRY_IMAGE" > /dev/null || { echo "  could not start $REGISTRY_IMAGE" >&2; exit 1; }
-started=$(date +%s)
-until curl -sf "$REGISTRY/subjects" > /dev/null; do
-    [ $(( $(date +%s) - started )) -lt 90 ] || { echo "  no answer from $REGISTRY" >&2; docker logs kafkakn-registry 2>&1 | tail -5; exit 1; }
-    sleep 1
-done
-echo "  $REGISTRY_IMAGE answers on $REGISTRY after $(( $(date +%s) - started )) s: /subjects = $(curl -s "$REGISTRY/subjects")"
+echo "=== the registry fixture, which broker.sh up brings since B-93 ==="
+echo "  /subjects = $(curl -s "$REGISTRY/subjects")"
 echo "  version: $(curl -s "$REGISTRY/v1/metadata/version" 2>/dev/null)"
 
 echo

@@ -1,7 +1,7 @@
 ---
 id: B-92
 title: "Schema Registry: what is real on both targets, measured before anything is built"
-status: question
+status: done
 priority: P1
 size: M
 stage: stage-21-schema-registry
@@ -55,3 +55,8 @@ A registry served over HTTPS cannot be reached from native through CIO. Which tr
 3. **HTTPS written here over the OpenSSL already linked into the native bundle.** No new runtime dependency and the
    same `ldd`. But it is an HTTP client and certificate verification of this project's own, the kind of
    security-critical code the rest of kafkakn has avoided writing by delegating to the clients underneath.
+
+## Decision (the owner, 2026-09-28)
+
+**Option 1.** The module takes a Ktor `HttpClient`, with CIO as the default. A native caller who needs HTTPS passes
+`HttpClient(Curl)`. HTTPS on both arms is [B-98](B-98-https-to-the-registry.md).

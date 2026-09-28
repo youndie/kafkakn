@@ -34,6 +34,8 @@ is invisible to it. The cost is that the suite needs Docker; that is accepted.
 | OAUTHBEARER | on `SASL_PLAINTEXT` only, unsecured validator (unsigned JWTs), re-authentication every 10 s ([B-33](../backlog/B-33-sasl-oauthbearer.md)) |
 | server keystore | PKCS12; the clients read a PEM CA |
 | auto-create | **off**, so a test against a topic that does not exist fails instead of quietly succeeding |
+| Compose project | `kafkakn`, named, so it is not the directory-derived `broker` another repository's fixture also gets ([B-97](../backlog/B-97-the-fixture-shares-a-compose-project-with-mostik.md)) |
+| Schema Registry | `confluentinc/cp-schema-registry:8.3.2` as `kafkakn-registry`, on the host network, port 18081, storing its schemas in the broker; `broker.sh up` waits for it ([B-93](../backlog/B-93-a-registry-client.md)) |
 
 Single node means replication factor 1, so `acks=all` is a durable write to **one** in-sync replica.
 That is the property the suite needs; it is not a durability claim about a real cluster, and no
@@ -99,7 +101,7 @@ be wrong in both directions at once.
 
 | What | Where |
 |---|---|
-| compose definition | `ci/broker/docker-compose.yml` |
+| compose definition, the registry included | `ci/broker/docker-compose.yml` |
 | the TLS overlay and its certificates | `ci/broker/docker-compose.tls.yml`, `ci/broker/certs.sh` |
 | the harness that starts it for the suite | `ci/harness/` |
 | the fixture's own positive control | `ci/harness/broker.sh tls-selftest` — the right CA connects, the wrong one does not, asked with the broker's own tools |
