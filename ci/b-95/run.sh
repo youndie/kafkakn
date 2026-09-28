@@ -47,8 +47,10 @@ for arm in jvm linuxX64; do
     python3 - "$lines" "$KAFKAKN_B95_DIR/read-$arm.json" "$arm" <<'PY' || fail=1
 import json, sys
 # Protobuf's JSON mapping writes an int64 as a string ("1"), and kotlinx as a number: compared as numbers.
+# A repeated or map field has no presence in Protobuf, so an empty one and an absent one are the same record: the
+# printer leaves an empty list out, and Json leaves out one that equals its default. Both sides drop them.
 def norm(v):
-    if isinstance(v, dict): return {k: norm(x) for k, x in v.items()}
+    if isinstance(v, dict): return {k: norm(x) for k, x in v.items() if x != [] and x != {}}
     if isinstance(v, list): return [norm(x) for x in v]
     if isinstance(v, str) and v.lstrip("-").isdigit(): return int(v)
     return v
