@@ -1,7 +1,7 @@
 ---
 id: B-84
 title: "listOffsets answers OffsetSpec.MaxTimestamp on both arms"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-20-what-waited-for-a-caller
