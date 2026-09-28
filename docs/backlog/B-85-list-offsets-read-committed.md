@@ -1,7 +1,7 @@
 ---
 id: B-85
 title: "listOffsets takes an isolation level"
-status: open
+status: wip
 priority: P3
 size: S
 stage: stage-20-what-waited-for-a-caller
