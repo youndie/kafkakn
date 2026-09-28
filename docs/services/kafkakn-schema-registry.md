@@ -1,0 +1,51 @@
+---
+id: kafkakn-schema-registry
+title: kafkakn-schema-registry — Schema Registry support
+type: service
+repo_url: https://github.com/youndie/kafkakn
+module: kafkakn-schema-registry
+tech_stack: [Kotlin Multiplatform, Ktor client, kotlinx.serialization]
+owner: unassigned
+depends_on:
+  - test-broker
+publishes: []
+---
+
+# kafkakn-schema-registry
+
+A client for a Schema Registry's REST API, and, from stage 21's later items, serializers that put a `@Serializable`
+type into the registry's wire format. It is a module of its own so that `kafkakn-core` gains no HTTP client
+([B-92](../backlog/B-92-schema-registry-what-is-real.md)). It is not published yet
+([B-99](../backlog/B-99-publish-the-schema-registry-module.md)).
+
+## Shape
+
+- **`SchemaRegistry(url, httpClient = null)`** registers a schema under a subject and reads one back by id. Both
+  answers are cached, so a record costs no request once its schema is known. Subjects follow `TopicNameStrategy`
+  (`valueSubject`, `keySubject`).
+- **The transport is a Ktor `HttpClient`, CIO by default.** CIO speaks HTTP on both targets and HTTPS on the JVM.
+  It has no TLS on Kotlin/Native (measured in B-92), so a native caller who needs HTTPS passes `HttpClient(Curl)`
+  ([B-98](../backlog/B-98-https-to-the-registry.md)).
+- **A refusal is `SchemaRegistryException`,** with the HTTP status and the registry's own error code: `42201` for a
+  schema it cannot read, `40403` for an id it does not have, `409` for an incompatible schema.
+- *Measured* (`ci/b-93/run.sh`, both arms, counted in the registry's own request log): one schema registered twice
+  is one request, and under two subjects it is two. A mutant that ignored the cache was caught by that count on both
+  arms.
+
+## Quirks
+
+- **Under `BACKWARD`, the registry's default, a property added to an open JSON Schema is incompatible**
+  (`OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL`, found by B-93's first control). A schema without
+  `"additionalProperties": false` can therefore not gain even an optional field. B-94's generated schemas have to be
+  closed for a type to evolve, and B-96 measures it.
+- **The registry leaves `schemaType` out for Avro,** its default, so a schema read back without one is Avro, which
+  this module does not read. It says so rather than guessing.
+
+## Code anchors
+
+| What | Where |
+|---|---|
+| the client | `kafkakn-schema-registry/src/commonMain/kotlin/io/github/youndie/kafkakn/schema/SchemaRegistry.kt` |
+| its suite | `kafkakn-schema-registry/src/commonTest/kotlin/io/github/youndie/kafkakn/schema/` |
+| the runner that counts requests at the registry | `ci/b-93/run.sh` |
+| the fixture registry | `ci/broker/docker-compose.yml` |

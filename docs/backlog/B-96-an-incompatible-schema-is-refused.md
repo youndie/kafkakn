@@ -17,4 +17,6 @@ produce a record the other side cannot read.
 
 - AC: adding an optional field is accepted, and a required field removed under `BACKWARD` is refused, on both arms,
   with the registry's 409 and its message in one kafkakn type.
+- **From B-93:** with open JSON Schemas, even an added optional property is refused under `BACKWARD`. The item measures
+  evolution on the closed schemas B-94 generates, and states what an open one would have cost.
 - Anchors: `kafkakn-schema-registry/`.

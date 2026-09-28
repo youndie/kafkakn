@@ -32,10 +32,11 @@ Every document on disk, listed once. `[x]` written, `[ ]` planned.
 
 - [x] [research-architecture](research/research-architecture.md) — why the JVM arm is the oracle, what librdkafka costs, and the four ways the obvious design is wrong
 
-### Services (2)
+### Services (3)
 
 - [x] [kafkakn-core](services/kafkakn-core.md) — the one published module: targets, the source-set layout, and the quirks that will bite
 - [x] [test-broker](services/test-broker.md) — a real broker rather than a fake, and the third parties every assertion goes through
+- [x] [kafkakn-schema-registry](services/kafkakn-schema-registry.md) — the registry client and, later, the `@Serializable` serializers; HTTPS on native only through a Curl client the caller passes
 
 ### API (2)
 
