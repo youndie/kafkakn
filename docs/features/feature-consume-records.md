@@ -159,6 +159,13 @@ The contract is [consumer-contract](../api/consumer-contract.md).
 * **Automated:** `RebalanceListenerTest.a_member_that_commits_only_on_revocation_hands_over_without_loss_or_duplicates`,
   counted by `ci/b-50/run.sh`.
 
+### Scenario: A commit of a partition another member holds is accepted, and wins
+* **Given:** two members of one group, each holding one partition, under either group protocol.
+* **When:** one member commits an offset for the partition the other holds.
+* **Then:** the commit returns on both arms, the broker stores it, and the group resumes that partition from it.
+  The holder's progress is overwritten.
+* **Automated:** `ForeignCommitTest`, both protocols, read against `kafka-consumer-groups.sh` by `ci/b-82/run.sh`.
+
 ### Scenario: A callback that calls the consumer is refused, not deadlocked
 * **Given:** a listener whose `onAssigned` calls the consumer.
 * **When:** the consumer is assigned a partition.

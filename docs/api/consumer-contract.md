@@ -145,9 +145,15 @@ class ConsumerRecord(                                       // B-36
 
   A commit of a partition the consumer does not hold is **accepted by both arms**, and the broker stores
   it (measured with `assign`, so the group has no generation to check against). The two clients agree,
-  so kafkakn passes it through rather than refusing it. Under a subscription, the broker may judge such a
-  commit against the member's generation. That is not measured yet; it belongs with the rebalance
-  listener ([B-50](../backlog/B-50-a-rebalance-listener.md)).
+  so kafkakn passes it through rather than refusing it. **Under a subscription it is accepted too, and it
+  wins**, measured in [B-82](../backlog/B-82-a-commit-of-a-partition-not-held-under-a-subscription.md) on both arms
+  and both group protocols (`ci/b-82/run.sh`). Two members each held one partition. Member A committed offset 5 for
+  the partition member B held and had read to its end. `commit` returned on both arms, under the classic protocol
+  and under KIP-848. The broker stored 5, as `kafka-consumer-groups.sh` shows, and a new member of the group
+  resumed that partition from 5. The broker checks the member and its generation, not which partitions it holds.
+  So a stray commit overwrites the holder's progress, and records are read again. **A caller commits only
+  partitions it holds.** kafkakn does not refuse the others, because neither client does and an assignment can
+  change between the check and the commit.
 - **`position` is a number on both arms, before any record too** ([B-49](../backlog/B-49-committed-and-position.md)).
   The Java client answers `position` from wherever it must. librdkafka does not: `rdkafka.h` says
   `rd_kafka_position` gives *"the offset of the last consumed message + 1, or RD_KAFKA_OFFSET_INVALID in
