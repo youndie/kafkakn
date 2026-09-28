@@ -216,7 +216,7 @@ verdict.
 | [B-95](docs/backlog/B-95-protobuf-serde.md) `[ ]` | A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer | P2 | M | B-93 |
 | [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[ ]` | A schema the subject's compatibility refuses is one typed exception, before any record is sent | P2 | S | B-94 |
 
-## Closed (91)
+## Closed (92)
 
 **It builds, and a test can fail**
 
@@ -371,6 +371,10 @@ verdict.
 - [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[x]` - kafkakn-soak for an hour on the KIP-848 consumer protocol
 - [B-90](docs/backlog/B-90-the-assignment-test-reads-before-the-growth-is-visible.md) `[x]` - B-87's test read the topic before the growth was visible, and failed once on CI
 - [B-91](docs/backlog/B-91-close-with-a-timeout.md) `[x]` - close(timeout) on both arms: what is not acknowledged in time fails, and may have been written
+
+**A `@Serializable` type in, bytes the registry's other clients read out**
+
+- [B-97](docs/backlog/B-97-the-fixture-shares-a-compose-project-with-mostik.md) `[x]` - The fixture broker shared a Compose project with mostik's, and a fresh broker failed its own topic check
 
 <!-- END INDEX -->
 
