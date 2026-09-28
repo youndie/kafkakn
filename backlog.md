@@ -201,7 +201,7 @@ verdict.
 | [B-83](docs/backlog/B-83-close-with-records-queued-and-the-broker-gone.md) `[?]` | How long close takes with records queued and the broker gone, on both arms | P2 | M | - |
 | [B-89](docs/backlog/B-89-the-soak-on-the-kip-848-protocol.md) `[ ]` | kafkakn-soak for an hour on the KIP-848 consumer protocol | P3 | M | - |
 
-## Closed (87)
+## Closed (88)
 
 **It builds, and a test can fail**
 
@@ -352,6 +352,7 @@ verdict.
 - [B-86](docs/backlog/B-86-append-and-subtract-topic-configs.md) `[x]` - alterTopicConfigs appends to and subtracts from list-valued keys
 - [B-87](docs/backlog/B-87-create-partitions-with-a-replica-assignment.md) `[x]` - createPartitions takes a replica assignment for the new partitions
 - [B-88](docs/backlog/B-88-delete-records-to-the-high-watermark.md) `[x]` - deleteRecords to the high watermark, without reading it first
+- [B-90](docs/backlog/B-90-the-assignment-test-reads-before-the-growth-is-visible.md) `[x]` - B-87's test read the topic before the growth was visible, and failed once on CI
 
 <!-- END INDEX -->
 

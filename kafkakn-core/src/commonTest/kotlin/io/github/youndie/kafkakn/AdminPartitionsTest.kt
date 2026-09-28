@@ -86,7 +86,15 @@ class AdminPartitionsTest {
                 withAdmin { admin ->
                     admin.createTopics(listOf(NewTopic(topic, 1, 1)))
                     admin.createPartitions(topic, 2, assignment = listOf(listOf(BROKER)))
-                    val grown = admin.describeTopics(listOf(topic)).getValue(topic)
+                    // The growth reaches the broker's description a moment later, as in the test above: read at once,
+                    // partition 1 was missing on the JVM in one CI run (B-90).
+                    val started = TimeSource.Monotonic.markNow()
+                    var grown = admin.describeTopics(listOf(topic)).getValue(topic)
+                    while (grown.none { it.partition == 1 }) {
+                        check(started.elapsedNow() < VISIBLE_WITHIN) { "partition 1 not visible after $VISIBLE_WITHIN" }
+                        delay(RETRY)
+                        grown = admin.describeTopics(listOf(topic)).getValue(topic)
+                    }
                     val added = grown.single { it.partition == 1 }
                     val refused = outcome { admin.createPartitions(topic, 3, assignment = listOf(listOf(NO_BROKER))) }
                     val after = admin.describeTopics(listOf(topic)).getValue(topic).size
