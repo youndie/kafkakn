@@ -8,15 +8,16 @@ tech_stack: [Kotlin Multiplatform, Ktor client, kotlinx.serialization]
 owner: unassigned
 depends_on:
   - test-broker
-publishes: []
+publishes:
+  - io.github.youndie.kafkakn:kafkakn-schema-registry (reposilite, numbered 0.1.0.<run>, beside kafkakn-core)
 ---
 
 # kafkakn-schema-registry
 
 A client for a Schema Registry's REST API, and, from stage 21's later items, serializers that put a `@Serializable`
 type into the registry's wire format. It is a module of its own so that `kafkakn-core` gains no HTTP client
-([B-92](../backlog/B-92-schema-registry-what-is-real.md)). It is not published yet
-([B-99](../backlog/B-99-publish-the-schema-registry-module.md)).
+([B-92](../backlog/B-92-schema-registry-what-is-real.md)). It is published beside `kafkakn-core`, under the same
+numbered version and three coordinates of its own ([B-99](../backlog/B-99-publish-the-schema-registry-module.md)).
 
 ## Shape
 
@@ -24,8 +25,11 @@ type into the registry's wire format. It is a module of its own so that `kafkakn
   answers are cached, so a record costs no request once its schema is known. Subjects follow `TopicNameStrategy`
   (`valueSubject`, `keySubject`).
 - **The transport is a Ktor `HttpClient`, CIO by default.** CIO speaks HTTP on both targets and HTTPS on the JVM.
-  It has no TLS on Kotlin/Native (measured in B-92), so a native caller who needs HTTPS passes `HttpClient(Curl)`
-  ([B-98](../backlog/B-98-https-to-the-registry.md)).
+  It has no TLS on Kotlin/Native (measured in B-92). **HTTPS from native is an open question**
+  ([B-98](../backlog/B-98-https-to-the-registry.md)): `HttpClient(Curl)` works in a binary without `kafkakn-core`, and
+  a binary with both does not link, because Ktor's Curl engine carries its own static OpenSSL (3.6.3) beside the one
+  in kafkakn's C bundle (3.0.13): `ld.lld: duplicate symbol`. Until it is decided, a native service reaches a registry
+  over HTTP.
 - **A refusal is `SchemaRegistryException`,** with the HTTP status and the registry's own error code: `42201` for a
   schema it cannot read, `40403` for an id it does not have. A registration the subject's compatibility refuses (409)
   is its subclass `IncompatibleSchemaException`, with the subject and the registry's reason

@@ -1,7 +1,7 @@
 ---
 id: B-98
 title: "A registry served over HTTPS, reached from both arms (Curl on native)"
-status: open
+status: question
 priority: P2
 size: M
 stage: stage-21-schema-registry
@@ -21,3 +21,49 @@ through Curl, which is a test dependency only.
   verification.
 - AC: the README and the module's KDoc say how a native caller gets HTTPS, and what libcurl adds to its binary's `ldd`.
 - Anchors: `kafkakn-schema-registry/`, `ci/broker/`.
+
+## Iteration 1 (2026-09-29): HTTPS works on both arms alone, and cannot link beside kafkakn on native
+
+**What exists, on the branch `feat/b-98-https-to-the-registry`:**
+- The fixture registry has an HTTPS listener on 18082 beside its plaintext one, serving the broker's certificate
+  (fixture CA, SAN `127.0.0.1`). `broker.sh up` waits for it and checks that the wrong CA is refused by `curl`.
+- `RegistryHttpsTest`, green on both arms: a schema registered and read back over HTTPS (CIO with the fixture CA on
+  the JVM, `HttpClient(Curl) { engine { caInfo = ... } }` on native), and a certificate from the wrong CA refused.
+  The words: native *"TLS verification failed ... SSL peer certificate or SSH remote key was not OK
+  (CURLE_PEER_FAILED_VERIFICATION)"*; JVM `SunCertPathBuilderException: unable to find valid certification path to
+  requested target`.
+
+**What was measured about Curl on native (Ktor 3.5.2):**
+- **libcurl is not the system's.** `ktor-client-curl-linuxX64Cinterop-libcurlMain-3.5.2.klib` carries
+  `included/libcurl.a`, `libssl.a`, `libcrypto.a` and `libnghttp2.a`, with `linkerOpts.linux=-lz`. The test binary's
+  `ldd` gains only `libz.so.1` over kafkakn-core's; its `NEEDED` has no libcurl. The OpenSSL inside is 3.6.3.
+- **Its default CA bundle is Debian's path**, `/etc/ssl/certs/ca-certificates.crt`, compiled in: on another
+  distribution a caller passes `caInfo`.
+- So no `libcurl4-openssl-dev` is needed anywhere; the CI step first added for it was taken out again.
+
+**What stops the item: a native binary with kafkakn-core and Curl does not link.** `OneProcessTest` (the case the
+module is for: encode through the registry over HTTPS, produce over TLS, in one process) passes on the JVM. On
+`linuxX64` the link fails: `ld.lld: error: duplicate symbol: i2d_SSL_SESSION`, `ssl_load_ciphers`,
+`ssl3_handshake_write`, ... — `libssl.a` from kafkakn-core's cinterop klib (OpenSSL 3.0.13, built by
+`ci/librdkafka/build.sh`) against the same objects in Ktor's Curl klib (3.6.3). Two static OpenSSLs of different
+versions in one binary. The owner's B-92 decision, "a native caller passes `HttpClient(Curl)`", holds only for a
+binary that does not also use kafkakn-core, which is not the binary anyone builds.
+
+## Question: how does a native kafkakn service reach a registry over HTTPS?
+
+1. **One OpenSSL: HTTPS through kafkakn's own.** kafkakn-core already links OpenSSL 3.0.13 statically. The
+   registry module's native side gets a small Ktor `HttpClientEngine` (or a transport under `SchemaRegistry`) over
+   Ktor's native sockets plus that OpenSSL through cinterop: TLS, peer and host-name verification, HTTP/1.1 with a
+   JSON body, which is all the registry's API needs. No libcurl, nothing new in `ldd`, the same CA handling as the
+   broker's TLS. Cost M. The module's native half then depends on kafkakn-core's C bundle.
+2. **libcurl in kafkakn's C bundle.** Build libcurl statically against the bundle's own OpenSSL (librdkafka would
+   gain `WITH_CURL`, which is also its OIDC token fetcher), expose `curl_easy_*` through the cinterop, and write the
+   engine over it. One OpenSSL too; more C to build and keep current in the old-glibc image. Cost M–L.
+3. **HTTP only on native, for now.** The JVM reaches HTTPS through CIO; a native service reaches a registry over
+   HTTP (in-cluster, or through a TLS-terminating sidecar), and the docs say so, with this link failure as the reason.
+   `RegistryHttpsTest` stays for the JVM and for native without kafkakn-core. Cost XS. Revisit when a caller needs it.
+4. *Rejected:* linking with `-z muldefs` so the first definition wins. It would run one OpenSSL's code against the
+   other's structures, silently.
+
+**Recommendation: 3 now, 1 when a native caller needs HTTPS.** 1 is the clean design, but it is a TLS client to own;
+3 costs nothing and is honest. The owner decides.

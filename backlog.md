@@ -206,15 +206,14 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (3)
+## Open (2)
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
 | [B-103](docs/backlog/B-103-an-unknown-topic-is-two-types.md) `[ ]` | describeTopics of an unknown topic throws a different type on each arm | P2 | S | - |
-| [B-98](docs/backlog/B-98-https-to-the-registry.md) `[ ]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
-| [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[ ]` | Publish kafkakn-schema-registry beside kafkakn-core | P2 | S | B-94 |
+| [B-98](docs/backlog/B-98-https-to-the-registry.md) `[?]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 
-## Closed (100)
+## Closed (101)
 
 **It builds, and a test can fail**
 
@@ -381,6 +380,7 @@ verdict.
 - [B-95](docs/backlog/B-95-protobuf-serde.md) `[x]` - A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer
 - [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[x]` - A schema the subject's compatibility refuses is one typed exception, before any record is sent
 - [B-97](docs/backlog/B-97-the-fixture-shares-a-compose-project-with-mostik.md) `[x]` - The fixture broker shared a Compose project with mostik's, and a fresh broker failed its own topic check
+- [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[x]` - Publish kafkakn-schema-registry beside kafkakn-core
 
 <!-- END INDEX -->
 
