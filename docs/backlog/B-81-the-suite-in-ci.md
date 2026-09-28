@@ -37,3 +37,8 @@ backed by whatever the person or the loop happened to run on the box that day, o
   certificates predated that and always took the "kept" branch. Reproduced on the box in an empty
   `KAFKAKN_TLS_DIR` (exit 1, the same line), and fixed by writing the file first (exit 0, 30 files, the JAAS file
   present).
+- **And a second: the broker could not read its keystore on the runner.** `certs.sh` leaves
+  `broker.keystore.p12` at 0600, and the broker runs as the image's `appuser`, uid 1000. The build box's user is uid
+  1000 too, so the owner and the reader matched by accident. The runner's is 1001. The keystore is now 0644, a
+  password-protected fixture file. The workflow prints the broker's log on failure, since `broker.sh` shows three
+  lines of it.

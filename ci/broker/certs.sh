@@ -76,6 +76,7 @@ if [ -z "${FORCE:-}" ] && [ -s "$OUT/ca.pem" ] && [ -s "$OUT/broker.keystore.p12
     echo "  certificates already in $OUT, and the broker's is valid for another day - kept"
     derive_pkcs1
     write_jaas
+    chmod 644 "$OUT/broker.keystore.p12"
     exit 0
 fi
 
@@ -137,7 +138,10 @@ mv wrong-client.plain.key wrong-client.key
 rm -f client.plain.key ./*.csr
 
 # The broker container does not run as root and has to be able to read these.
-chmod 644 ./*.pem key-password keystore-password
+# The keystore too: openssl writes it 0600, and the broker runs as the image's `appuser`, uid 1000. On the build
+# box the owner is uid 1000 as well, so it read the file anyway. On a CI runner the owner is uid 1001, and the
+# broker could not open its own keystore (B-81).
+chmod 644 ./*.pem key-password keystore-password broker.keystore.p12
 
 # A fixture that produced nothing must not look like one that worked.
 for f in ca.pem broker.keystore.p12 wrong-ca.pem client.pem client.key wrong-client.pem wrong-client.key; do

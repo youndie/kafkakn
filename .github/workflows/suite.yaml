@@ -46,6 +46,10 @@ jobs:
 
       - run: bash ci/suite/run.sh
 
+      # The broker's own account, when the fixture is what failed: `broker.sh` prints three lines of it.
+      - if: failure()
+        run: docker logs kafkakn-broker 2>&1 | tail -80 || true
+
       # What a red run needs to be read without rerunning it: every report, both arms, and the arms' observations.
       - if: failure()
         uses: actions/upload-artifact@v4
