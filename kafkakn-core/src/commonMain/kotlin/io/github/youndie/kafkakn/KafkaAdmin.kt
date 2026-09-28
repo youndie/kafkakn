@@ -95,7 +95,10 @@ public interface KafkaAdmin {
 
     /**
      * Changes topic [name]'s configuration **incrementally**: the keys in [set] take those values, the keys in
-     * [delete] return to what the topic would have without them, and every other key is left alone. The
+     * [delete] return to what the topic would have without them, the values in [append] are added to a list-valued
+     * key such as `cleanup.policy` and those in [subtract] removed from it
+     * ([B-86](../../../../../../../docs/backlog/B-86-append-and-subtract-topic-configs.md)), and every other key is
+     * left alone. The
      * non-incremental `alterConfigs` of both clients resets every key not named, and is deliberately not
      * offered. A key or value the broker refuses fails the whole call with [IllegalArgumentException], and
      * nothing is changed.
@@ -104,6 +107,8 @@ public interface KafkaAdmin {
         name: String,
         set: Map<String, String> = emptyMap(),
         delete: List<String> = emptyList(),
+        append: Map<String, String> = emptyMap(),
+        subtract: Map<String, String> = emptyMap(),
     )
 
     /**

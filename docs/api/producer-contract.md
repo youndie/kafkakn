@@ -663,7 +663,8 @@ interface KafkaAdmin {
     suspend fun deleteConsumerGroupOffsets(groupId: String, partitions: List<TopicPartition>)          // B-60
     suspend fun deleteConsumerGroups(groupIds: List<String>)                                          // B-60
     suspend fun describeTopicConfigs(names: List<String>): Map<String, Map<String, TopicConfigEntry>> // B-61
-    suspend fun alterTopicConfigs(name: String, set: Map<String, String>, delete: List<String>)      // B-61
+    suspend fun alterTopicConfigs(name: String, set: Map<String, String>, delete: List<String>,
+                                  append: Map<String, String>, subtract: Map<String, String>)   // B-61, B-86
     suspend fun createPartitions(topic: String, totalCount: Int)                                     // B-62
     suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long>  // B-63
     suspend fun close()
@@ -765,7 +766,11 @@ member of the controller quorum; on the fixture both arms reported node 1.
 - `alterTopicConfigs(name, set, delete)` is **incremental only**. The keys in `set` take their values, the
   keys in `delete` return to what the topic would have without them, and every other key is left alone.
   Both clients' non-incremental `alterConfigs` resets every key not named, and it is deliberately not
-  offered.
+  offered. `append` and `subtract` ([B-86](../backlog/B-86-append-and-subtract-topic-configs.md)) edit a
+  list-valued key without reading it first. *Measured* (`ci/b-86/run.sh`): `cleanup.policy=compact` with `delete`
+  appended reads `compact,delete`, and with `compact` subtracted reads `delete`, on both arms and by
+  `kafka-configs.sh`. `APPEND` to a key that is not a list is refused like any other value the broker cannot use
+  (*"Can't APPEND to key retention.ms because its type is not LIST"*), and the key is unchanged.
 - **What the broker refuses is refused with `IllegalArgumentException` on both arms, and nothing is
   changed.** That covers an unknown key and a value it cannot read (`INVALID_CONFIG`, 40). A call that
   pairs a bad value with a good one applies neither. The Java client's `InvalidConfigurationException` is

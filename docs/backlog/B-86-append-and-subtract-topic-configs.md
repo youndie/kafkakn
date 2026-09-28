@@ -1,7 +1,7 @@
 ---
 id: B-86
 title: "alterTopicConfigs appends to and subtracts from list-valued keys"
-status: open
+status: done
 priority: P3
 size: S
 stage: stage-20-what-waited-for-a-caller
@@ -20,3 +20,13 @@ caller" on 2026-09-28.
   --describe` shows the list, on both arms.
 - AC: what each arm does with `APPEND` on a key that is not a list is recorded, and the contract states it.
 - Anchors: `kafkakn-core/src/commonMain/kotlin/io/github/youndie/kafkakn/KafkaAdmin.kt`.
+
+## Findings (2026-09-28)
+
+- `alterTopicConfigs(name, set, delete, append, subtract)`: `AlterConfigOp.OpType.APPEND`/`SUBTRACT` on the JVM,
+  `RD_KAFKA_ALTER_CONFIG_OP_TYPE_APPEND`/`SUBTRACT` on native. *Measured*, `ci/b-86/run.sh`: `compact`, then
+  `compact,delete`, then `delete`, on both arms and by `kafka-configs.sh --describe`.
+- `APPEND` on `retention.ms`: `IllegalArgumentException` on both arms (*"Can't APPEND to key retention.ms because
+  its type is not LIST"*), the key unchanged. The arms agree on every observation of `AdminConfigsTest`.
+- Mutant: native sending `APPEND` as `SET` was killed by
+  `AdminConfigsTest.a_list_valued_key_is_appended_to_and_subtracted_from`.

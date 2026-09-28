@@ -128,6 +128,13 @@ describes the cluster. On both arms, and checked with the broker's own tools
 * **Automated:** `AdminGroupOffsetsTest.an_empty_groups_offsets_and_then_the_group_are_deleted`, and
   `ci/b-60/run.sh`.
 
+### Scenario: A list-valued key is appended to and subtracted from
+* **Given:** a topic with `cleanup.policy=compact`.
+* **When:** `delete` is appended, then `compact` subtracted, then `APPEND` is tried on `retention.ms`.
+* **Then:** `compact,delete`, then `delete`, on both arms and by `kafka-configs.sh`. The append to a key that is not
+  a list throws `IllegalArgumentException` on both arms, and the key keeps its value.
+* **Automated:** `AdminConfigsTest.a_list_valued_key_is_appended_to_and_subtracted_from`, by `ci/b-86/run.sh`.
+
 ### Scenario: A topic's configuration is described, changed incrementally, and returned to its default
 * **Given:** a topic created with `retention.ms` set.
 * **When:** `max.message.bytes` is set on it, and then `retention.ms` is deleted.
