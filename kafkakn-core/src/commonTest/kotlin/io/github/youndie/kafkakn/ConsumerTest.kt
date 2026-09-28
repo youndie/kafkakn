@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -145,6 +146,7 @@ class ConsumerTest {
             var longestSilence = Duration.ZERO
             var returned = -1
             val started = TimeSource.Monotonic.markNow()
+            val wallStarted = wallNow()
             withConsumer { consumer ->
                 consumer.assign(listOf(partition))
                 consumer.seek(partition, SeekTo.End)
@@ -172,7 +174,19 @@ class ConsumerTest {
                 }
             }
             val waited = started.elapsedNow()
-            assertTrue(returned == 0 && waited > WAIT, "the fixture stopped working: $returned records after $waited")
+            // Each arm's client counts the timeout on its own clock: kafka-clients on the wall clock
+            // (`Timer.update()` reads `Time.SYSTEM.milliseconds()`, `System.currentTimeMillis`), the native drain on the
+            // monotonic one. A host whose wall clock jumps forward ends a JVM poll early by the monotonic clock: 2.54 s
+            // of 3 once, on a box whose wall clock jumped 720 ms in one 100 ms step (B-102). Waited is either clock.
+            val wallWaited = wallNow() - wallStarted
+            recordArmFact(
+                "consume.wait.ms",
+                "monotonic=${waited.inWholeMilliseconds} wall=${wallWaited.inWholeMilliseconds}",
+            )
+            assertTrue(
+                returned == 0 && (waited > WAIT || wallWaited >= WAIT),
+                "the fixture stopped working: $returned records after $waited (monotonic), $wallWaited (wall)",
+            )
             assertTrue(longestSilence < TOLERATED_SILENCE, "the caller's dispatcher was held for $longestSilence")
         }
 
@@ -194,6 +208,9 @@ class ConsumerTest {
             withContext(Dispatchers.Default) { consumer.close() }
         }
     }
+
+    @Suppress("ktlint:kapkan:wall-clock", "the clock kafka-clients times poll with, compared with ours (B-102)")
+    private fun wallNow() = Clock.System.now()
 
     private companion object {
         val TIMEOUT = 3.minutes
