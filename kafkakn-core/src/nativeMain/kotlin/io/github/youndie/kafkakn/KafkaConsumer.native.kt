@@ -579,13 +579,12 @@ internal class NativeKafkaConsumer(
                 // A rebalance callback runs inside that call; what its listener threw surfaces here.
                 rethrowFromCallback()
                 if (bridge.givenUp.isNotEmpty()) {
-                    // B-68: a callback took partitions inside this call. What was collected before it is already in
-                    // `records`, and would reach the caller after the listener gave its partitions up.
+                    // A callback took partitions inside this call. What was collected for them before it would reach
+                    // the caller after the listener gave them up: dropped, as the Java client drops a revoked
+                    // partition's fetched records. Seen once, 486 records, when B-68 had looked for it and not (B-100).
                     if (records.isNotEmpty()) {
                         rebalancesMidDrain.addAndGet(1)
-                        recordsGivenUpMidDrain.addAndGet(
-                            records.count { TopicPartition(it.topic, it.partition) in bridge.givenUp }.toLong(),
-                        )
+                        recordsGivenUpMidDrain.addAndGet(dropGivenUp(records, bridge.givenUp).toLong())
                     }
                     bridge.givenUp.clear()
                 }
@@ -753,11 +752,25 @@ private class RebalanceBridge(
 /**
  * B-68's instrument, read only by the tests: how often a rebalance callback took partitions away inside a `poll`
  * after that `poll` had already collected records, and how many of those collected records belonged to the
- * partitions taken. The second number is what a caller would be handed for partitions it no longer holds. Kept
+ * partitions taken. The second number is what a caller would have been handed for partitions it no longer holds,
+ * and what the drain now drops (B-100). Kept
  * process-wide like the producer's `backpressureWaits`: a test binary runs one member at a time.
  */
 internal val rebalancesMidDrain = AtomicLong(0)
 internal val recordsGivenUpMidDrain = AtomicLong(0)
+
+/**
+ * Removes from [records] those of a partition in [givenUp], keeping the rest in order, and says how many went
+ * ([B-100](../../../../../../../docs/backlog/B-100-poll-drops-records-given-up-mid-drain.md)).
+ */
+internal fun dropGivenUp(
+    records: MutableList<ConsumerRecord>,
+    givenUp: Set<TopicPartition>,
+): Int {
+    val before = records.size
+    records.removeAll { TopicPartition(it.topic, it.partition) in givenUp }
+    return before - records.size
+}
 
 /** Set while a rebalance callback runs on this thread: a call to the consumer from there is refused. */
 @kotlin.native.concurrent.ThreadLocal
