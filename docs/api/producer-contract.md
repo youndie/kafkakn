@@ -127,7 +127,7 @@ bridge answering `429` or `504`, reads the answer off the step that ended:
 | `enqueue` threw `RecordNotQueuedException` | **never queued**: nothing written, a retry cannot write it twice | the wait for room, or for metadata, outlasted `max.block.ms` |
 | `enqueue` threw anything else | never queued either: refused on the way in | each client's own type, as before |
 | `enqueue` returned, `await()` cut short | **queued, outcome unknown**: the record goes on, and lands or fails without the caller | measured: the cut record landed on both arms |
-| `await()` threw | queued, and failed | each client's own type, as before |
+| `await()` threw | queued, and the client gave up on it. **Not written if it was never sent; possibly written if it was in flight** when the client's own timeout ran out (B-83, below) | each client's own type, as before |
 
 - **`max.block.ms` is honoured on both arms now, with the same type when it runs out.** It is the Java
   client's own key. On native, kafkakn's wait for room reads it, since librdkafka has no such key, and the
@@ -545,6 +545,24 @@ still holding and had not handed over** when its shutdown deadlines expired. The
 about this contract — a record `send` was never called for is the caller's, and whether a service
 should write its intent and reconcile later is an outbox question. The distinction is written here
 because the sentence above covers both shapes and a reader will assume the harder one.
+
+**With records queued and the broker gone, `close` takes as long as the client's own delivery timeout, and a
+record it reports failed may have been written anyway.** Measured on 2026-09-28
+([B-83](../backlog/B-83-close-with-records-queued-and-the-broker-gone.md), `ci/b-83/run.sh`). Five records were
+queued, the broker was made unreachable, `close()` was called, and the topic was read once the broker was back:
+
+| the broker | JVM `close` | native `close` | every record's `Delivery.await()` | the topic afterwards |
+|---|---|---|---|---|
+| paused (connections open, nothing answered) | 158 s | 301 s | threw: `TimeoutException: Expiring 5 record(s)` on the JVM, `KafkaProduceException: Local: Message timed out` on native | **all five written**, on both arms |
+| stopped (connections refused) | 118 s | 307 s | threw, the same types | none |
+
+- **How long: `delivery.timeout.ms` on the JVM (120 s by default), `message.timeout.ms` on native (300 s).** `close`
+  flushes, and the flush ends when every record is acknowledged or has timed out. kafkakn bounds it no further.
+- **A timed-out record is "outcome unknown" when it was in flight.** With the broker paused, the request had been
+  sent. Both clients gave up and reported it failed, and the broker wrote it when it answered again. A failed
+  `await()` does not mean "not written" in general: it means that for a record that was never sent, and "possibly
+  written" for one in flight. Neither client tells the two apart in what `await()` throws. This is the same line
+  the "never queued" / "outcome unknown" split draws one step earlier.
 
 ## Configuration
 
