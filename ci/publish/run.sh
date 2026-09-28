@@ -26,13 +26,16 @@ echo "  version $VERSION"
 echo
 echo "=== publish to a real Maven repository on disk ==="
 rm -rf "$REPO"
-./gradlew --no-daemon --console=plain $VERSION_ARG :kafkakn-core:publishAllPublicationsToLocalRepository 2>&1 | tail -3
+./gradlew --no-daemon --console=plain $VERSION_ARG :kafkakn-core:publishAllPublicationsToLocalRepository \
+    :kafkakn-schema-registry:publishAllPublicationsToLocalRepository 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "PUBLISH FAILED"; exit 1; }
 
 echo
 echo "=== every coordinate, named one by one ==="
 missing=0
-for artefact in kafkakn-core kafkakn-core-jvm kafkakn-core-linuxx64; do
+# Two modules since B-99, three coordinates each.
+for artefact in kafkakn-core kafkakn-core-jvm kafkakn-core-linuxx64 \
+        kafkakn-schema-registry kafkakn-schema-registry-jvm kafkakn-schema-registry-linuxx64; do
     dir=$REPO/$GROUP_PATH/$artefact/$VERSION
     if [ ! -d "$dir" ]; then
         echo "  MISSING $artefact" >&2
@@ -91,5 +94,5 @@ find "$DOWNSTREAM_HOME/caches/modules-2/files-2.1/io.github.youndie.kafkakn" -na
 
 echo
 echo "=== verdict ==="
-echo "B-12: three coordinates published; a separate build resolves and compiles against them,"
+echo "B-12, B-99: six coordinates published, two modules; a separate build resolves and compiles against them,"
 echo "      and the same probe fails when the repository is empty"

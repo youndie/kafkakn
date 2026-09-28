@@ -7,6 +7,8 @@ plugins {
     alias(wip.plugins.kotlinSerialization)
     id("io.github.youndie.sborka.kmp")
     id("io.github.youndie.sborka.lint")
+    // B-99: published beside kafkakn-core, under the same numbered version.
+    id("io.github.youndie.sborka.publish")
 }
 
 kotlin {
@@ -25,6 +27,17 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(wip.kotlinx.coroutines.test)
+        }
+    }
+}
+
+// Three coordinates, as for kafkakn-core: the metadata module, `-jvm` and `-linuxx64`. `ci/publish/run.sh` publishes
+// here first and names each one before anything is uploaded.
+publishing {
+    repositories {
+        maven {
+            name = "local"
+            url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
         }
     }
 }

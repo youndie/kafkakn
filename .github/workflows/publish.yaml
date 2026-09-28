@@ -73,8 +73,10 @@ jobs:
           ORG_GRADLE_PROJECT_REPOSILITE_USER: ${{ secrets.REPOSILITE_USER }}
           ORG_GRADLE_PROJECT_REPOSILITE_SECRET: ${{ secrets.REPOSILITE_SECRET }}
         run: |
-          ./gradlew --no-daemon --console=plain "-PVERSION=$KAFKAKN_VERSION" :kafkakn-core:publishAllPublicationsToWipRepository
+          ./gradlew --no-daemon --console=plain "-PVERSION=$KAFKAKN_VERSION" :kafkakn-core:publishAllPublicationsToWipRepository \
+              :kafkakn-schema-registry:publishAllPublicationsToWipRepository
           echo "published io.github.youndie.kafkakn:kafkakn-core{,-jvm,-linuxx64}:$KAFKAKN_VERSION"
+          echo "published io.github.youndie.kafkakn:kafkakn-schema-registry{,-jvm,-linuxx64}:$KAFKAKN_VERSION"
 
       # An upload that returned 2xx is not a publication. This is the statement worth making: a
       # separate build, knowing a coordinate and a URL, compiling against every variant with the
