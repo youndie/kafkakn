@@ -206,13 +206,11 @@ verdict.
 
 <!-- BEGIN INDEX -->
 
-## Open (1)
+## Open (0)
 
-| Task | | Priority | Size | Blocked by |
-|---|---|---|---|---|
-| [B-98](docs/backlog/B-98-https-to-the-registry.md) `[?]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
+No open tasks.
 
-## Closed (103)
+## Closed (104)
 
 **It builds, and a test can fail**
 
@@ -381,6 +379,7 @@ verdict.
 - [B-95](docs/backlog/B-95-protobuf-serde.md) `[x]` - A @Serializable type as Protobuf, in the registry's wire format, read by its official deserializer
 - [B-96](docs/backlog/B-96-an-incompatible-schema-is-refused.md) `[x]` - A schema the subject's compatibility refuses is one typed exception, before any record is sent
 - [B-97](docs/backlog/B-97-the-fixture-shares-a-compose-project-with-mostik.md) `[x]` - The fixture broker shared a Compose project with mostik's, and a fresh broker failed its own topic check
+- [B-98](docs/backlog/B-98-https-to-the-registry.md) `[x]` - A registry served over HTTPS, reached from both arms (Curl on native)
 - [B-99](docs/backlog/B-99-publish-the-schema-registry-module.md) `[x]` - Publish kafkakn-schema-registry beside kafkakn-core
 
 <!-- END INDEX -->
@@ -416,6 +415,12 @@ offsets — never in the library counting its own successes.
 one trades three `konan.properties` keys JetBrains may change at any patch release for a pinned
 build image and a one-line patch this project carries — the difference being *when* the breakage
 lands: on somebody else's release, or on ours.
+
+**A native service reaches a Schema Registry over HTTP (2026-09-29, B-98).** Ktor's Curl engine, the one TLS a
+native Ktor client has, carries a static OpenSSL of its own, and a binary with it and `kafkakn-core` does not link.
+The owner chose HTTP on native over owning a TLS client or building libcurl into the C bundle. When a native caller
+needs HTTPS, the route is kafkakn's own OpenSSL, one per binary; never `-z muldefs`, which runs one OpenSSL's code on
+the other's structures.
 
 **Reposilite, never Maven Central.** Publication to Central is a decision nobody has taken. Since
 [B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md) every publish is a numbered version,

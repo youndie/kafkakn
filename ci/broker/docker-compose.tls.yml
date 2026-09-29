@@ -74,3 +74,16 @@ services:
       KAFKA_LISTENER_NAME_SASL__PLAINTEXT_SASL_ENABLED_MECHANISMS: "PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER"
       KAFKA_LISTENER_NAME_SASL__PLAINTEXT_OAUTHBEARER_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required unsecuredLoginStringClaim_sub=\"broker\";"
       KAFKA_LISTENER_NAME_SASL__PLAINTEXT_OAUTHBEARER_CONNECTIONS_MAX_REAUTH_MS: "10000"
+
+  # B-98: the registry over HTTPS BESIDE its plaintext listener, for the same reason as the broker's: HTTPS that worked
+  # can then be told from HTTPS that was not used. It serves the broker's certificate (SAN localhost and 127.0.0.1,
+  # signed by the fixture CA), from the same PKCS12 keystore and password.
+  registry:
+    volumes:
+      - ${KAFKAKN_TLS_DIR:-${HOME}/.cache/kafkakn/tls}:/etc/schema-registry/secrets:ro
+    environment:
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:18081,https://0.0.0.0:18082"
+      SCHEMA_REGISTRY_SSL_KEYSTORE_LOCATION: "/etc/schema-registry/secrets/broker.keystore.p12"
+      SCHEMA_REGISTRY_SSL_KEYSTORE_TYPE: "PKCS12"
+      SCHEMA_REGISTRY_SSL_KEYSTORE_PASSWORD: "kafkakn"
+      SCHEMA_REGISTRY_SSL_KEY_PASSWORD: "kafkakn"

@@ -2,6 +2,8 @@
 
 package io.github.youndie.kafkakn.schema
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.curl.Curl
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.allocArray
@@ -42,6 +44,9 @@ internal actual fun writeLines(
         fclose(file)
     }
 }
+
+/** Curl, trusting only the CA in [caPemPath]: libcurl verifies the peer and the host name by default. */
+internal actual fun httpsClient(caPemPath: String): HttpClient = HttpClient(Curl) { engine { caInfo = caPemPath } }
 
 /** Longer than any line the oracle writes: a hex-encoded record of a few hundred bytes. */
 private const val LINE = 1 shl 16

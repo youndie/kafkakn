@@ -19,6 +19,8 @@ CONTAINER=kafkakn-broker
 BOOTSTRAP=${BOOTSTRAP:-127.0.0.1:9092}
 PARTITIONS=${PARTITIONS:-3}
 REGISTRY=${REGISTRY:-http://127.0.0.1:18081}
+REGISTRY_TLS=${REGISTRY_TLS:-https://127.0.0.1:18082}
+TLS_DIR=${KAFKAKN_TLS_DIR:-$HOME/.cache/kafkakn/tls}
 
 kc() { docker exec "$CONTAINER" "$@"; }
 # -i belongs BEFORE the container name. `docker exec <name> -i` makes "-i" the command, and a
@@ -170,8 +172,15 @@ case "${1:-}" in
             echo "  broker answers over TLS on $SSL_BOOTSTRAP"
             # B-93: and the registry, which stores its schemas in the broker and so answers only after it.
             for _ in $(seq 1 60); do
-                if curl -sf "$REGISTRY/subjects" > /dev/null 2>&1; then
-                    echo "  registry answers on $REGISTRY"
+                if curl -sf "$REGISTRY/subjects" > /dev/null 2>&1 \
+                        && curl -sf --cacert "$TLS_DIR/ca.pem" "$REGISTRY_TLS/subjects" > /dev/null 2>&1; then
+                    echo "  registry answers on $REGISTRY, and over HTTPS on $REGISTRY_TLS"
+                    # B-98: and it can say no. A client trusting the wrong CA must be refused, or the arms' own
+                    # refusal test proves nothing.
+                    if curl -sf --cacert "$TLS_DIR/wrong-ca.pem" "$REGISTRY_TLS/subjects" > /dev/null 2>&1; then
+                        echo "  THE REGISTRY'S CERTIFICATE VERIFIES WITH THE WRONG CA" >&2
+                        exit 1
+                    fi
                     exit 0
                 fi
                 sleep 1

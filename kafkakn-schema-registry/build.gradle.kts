@@ -28,6 +28,17 @@ kotlin {
             implementation(kotlin("test"))
             implementation(wip.kotlinx.coroutines.test)
         }
+        // B-98: a record encoded through the registry over HTTPS and produced over TLS, in one process. On the JVM
+        // only, by the owner's decision: on native, Ktor's Curl and kafkakn-core each carry a static OpenSSL, and a
+        // binary with both does not link.
+        jvmTest.dependencies {
+            implementation(project(":kafkakn-core"))
+        }
+        // B-98: how the suite shows that Curl reaches an HTTPS registry from native, in a binary without
+        // kafkakn-core. A test dependency only; the module does not depend on it.
+        nativeTest.dependencies {
+            implementation(libs.ktor.client.curl)
+        }
     }
 }
 

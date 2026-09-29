@@ -27,6 +27,8 @@ ktor = "3.5.2"
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+# B-98: the native suite's way to an HTTPS registry, a test dependency only: CIO has no TLS on Kotlin/Native.
+ktor-client-curl = { module = "io.ktor:ktor-client-curl", version.ref = "ktor" }
 
 [plugins]
 # The module half of the conventions: the coordinate, the toolchain, explicit API, warnings as
