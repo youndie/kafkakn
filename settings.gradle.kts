@@ -34,7 +34,7 @@ plugins {
     // taken here. They move the toolchain, the formatter and the whole publication block, and this
     // repository's publication is what B-12 and B-15 just finished measuring. That is its own
     // migration, with its own run of the acceptance.
-    id("io.github.youndie.sborka.settings") version "0.4.0.86"
+    id("io.github.youndie.sborka.settings") version "0.4.0.93"
 }
 
 // `dependencyResolutionManagement` belongs to the settings plugin now: Maven Central and the
