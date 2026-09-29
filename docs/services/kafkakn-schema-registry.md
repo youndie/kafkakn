@@ -25,11 +25,19 @@ numbered version and three coordinates of its own ([B-99](../backlog/B-99-publis
   answers are cached, so a record costs no request once its schema is known. Subjects follow `TopicNameStrategy`
   (`valueSubject`, `keySubject`).
 - **The transport is a Ktor `HttpClient`, CIO by default.** CIO speaks HTTP on both targets and HTTPS on the JVM.
-  It has no TLS on Kotlin/Native (measured in B-92). **HTTPS from native is an open question**
-  ([B-98](../backlog/B-98-https-to-the-registry.md)): `HttpClient(Curl)` works in a binary without `kafkakn-core`, and
-  a binary with both does not link, because Ktor's Curl engine carries its own static OpenSSL (3.6.3) beside the one
-  in kafkakn's C bundle (3.0.13): `ld.lld: duplicate symbol`. Until it is decided, a native service reaches a registry
-  over HTTP.
+  It has no TLS on Kotlin/Native (measured in B-92). **A native service reaches a registry over HTTP**, by the owner's
+  decision ([B-98](../backlog/B-98-https-to-the-registry.md), 2026-09-29): in-cluster, or through a TLS-terminating
+  sidecar. `HttpClient(Curl)` does reach HTTPS from native, measured, but only in a binary without `kafkakn-core`: Ktor's
+  Curl engine carries its own static OpenSSL (3.6.3) beside the one in kafkakn's C bundle (3.0.13), and a binary with
+  both fails to link (`ld.lld: duplicate symbol`). HTTPS through kafkakn's own OpenSSL is the route when a native
+  caller needs it.
+- *Measured* (`RegistryHttpsTest`, the fixture's HTTPS listener on 18082): a schema registered and read back over
+  HTTPS verifying the fixture CA, CIO on the JVM and Curl on native; a certificate from another CA refused on both
+  (JVM `SunCertPathBuilderException`, native `CURLE_PEER_FAILED_VERIFICATION`). `OneProcessTest`, on the JVM: a record
+  encoded over HTTPS and produced over TLS in one process.
+- **Ktor's Curl on native needs no system libcurl:** its klib carries `libcurl.a`, `libssl.a`, `libcrypto.a` and
+  `libnghttp2.a`, and adds only `libz.so.1` to `ldd`. Its default CA bundle is Debian's path,
+  `/etc/ssl/certs/ca-certificates.crt`: elsewhere, pass `caInfo`.
 - **A refusal is `SchemaRegistryException`,** with the HTTP status and the registry's own error code: `42201` for a
   schema it cannot read, `40403` for an id it does not have. A registration the subject's compatibility refuses (409)
   is its subclass `IncompatibleSchemaException`, with the subject and the registry's reason

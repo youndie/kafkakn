@@ -1,7 +1,7 @@
 ---
 id: B-98
 title: "A registry served over HTTPS, reached from both arms (Curl on native)"
-status: question
+status: done
 priority: P2
 size: M
 stage: stage-21-schema-registry
@@ -67,3 +67,18 @@ binary that does not also use kafkakn-core, which is not the binary anyone build
 
 **Recommendation: 3 now, 1 when a native caller needs HTTPS.** 1 is the clean design, but it is a TLS client to own;
 3 costs nothing and is honest. The owner decides.
+
+**The owner's answer (2026-09-29): 3.** A native service reaches a registry over HTTP; option 1 is the route when a
+native caller needs HTTPS. Recorded in `backlog.md`'s decisions.
+
+## Done (2026-09-29)
+
+- **What stayed:** the fixture registry's HTTPS listener and `broker.sh`'s check that the wrong CA is refused;
+  `RegistryHttpsTest` on both arms (native through Curl, in the module's test binary, which does not link
+  `kafkakn-core`); `OneProcessTest` moved to `jvmTest`, with `kafkakn-core` a JVM test dependency only. Green on both
+  arms on the Linux box: 2 + 2 HTTPS tests, and the one-process test on the JVM.
+- **The ACs, as the decision reshaped them:** both arms register and read over HTTPS verifying the fixture CA, and
+  both refuse the wrong CA naming certificate verification, measured. The README and the service document say how a
+  native caller reaches a registry (HTTP), why (the link failure), what Curl adds to `ldd` (`libz.so.1` only), and its
+  compiled-in CA path.
+- **Left out by the decision:** HTTPS from a native binary that also uses `kafkakn-core`.

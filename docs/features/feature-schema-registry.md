@@ -24,8 +24,8 @@ with the schema generated from the type and registered once
 **Built and measured:** the registry client ([B-93](../backlog/B-93-a-registry-client.md)) and JSON Schema
 ([B-94](../backlog/B-94-json-schema-serde.md)), Protobuf ([B-95](../backlog/B-95-protobuf-serde.md)) and evolution
 under the subject's compatibility ([B-96](../backlog/B-96-an-incompatible-schema-is-refused.md)), on both arms.
-Published beside `kafkakn-core` ([B-99](../backlog/B-99-publish-the-schema-registry-module.md)). HTTPS from native is
-an open question ([B-98](../backlog/B-98-https-to-the-registry.md)).
+Published beside `kafkakn-core` ([B-99](../backlog/B-99-publish-the-schema-registry-module.md)). HTTPS on the JVM;
+a native service reaches a registry over HTTP, by decision ([B-98](../backlog/B-98-https-to-the-registry.md)).
 
 ## 2. Business rules
 

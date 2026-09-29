@@ -58,5 +58,6 @@ jobs:
           path: |
             kafkakn-core/build/test-results/
             kafkakn-core/build/reports/tests/
+            kafkakn-schema-registry/build/test-results/
             kafkakn-core/build/observations/
           retention-days: 14
