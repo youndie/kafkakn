@@ -21,7 +21,7 @@ librdkafka = "2.13.0"
 kafka-image = "apache/kafka:4.3.1"
 # kafkakn-schema-registry's HTTP client (B-93). The version B-92 measured: CIO speaks HTTP on both targets and HTTPS on
 # the JVM only, since `ktor-network-tls` has no TLS on Kotlin/Native.
-ktor = "3.5.2"
+ktor = "3.6.0"
 
 [libraries]
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
