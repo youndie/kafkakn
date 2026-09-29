@@ -1,51 +1,25 @@
 # kafkakn
 
 [![check](https://github.com/youndie/kafkakn/actions/workflows/check.yaml/badge.svg)](https://github.com/youndie/kafkakn/actions/workflows/check.yaml)
+[![suite](https://github.com/youndie/kafkakn/actions/workflows/suite.yaml/badge.svg)](https://github.com/youndie/kafkakn/actions/workflows/suite.yaml)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A Kafka **producer** for Kotlin Multiplatform — so that a service compiled to a single
-Kotlin/Native binary can produce to Kafka without a JVM anywhere, and so that the native
-implementation can be proved right against the official one.
+A Kafka client for Kotlin Multiplatform: a producer, a consumer with groups and exactly-once, an admin client, and
+Schema Registry serializers for `@Serializable` types.
 
-```kotlin
-val producer = kafkaProducer(
-    ProducerConfig(
-        "bootstrap.servers" to "kafka:9092",
-        "acks" to "all",
-    ),
-)
-val where = producer.send(
-    ProducerRecord(
-        topic = "orders",
-        value = payload,                                  // bytes, not text
-        key = orderId.encodeToByteArray(),
-        headers = listOf(RecordHeader("trace", traceId.encodeToByteArray())),
-    ),
-)                                                         // returns when the broker acknowledged
-producer.close()
-```
+- **On `linuxX64`** it is librdkafka 2.13.0, linked statically into your binary. A service compiled with Kotlin/Native
+  talks to Kafka with no JVM and no extra shared libraries.
+- **On the JVM** it is the official `org.apache.kafka:kafka-clients` 4.3.1.
 
-Something very close to that is [`ci/downstream`](ci/downstream/src/commonMain/kotlin/Main.kt), which is
-a build of its own: it resolves the published artefact from the network, links a native binary and
-runs it, and an independent reader counts what arrived.
-
+One API in common code, the same behaviour on both targets. The whole test suite runs on both against one broker, and
+the native side is correct when it agrees with the official client. Where the two clients underneath genuinely
+differ, the [contracts](#documentation) say so rather than hide it.
 
 ## Getting it
 
-Published to reposilite only, never to Maven Central, and with no compatibility promise
-([D7](docs/research/research-architecture.md)). What would change that is a **condition, not a date**:
-somebody outside this portfolio turning up and wanting the library. Nothing is being done to bring
-one. The repository is not announced anywhere, and the item that would have tested demand was
-dropped for that reason ([B-21](docs/backlog/B-21-does-anyone-want-this.md)).
-
-Every publish is a version of its own, `0.1.0.<n>`, and is never overwritten
-([B-75](docs/backlog/B-75-every-publish-gets-its-own-number.md)). Each one is tagged `v0.1.0.<n>` at the
-commit it was built from; the newest is the highest tag, or `<latest>` in the
-[metadata](https://reposilite.kotlin.website/snapshots/io/github/youndie/kafkakn/kafkakn-core/maven-metadata.xml).
-Builds before 2026-09-27 went out as `0.1.0-SNAPSHOT`, each over the last.
-
-The whole of a build file that links it, because the two halves that usually get shown on their own
-do not compose into a working one — measured, see [`ci/b-20/run.sh`](ci/b-20/run.sh):
+Published to `https://reposilite.kotlin.website/snapshots`, not to Maven Central. Every release is a version of its own,
+`0.1.0.<n>`, never overwritten, and tagged `v0.1.0.<n>` in this repository; the newest is the highest tag. There is
+no compatibility promise between releases yet.
 
 ```kotlin
 plugins {
@@ -60,140 +34,216 @@ repositories {
 }
 
 kotlin {
-    linuxX64("native") {
+    jvm()
+    linuxX64 {
         binaries.executable { entryPoint = "main" }
     }
 
     sourceSets.commonMain.dependencies {
-        implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0.<n>")
+        implementation("io.github.youndie.kafkakn:kafkakn-core:0.1.0.14")
+        // Optional: Schema Registry, JSON Schema and Protobuf.
+        implementation("io.github.youndie.kafkakn:kafkakn-schema-registry:0.1.0.14")
     }
 }
 ```
 
-Three coordinates, because a KMP module has one per target: `kafkakn-core` (metadata),
-`kafkakn-core-jvm`, `kafkakn-core-linuxx64`. The native one carries librdkafka and its TLS stack
-**inside the klib**, so a downstream link needs no configuration of its own.
+- **Use Kotlin 2.4.20.** A klib carries compiler metadata, and a build on another Kotlin version may refuse it.
+- **Nothing to configure for the native link.** The native artefact carries librdkafka, OpenSSL, zlib and zstd inside
+  the klib.
+- **The first native build downloads the Kotlin/Native toolchain.** From a container with only a JDK and Gradle, this
+  build file got to a record on a topic in 106–109 s, of which 74–78 s was the toolchain arriving.
 
-**Schema Registry** is a second module under the same version
-([B-99](docs/backlog/B-99-publish-the-schema-registry-module.md)):
-`implementation("io.github.youndie.kafkakn:kafkakn-schema-registry:0.1.0.<n>")`, three coordinates again. A
-`@Serializable` type in, bytes the registry's own serializers read out, as JSON Schema or Protobuf
-([docs/services/kafkakn-schema-registry.md](docs/services/kafkakn-schema-registry.md)).
+## Producing
 
-**The Kotlin version is part of the instructions, not a detail.** A klib carries metadata that a
-build on another compiler refuses, so `2.4.20` above is the version this is known to work with rather
-than a placeholder. `send` suspends, and the coroutines runtime arrives with the dependency — the
-build file above compiles a caller that uses `runBlocking` with nothing else added.
+```kotlin
+val producer = kafkaProducer(ProducerConfig("bootstrap.servers" to "kafka:9092", "acks" to "all"))
+try {
+    val written: RecordMetadata = producer.send(
+        ProducerRecord(
+            topic = "orders",
+            value = payload,                       // ByteArray: Kafka values have no encoding
+            key = orderId.encodeToByteArray(),
+            headers = listOf(RecordHeader("trace", traceId.encodeToByteArray())),
+        ),
+    )
+    println("${written.partition}@${written.offset}")
+} finally {
+    producer.close()
+}
+```
 
-**Measured from an empty machine**: a container with a JDK, Gradle and nothing else — no clone, no
-Gradle cache, no `~/.konan` — gets from that build file to a record on a topic in **106 and 109
-seconds** across two runs, of which **74–78 s is the Kotlin/Native toolchain downloading** and about
-31 s is everything else ([`ci/b-20/run.sh`](ci/b-20/run.sh)). Most of a first build is Kotlin/Native
-arriving, and that price is not this library's.
+**`send` returns when the broker has acknowledged the record, or throws.** There is no third outcome: holding a
+`RecordMetadata` is the acknowledgement. What follows from that:
 
-### What the native artefact requires
+- **A full queue is backpressure, not an error.** `send` suspends until there is room, for up to `max.block.ms`, then
+  throws `RecordNotQueuedException`: the record was never queued, and retrying cannot write it twice.
+- **Throughput comes from concurrency.** One `send` is one record and one acknowledgement. Call it from many
+  coroutines at once, and the client batches what is in flight.
+- **Two steps when you need a deadline.** `enqueue(record)` returns a `Delivery` once the record is queued, and
+  `delivery.await()` waits for the broker. If `enqueue` throws, nothing was written. If it returned, the record goes
+  on whatever you do next: cancelling `await` does not recall it.
+- **`close(timeout)` bounds a shutdown.** A record not acknowledged in time fails with
+  `ClosedBeforeAcknowledgedException`. It may still have been written, so retrying it may write it twice.
+- **Idempotent by default, on both targets,** with the Java client's conditions: it turns off if you set `acks` to
+  anything but `all`, or `retries=0`.
+- **Transactions:** set `transactional.id`, call `initTransactions()` once, then `producer.inTransaction { ... }`,
+  which aborts on any failure, cancellation included.
 
-Measured 2026-09-17 by [`ci/b-16/run.sh`](ci/b-16/run.sh), on the binary a downstream build
-(`ci/downstream`) links against one built the same way with the dependency removed — not on this
-repository's own test binary, which was once linked with options no stranger had.
+The reason for this shape: `rd_kafka_produce` only enqueues, and a record it refuses produces no delivery report at
+all. A naive binding that counted delivery reports lost 264 826 of 1 000 000 records while reporting complete success.
 
-- **Shared libraries: the same set, exactly.** `linux-vdso`, the loader, `libc`, `libcrypt`, `libdl`,
-  `libgcc_s`, `libm`, `libpthread`, `libresolv`, `librt`, `libutil` — and every one of those is there
-  before kafkakn is. Linking it adds none and removes none. (The earlier wording here, "no runtime
-  dependency beyond libc", was false in the first word that matters: `libgcc_s` is not libc, and one
-  `ldd` refutes it.)
-- **glibc 2.17 or newer**, and this is the one thing kafkakn does raise: the same binary without it
-  references nothing above 2.14. 2.17 is `manylinux2014`'s, which is where the C bundle is built
-  ([D4](docs/research/research-architecture.md)) — the floor is the bundle's build image, by
-  decision, and the script fails if it ever moves.
-- **The bundle carries a one-line local patch.** librdkafka 2.13.0 includes `<sys/random.h>` from
-  `rdrand.c` under `#ifndef _WIN32` only, while the `getentropy` call it is there for is guarded by
-  `HAVE_GETENTROPY`; the header arrived in glibc 2.25, so on a 2.17 image the include has to go.
-  **There is no upstream pull request and there will not be one** — nothing from this project is
-  filed anywhere — so the patch is a file in this repository, re-applied and re-tested on every
-  librdkafka bump ([B-03](docs/backlog/B-03-c-bundle-old-glibc.md)).
+## Consuming
 
-## The idea
+```kotlin
+val consumer = kafkaConsumer(
+    ConsumerConfig("bootstrap.servers" to "kafka:9092", "group.id" to "billing", "auto.offset.reset" to "earliest"),
+)
+consumer.subscribe(listOf("orders"))
+consumer.records().collect { record ->         // a cold Flow over poll()
+    handle(record.key, record.value)
+    consumer.commit()
+}
+```
 
-One `expect` surface, two actuals:
+- **Commits are yours.** `enable.auto.commit` is `false` on both targets, because the two clients mean different
+  things by `true`. `commit()` commits the position after everything `poll` has returned; `commit(offsets)` commits
+  exactly the offsets you name.
+- **`poll(timeout)`** returns up to 500 records, or an empty list once `timeout` passes. It never holds the caller's
+  dispatcher, and the consumer is still usable after a cancelled `poll`.
+- **Without a group:** `assign(partitions)`, and `seek(partition, SeekTo.Beginning)` (or `End`, `Offset`,
+  `Timestamp`).
+- **Rebalances:** `subscribe(topics, listener)` with `onAssigned`, `onRevoked` and `onLost`. The listener runs inside
+  `poll`, so it commits and seeks through the scope it is handed, not through the consumer. Cooperative rebalancing
+  (`partition.assignment.strategy=cooperative-sticky`), static membership (`group.instance.id`) and the KIP-848
+  protocol (`group.protocol=consumer`) are supported. The default protocol stays each client's own, `classic`.
+- **Exactly once, read-process-write:** a transactional producer and `sendOffsetsToTransaction(offsets,
+  consumer.groupMetadata())`. Readers get `isolation.level=read_committed` by default on both targets.
 
-| Target | Behind it | Why |
-|---|---|---|
-| `linuxX64` | librdkafka 2.13.0 through cinterop, linked statically | the reason the project exists — a producer inside a single binary, and **`ldd` on it is the same set as on the same binary built without kafkakn** (measured, see below) |
-| `jvm` | `org.apache.kafka:kafka-clients` 4.3.1 | the reference implementation, and therefore **the oracle**: one `commonTest` suite runs on both arms against one broker, and the native arm is correct when it agrees |
+## Administering
 
-The only published Kafka client for Kotlin/Native (`com.icemachined:kafka-client` 0.2.0, October
-2022) ships three native artefacts and **no JVM variant**, so it has no way to check itself except by
-believing what a broker tells it. That asymmetry is this project's whole argument, and it has earned
-its keep twice:
+```kotlin
+val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to "kafka:9092"))
+admin.createTopics(listOf(NewTopic("orders", partitions = 6, replicationFactor = 3)))
+```
 
-- **The two clients put the same key on different partitions.** librdkafka hashes keys with CRC32,
-  the Java producer with murmur2; of eight keys, five landed differently depending on which arm
-  produced them. Each arm was individually consistent with the broker, so neither could have noticed
-  alone — and the symptom would have surfaced in somebody else's consumer, as records for one key
-  arriving out of order ([B-07](docs/backlog/B-07-native-actual.md),
-  [research §2.2](docs/research/research-architecture.md)).
-- **The published klib carried the bindings and not the C.** Eleven items passed over it: this
-  project's own test binaries were linked with `linkerOpts` naming archives on the build machine, so
-  the suite was green while a stranger's link failed with 14 undefined symbols. It took a build that
-  was not this one to find it ([B-15](docs/backlog/B-15-native-klib-carries-no-c.md), §2.12).
+It covers:
+- **topics:** create, delete, describe, add partitions, read and change their configuration;
+- **records:** delete up to an offset, and look up offsets (`listOffsets`);
+- **the cluster:** describe it;
+- **consumer groups:** list and describe them, read, move and delete their offsets, delete a group.
 
-## The thing worth knowing before reading the code
+- **Errors you can catch in common code:**
+  - `TopicExistsException`;
+  - `UnknownTopicException`;
+  - `GroupNotEmptyException`;
+  - `IllegalArgumentException` for an argument the broker refused;
+  - `KafkaAdminException` for everything else.
 
-`rd_kafka_produce` only **enqueues**, and when its queue is full it refuses — which is backpressure,
-not an error. **A record that was never queued produces no delivery report**, so a producer that
-counts delivery reports sees a perfect success rate while losing records. A measured naive binding
-lost **264 826 of 1 000 000** this way, with a successful flush.
+  On the JVM, the Java client's own exception is the `cause`.
+- **A topic is not visible the moment `createTopics` returns.** Described at once, a new topic was unknown in 199 of
+  200 tries on both targets, and visible within 134 ms, typically 25–35 ms. That is Kafka. If you describe what you
+  have just created, wait for it.
 
-Everything about this API follows from that:
+## Schema Registry
 
-- **`send` suspends** rather than returning a failure the caller may ignore. It returns when the
-  broker has acknowledged, so holding a `RecordMetadata` *is* the acknowledgement — there is no
-  third outcome to inspect.
-- **The reconciliation is against what the caller handed in**, and it lives in the test suite rather
-  than in the library.
-- **No public API exposes a delivery-report count**, and that is a build gate
-  (`scripts/no_delivery_counters.py`), not a habit.
-- **`send` does not batch for you.** One call is one record and one acknowledgement; throughput
-  comes from calling it concurrently, and both clients batch internally once records are in flight
-  together.
+```kotlin
+@Serializable
+data class Order(val id: Long, val total: Double, val note: String? = null)
 
-## What it does not do yet
+val registry = SchemaRegistry("http://schema-registry:8081")
+val orders = registry.jsonSchemaSerde<Order>(valueSubject("orders"))   // or protobufSerde<Order>(...)
 
-**None of this exists today.** Since 2026-09-24 most of it is planned, in an order that keeps the hard
-part last ([backlog.md](backlog.md), stages 5 to 9) — and every item arrives with a test that holds
-the two arms to one answer, because both clients underneath already implement all of it and the gap
-is surface, not implementation.
+orders.register()                                    // optional: fail at startup, not at the first record
+producer.send(ProducerRecord("orders", orders.encode(Order(1, 9.5))))
+val order: Order = orders.decode(record.value!!)
+```
 
-| Not done yet | Where it stands |
+- **`@Serializable` needs the serialization compiler plugin** in your build: `kotlin("plugin.serialization")`, at the
+  Kotlin version above.
+- **Confluent's own serializers read these bytes, and kafkakn reads theirs.** Measured both ways against
+  `KafkaJsonSchemaSerializer` and `KafkaProtobufSerializer` 8.3.2, on both targets. A Java or Go service on the same
+  topic needs nothing from you.
+- **The schema is generated from the type**, and registered once. The JSON Schema is draft-07 and closed
+  (`additionalProperties: false`): that is what lets a type gain an optional field under the registry's default
+  `BACKWARD` compatibility. The Protobuf schema is the `.proto` kotlinx.serialization generates.
+- **A change the subject refuses** (a required field removed, say) throws `IncompatibleSchemaException` with the
+  registry's own reason, before any record is made.
+- **Not supported:**
+  - Avro, which has no Kotlin Multiplatform library;
+  - polymorphic types;
+  - schema ids by GUID or in record headers.
+- **HTTPS works on the JVM**, through the default CIO client or any `HttpClient` you pass.
+- **From native, reach the registry over HTTP**, in-cluster or through a TLS-terminating sidecar. Ktor's CIO has no TLS
+  on Kotlin/Native, and its Curl engine carries its own OpenSSL, which does not link beside kafkakn's.
+
+## Configuration
+
+**Kafka's own keys, verbatim:** `bootstrap.servers`, `acks`, `group.id`, `security.protocol`. There is no
+kafkakn-specific spelling.
+
+- **An unknown key fails at construction.** A setting that was accepted and silently dropped would look exactly like
+  one that worked.
+- **Some keys exist on one target only.** Examples: `queue.buffering.max.messages` on native, `buffer.memory` and
+  `linger.ms` on the JVM. The other target refuses them at construction. Code for both targets passes the common keys
+  and adds the platform ones per target. The [producer](docs/api/producer-contract.md) and
+  [consumer](docs/api/consumer-contract.md) contracts list which keys work on both, and each target's defaults.
+- **TLS:** `security.protocol=SSL` and `ssl.ca.location` (a PEM file). For client certificates, also
+  `ssl.certificate.location`, `ssl.key.location` and `ssl.key.password`. The same keys work on both targets.
+  **Certificate verification cannot be turned off.** Hostname checking can, with
+  `ssl.endpoint.identification.algorithm=none`.
+- **SASL:** `PLAIN` and `SCRAM-SHA-256`/`SCRAM-SHA-512`, through `sasl.mechanism`, `sasl.username` and
+  `sasl.password`. `OAUTHBEARER` takes an `OAuthBearerTokenProvider` you supply: kafkakn does not fetch OIDC tokens
+  itself.
+
+## The native binary
+
+Measured on a binary built from the published artefact, against the same binary built without it:
+
+- **The same shared libraries, exactly.** Linking kafkakn adds none: `libc`, `libm`, `libpthread`, `libdl`, `librt`,
+  `libresolv`, `libutil`, `libcrypt`, `libgcc_s` and the loader, all there before.
+- **glibc 2.17 or newer.** This is the one thing kafkakn raises, because the C bundle is built in a `manylinux2014`
+  image.
+- **librdkafka 2.13.0 with one local patch.** `rdrand.c` includes a header glibc 2.17 does not have. The patch is
+  re-applied and re-tested on every librdkafka upgrade.
+- **The default partitioner is the Java client's.** Native sets librdkafka's `murmur2_random`, so a key lands on the
+  same partition whichever target produced it. librdkafka's own default, a CRC32, would not.
+
+## Where the two targets differ
+
+Both clients are the reference on their own platform, and kafkakn does not paper over the differences. The ones worth
+knowing:
+
+- **An invalid value** (`acks=99`) fails at construction on the JVM, and at the broker on native.
+- **`poll`'s timeout** is counted on the wall clock on the JVM (the Java client's timer), and on the monotonic clock on
+  native. On a host whose clock jumps forward, a JVM `poll` can return early.
+- **A burst of concurrent sends into a topic created a moment before** can leave the Java client's first batch stuck
+  until `delivery.timeout.ms`, with `OutOfOrderSequenceException` at the broker. Native does not do this. Sending and
+  awaiting one record per partition first avoids it.
+- **With every broker down**, both targets refuse a record for a topic they know under the default
+  `metadata.recovery.strategy=rebootstrap`, and both queue it under `none`.
+
+The contracts list the rest, each with how it was measured.
+
+## Not supported
+
+| | |
 |---|---|
-| **Topic metadata** | planned — [B-29](docs/backlog/B-29-topic-metadata.md). An explicit partition and a record timestamp are in since [B-27](docs/backlog/B-27-a-record-can-name-its-partition.md) and [B-28](docs/backlog/B-28-a-record-carries-its-timestamp.md) |
-| **OIDC token fetching** | not planned — OAUTHBEARER is in since [B-33](docs/backlog/B-33-sasl-oauthbearer.md) with a token the caller supplies, since the native bundle has no curl. PLAIN and SCRAM are in since [B-32](docs/backlog/B-32-sasl-plain-and-scram.md), TLS since B-11, client certificates since [B-31](docs/backlog/B-31-client-certificates.md), and **certificate trust cannot be turned off** — the key that would do it is refused on both arms, because it exists only on the one without an oracle ([B-18](docs/backlog/B-18-verification-cannot-be-turned-off.md)). Hostname checking is the one thing that can be relaxed, with `ssl.endpoint.identification.algorithm=none` |
-| **ACLs, and broker configuration** | not planned. What the admin client does: listing and describing consumer groups is in since [B-58](docs/backlog/B-58-list-and-describe-consumer-groups.md), reading a group's committed offsets and a partition's offsets since [B-59](docs/backlog/B-59-consumer-group-offsets-and-lag.md), moving and deleting group offsets and groups since [B-60](docs/backlog/B-60-reset-and-delete-group-offsets.md), describing and incrementally changing a topic's configuration since [B-61](docs/backlog/B-61-topic-configs.md), adding partitions since [B-62](docs/backlog/B-62-create-partitions.md), and deleting records since [B-63](docs/backlog/B-63-delete-records.md). Creating, deleting and describing topics and describing the cluster are in since [B-34](docs/backlog/B-34-a-minimal-admin.md) |
-| **The KIP-848 protocol as the default** | not planned: the default stays the clients' own `classic`. What is in: a rebalance listener ([B-50](docs/backlog/B-50-a-rebalance-listener.md)), a `Flow` over `poll` ([B-54](docs/backlog/B-54-a-flow-over-poll.md)), cooperative rebalancing ([B-55](docs/backlog/B-55-cooperative-rebalancing.md)) and static membership, measured with fencing as one exception ([B-56](docs/backlog/B-56-static-membership.md)), are in, and so is the KIP-848 group protocol as a value the caller chooses ([B-57](docs/backlog/B-57-the-kip-848-consumer-protocol.md)). A consumer that assigns and seeks ([B-36](docs/backlog/B-36-assign-and-poll.md)) and joins groups with manual commits ([B-37](docs/backlog/B-37-consumer-groups.md)) is in, built to a contract designed first ([B-35](docs/backlog/B-35-the-consumer-designed-first.md)) — and a group with one member on each arm is measured |
-| **`linuxArm64` as a shipped target** | not planned: not published and not run in CI, by decision. It is built on request (`-Pkafkakn.linuxArm64`) and run on arm64 hardware since [B-39](docs/backlog/B-39-linux-arm64.md): the native suite passes there and agrees with the JVM arm (93 tests, 17 observations, measured 2026-09-25). Its binaries need glibc 2.17, the same as x64, and have been run on it ([B-44](docs/backlog/B-44-arm64-glibc-floor.md)) |
-| **macOS as a shipped target** | not published. `macosArm64` exists for contributors since [B-40](docs/backlog/B-40-macos-for-contributors.md), declared only on a Mac: the native suite runs there against the broker and agrees with the JVM arm (92 tests, 17 observations, measured 2026-09-25). No `macosX64`, no Windows, no `musl` |
-| **HTTPS to a Schema Registry from native beside kafkakn-core** | not yet, by decision ([B-98](docs/backlog/B-98-https-to-the-registry.md)): a native service reaches a registry over HTTP, in-cluster or through a TLS-terminating sidecar. Ktor's Curl engine carries its own static OpenSSL, and a binary with both it and `kafkakn-core` does not link. The JVM reaches HTTPS through CIO. HTTPS through kafkakn's own OpenSSL is the route when a native caller needs it |
-| **Avro, Streams, Windows, `musl`** | not planned. Avro has no Kotlin Multiplatform library; Streams is in neither client underneath, so it is not a gap between kafkakn and what it wraps |
+| `linuxArm64`, macOS | built and tested on request, not published |
+| Windows, `musl`, Kafka Streams, Avro | not planned |
+| ACLs and broker configuration in the admin client | not planned |
+| OIDC token fetching for `OAUTHBEARER` | not planned: you supply the token |
+| HTTPS to a Schema Registry from a native binary | use HTTP, see above |
 
 ## Documentation
 
-Start at [docs/README.md](docs/README.md) — the research says why the architecture is what it is,
-[the producer contract](docs/api/producer-contract.md) says what both arms are held to, and
-[backlog.md](backlog.md) is the queue. The interesting reading is the places where the two arms do
-**not** agree and the contract says so instead of promising it away: the partitioner, the queue
-bound, where a configuration value is refused, and how long an unverifiable TLS peer takes to fail.
+- [Producer contract](docs/api/producer-contract.md): what `send`, the configuration, transactions and the admin
+  client promise, and where the targets differ.
+- [Consumer contract](docs/api/consumer-contract.md): polling, groups, rebalances, commits, exactly-once.
+- [Schema Registry](docs/services/kafkakn-schema-registry.md): the module, its wire format, and its limits.
+- [`ci/downstream`](ci/downstream/src/commonMain/kotlin/Main.kt): a separate build that resolves the published
+  artefact, links a native binary and produces with it.
 
-## Checks
-
-```bash
-make check              # the documents
-./gradlew ktlintCheck   # the code
-```
-
-Both run in CI. The suite itself needs the C bundle and a broker and runs on a Linux box — each
-item's `ci/b-NN/run.sh` is what runs it, and `ci/downstream` is a build outside this one that resolves
-the published artefact and runs it.
+To work on kafkakn itself, start at [docs/README.md](docs/README.md) and [CLAUDE.md](CLAUDE.md).
 
 ## License
 
