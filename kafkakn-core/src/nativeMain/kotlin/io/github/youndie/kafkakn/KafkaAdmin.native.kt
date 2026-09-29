@@ -66,6 +66,7 @@ import rdkafka.RD_KAFKA_RESP_ERR_NO_ERROR
 import rdkafka.RD_KAFKA_RESP_ERR_OFFSET_OUT_OF_RANGE
 import rdkafka.RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS
 import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID
+import rdkafka.RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART
 import rdkafka.rd_kafka_AdminOptions_destroy
 import rdkafka.rd_kafka_AdminOptions_new
 import rdkafka.rd_kafka_AdminOptions_set_isolation_level
@@ -380,11 +381,11 @@ internal class NativeKafkaAdmin(
                         val topic = described!![index]!!
                         val name = rd_kafka_TopicDescription_name(topic)?.toKString() ?: "<unnamed>"
                         rd_kafka_TopicDescription_error(topic)?.let { error ->
-                            throw KafkaAdminException(
-                                "describeTopics: $name: ${rd_kafka_error_string(
-                                    error,
-                                )?.toKString()} (${rd_kafka_error_code(error)})",
-                            )
+                            val code = rd_kafka_error_code(error)
+                            val said = "describeTopics: $name: ${rd_kafka_error_string(error)?.toKString()} ($code)"
+                            // B-103: one type on both arms for a topic the broker does not describe.
+                            if (code == RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART) throw UnknownTopicException(said)
+                            throw KafkaAdminException(said)
                         }
                         val partitionCount = alloc<size_tVar>()
                         val partitions = rd_kafka_TopicDescription_partitions(topic, partitionCount.ptr)
@@ -1165,6 +1166,11 @@ internal class NativeKafkaAdmin(
             val said = rd_kafka_topic_result_error_string(result)?.toKString() ?: rd_kafka_err2str(err)?.toKString()
             if (err == RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS) {
                 throw TopicExistsException("$what: $name: $said")
+            }
+            if (err ==
+                RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART
+            ) {
+                throw UnknownTopicException("$what: $name: $said ($err)")
             }
             if (err in refusedArguments) throw IllegalArgumentException("$what: $name: $said ($err)")
             throw KafkaAdminException("$what: $name: $said ($err)")

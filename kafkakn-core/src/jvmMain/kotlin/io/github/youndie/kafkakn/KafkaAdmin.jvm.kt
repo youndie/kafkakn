@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.InvalidPartitionsException
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.errors.UnknownMemberIdException
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import java.util.Properties
 import org.apache.kafka.clients.admin.NewTopic as ApacheNewTopic
 import org.apache.kafka.clients.admin.OffsetSpec as ApacheOffsetSpec
@@ -80,11 +81,11 @@ internal class JvmKafkaAdmin(
     }
 
     override suspend fun deleteTopics(names: List<String>) {
-        answer("deleteTopics") { delegate.deleteTopics(names).all() }
+        answer("deleteTopics $names") { delegate.deleteTopics(names).all() }
     }
 
     override suspend fun describeTopics(names: List<String>): Map<String, List<PartitionInfo>> =
-        answer("describeTopics") { delegate.describeTopics(names).allTopicNames() }
+        answer("describeTopics $names") { delegate.describeTopics(names).allTopicNames() }
             .mapValues { (name, description) ->
                 description
                     .partitions()
@@ -274,7 +275,7 @@ internal class JvmKafkaAdmin(
                 NewPartitions.increaseTo(totalCount, assignment)
             }
         try {
-            answer("createPartitions") { delegate.createPartitions(mapOf(topic to grown)).all() }
+            answer("createPartitions $topic") { delegate.createPartitions(mapOf(topic to grown)).all() }
         } catch (refused: InvalidPartitionsException) {
             // The broker's INVALID_PARTITIONS, a count that does not grow the topic: one type on both arms (B-62).
             throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
@@ -368,5 +369,8 @@ internal class JvmKafkaAdmin(
             call().toCompletionStage().await()
         } catch (failure: ApacheTopicExistsException) {
             throw TopicExistsException("$what: ${failure.message}", failure)
+        } catch (failure: UnknownTopicOrPartitionException) {
+            // B-103: the Java client's words do not name the topic, so [what] does.
+            throw UnknownTopicException("$what: ${failure.message}", failure)
         }
 }

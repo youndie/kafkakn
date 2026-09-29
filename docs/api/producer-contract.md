@@ -847,8 +847,9 @@ shows the change a moment later. That is Kafka's, not either arm's: the Java cli
   once after growing a visible topic, the old count came back in 6 of 200 rounds on the JVM and 21 of 200 on native,
   and the new one within 38 ms.
 - A caller that describes what it has just created waits for it. The suite does (`AdminPartitionsTest`), bounded.
-- **The unknown topic is not one type across the arms:** the Java client's `UnknownTopicOrPartitionException` on the
-  JVM, `KafkaAdminException` on native ([B-103](../backlog/B-103-an-unknown-topic-is-two-types.md)).
+- **The unknown topic is one type on both arms, `UnknownTopicException`**, since
+  [B-103](../backlog/B-103-an-unknown-topic-is-two-types.md); before it, the Java client's
+  `UnknownTopicOrPartitionException` on the JVM and `KafkaAdminException` on native.
 
 **The suite does not build its fixtures with this client.** Everything it created is read back by
 `kafka-topics.sh` and `kafka-configs.sh`, and the cluster id is compared with `kafka-cluster.sh` —
@@ -865,6 +866,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | TLS peer not verifiable | `send` throws and the message names certificate verification — but **not promptly on native**, see below |
 | SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
 | an admin client creates a topic that exists | `TopicExistsException`, on both arms |
+| an admin client describes or deletes a topic that does not exist, or is not in the broker's description yet (B-101) | `UnknownTopicException`, on both arms, naming the topic; the Java client's `UnknownTopicOrPartitionException` is the cause on the JVM ([B-103](../backlog/B-103-an-unknown-topic-is-two-types.md)) |
 | an admin client alters or deletes the offsets of a group with an active member, or deletes the group | `GroupNotEmptyException`, on both arms |
 | an admin client sets a topic configuration key the broker does not know, or a value it cannot read | `IllegalArgumentException`, on both arms, and nothing is changed |
 | an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |

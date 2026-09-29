@@ -265,11 +265,5 @@ internal expect fun adminFailFastConfig(): Map<String, String>
  */
 internal expect fun effectiveIdempotence(config: ProducerConfig): Boolean
 
-/**
- * UNKNOWN_TOPIC_OR_PARTITION (3), as each arm throws it: native, `KafkaAdminException` in librdkafka's words; the JVM,
- * the Java client's own `UnknownTopicOrPartitionException` (B-101).
- */
-internal fun Throwable.isUnknownTopic(): Boolean {
-    val said = "${this::class.simpleName} $message"
-    return "nknown topic" in said || "UnknownTopicOrPartition" in said
-}
+/** UNKNOWN_TOPIC_OR_PARTITION (3): one type on both arms since B-103; B-101 had to read each arm's words. */
+internal fun Throwable.isUnknownTopic(): Boolean = this is UnknownTopicException

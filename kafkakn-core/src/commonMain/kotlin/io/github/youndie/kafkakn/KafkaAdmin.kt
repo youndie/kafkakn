@@ -333,3 +333,13 @@ public class TopicExistsException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
+
+/**
+ * A topic the call names does not exist, or is not in the broker's description yet: `createTopics` returns before it
+ * is ([B-103](../../../../../../../docs/backlog/B-103-an-unknown-topic-is-two-types.md), B-101). One type on both arms,
+ * for `UNKNOWN_TOPIC_OR_PARTITION` (3); each client's own error, when it has one, is the [cause].
+ */
+public class UnknownTopicException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
