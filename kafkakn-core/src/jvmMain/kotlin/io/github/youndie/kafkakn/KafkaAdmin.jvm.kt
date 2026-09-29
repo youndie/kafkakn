@@ -12,9 +12,9 @@ import org.apache.kafka.clients.admin.ListOffsetsOptions
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -138,6 +138,8 @@ internal class JvmKafkaAdmin(
                 describedAs(id, futures.getValue(id).toCompletionStage().await())
             } catch (missing: GroupIdNotFoundException) {
                 ConsumerGroupDescription(id, GroupState.DEAD, partitionAssignor = "", members = emptyList())
+            } catch (failure: KafkaException) {
+                throw KafkaAdminException("describeConsumerGroups $id: ${failure.message}", failure)
             }
         }
     }
@@ -215,8 +217,8 @@ internal class JvmKafkaAdmin(
     ) {
         requireCommittable(offsets)
         val moved = offsets.entries.associate { (partition, offset) -> partition.java() to OffsetAndMetadata(offset) }
-        refusedWhileActive("alterConsumerGroupOffsets") {
-            answer("alterConsumerGroupOffsets") { delegate.alterConsumerGroupOffsets(groupId, moved).all() }
+        answer("alterConsumerGroupOffsets", refusedWhileActive("alterConsumerGroupOffsets")) {
+            delegate.alterConsumerGroupOffsets(groupId, moved).all()
         }
     }
 
@@ -224,16 +226,14 @@ internal class JvmKafkaAdmin(
         groupId: String,
         partitions: List<TopicPartition>,
     ) {
-        refusedWhileActive("deleteConsumerGroupOffsets") {
-            answer("deleteConsumerGroupOffsets") {
-                delegate.deleteConsumerGroupOffsets(groupId, partitions.map { it.java() }.toSet()).all()
-            }
+        answer("deleteConsumerGroupOffsets", refusedWhileActive("deleteConsumerGroupOffsets")) {
+            delegate.deleteConsumerGroupOffsets(groupId, partitions.map { it.java() }.toSet()).all()
         }
     }
 
     override suspend fun deleteConsumerGroups(groupIds: List<String>) {
-        refusedWhileActive("deleteConsumerGroups") {
-            answer("deleteConsumerGroups") { delegate.deleteConsumerGroups(groupIds).all() }
+        answer("deleteConsumerGroups", refusedWhileActive("deleteConsumerGroups")) {
+            delegate.deleteConsumerGroups(groupIds).all()
         }
     }
 
@@ -243,20 +243,16 @@ internal class JvmKafkaAdmin(
      * group with members accepts commits only from them), `GROUP_SUBSCRIBED_TO_TOPIC` to a deleted one, and
      * `NON_EMPTY_GROUP` to a deleted group.
      */
-    private suspend fun <T> refusedWhileActive(
-        what: String,
-        call: suspend () -> T,
-    ): T =
-        try {
-            call()
-        } catch (refused: ApiException) {
+    private fun refusedWhileActive(what: String): (KafkaException) -> Throwable? =
+        { refused ->
             if (refused is UnknownMemberIdException ||
                 refused is GroupSubscribedToTopicException ||
                 refused is ApacheGroupNotEmptyException
             ) {
-                throw GroupNotEmptyException("$what: ${refused.message}", refused)
+                GroupNotEmptyException("$what: ${refused.message}", refused)
+            } else {
+                null
             }
-            throw refused
         }
 
     private fun TopicPartition.java() = ApacheTopicPartition(topic, partition)
@@ -274,15 +270,18 @@ internal class JvmKafkaAdmin(
             } else {
                 NewPartitions.increaseTo(totalCount, assignment)
             }
-        try {
-            answer("createPartitions $topic") { delegate.createPartitions(mapOf(topic to grown)).all() }
-        } catch (refused: InvalidPartitionsException) {
-            // The broker's INVALID_PARTITIONS, a count that does not grow the topic: one type on both arms (B-62).
-            throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
-        } catch (refused: InvalidReplicaAssignmentException) {
-            // INVALID_REPLICA_ASSIGNMENT, a broker the cluster does not have: the same type (B-87).
-            throw IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
-        }
+        answer(
+            "createPartitions $topic",
+            named = { refused ->
+                // The broker's INVALID_PARTITIONS, a count that does not grow the topic (B-62), and
+                // INVALID_REPLICA_ASSIGNMENT, a broker the cluster does not have (B-87): one type on both arms.
+                if (refused is InvalidPartitionsException || refused is InvalidReplicaAssignmentException) {
+                    IllegalArgumentException("createPartitions: $topic: ${refused.message}", refused)
+                } else {
+                    null
+                }
+            },
+        ) { delegate.createPartitions(mapOf(topic to grown)).all() }
     }
 
     override suspend fun deleteRecords(beforeOffsets: Map<TopicPartition, Long>): Map<TopicPartition, Long> {
@@ -303,12 +302,17 @@ internal class JvmKafkaAdmin(
                     },
                 ).lowWatermarks()
         return beforeOffsets.keys.sortedWith(PARTITION_ORDER).associateWith { partition ->
-            try {
-                answer("deleteRecords") { watermarks.getValue(partition.java()) }.lowWatermark()
-            } catch (refused: OffsetOutOfRangeException) {
-                // OFFSET_OUT_OF_RANGE: an offset past the end, the caller's argument; one type on both arms (B-63).
-                throw IllegalArgumentException("deleteRecords: $partition: ${refused.message}", refused)
-            }
+            answer(
+                "deleteRecords $partition",
+                named = { refused ->
+                    // OFFSET_OUT_OF_RANGE: an offset past the end, the caller's argument; one type on both arms (B-63).
+                    if (refused is OffsetOutOfRangeException) {
+                        IllegalArgumentException("deleteRecords: $partition: ${refused.message}", refused)
+                    } else {
+                        null
+                    }
+                },
+            ) { watermarks.getValue(partition.java()) }.lowWatermark()
         }
     }
 
@@ -338,16 +342,21 @@ internal class JvmKafkaAdmin(
                 delete.map { key -> AlterConfigOp(ConfigEntry(key, null), AlterConfigOp.OpType.DELETE) } +
                 append.map { (key, value) -> AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.APPEND) } +
                 subtract.map { (key, value) -> AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.SUBTRACT) }
-        try {
-            answer("alterTopicConfigs") {
-                delegate
-                    .incrementalAlterConfigs(
-                        mapOf(ConfigResource(ConfigResource.Type.TOPIC, name) to changes),
-                    ).all()
-            }
-        } catch (refused: InvalidConfigurationException) {
-            // The broker's INVALID_CONFIG, an unknown key or an unreadable value: the one type both arms throw (B-61).
-            throw IllegalArgumentException("alterTopicConfigs: $name: ${refused.message}", refused)
+        answer(
+            "alterTopicConfigs $name",
+            named = { refused ->
+                // The broker's INVALID_CONFIG, an unknown key or an unreadable value: the one type both arms throw (B-61).
+                if (refused is InvalidConfigurationException) {
+                    IllegalArgumentException("alterTopicConfigs: $name: ${refused.message}", refused)
+                } else {
+                    null
+                }
+            },
+        ) {
+            delegate
+                .incrementalAlterConfigs(
+                    mapOf(ConfigResource(ConfigResource.Type.TOPIC, name) to changes),
+                ).all()
         }
     }
 
@@ -358,11 +367,14 @@ internal class JvmKafkaAdmin(
 
     /**
      * Awaits one of the client's futures without holding a thread — `Admin`'s calls return at once and
-     * complete the future on the client's own network thread — and turns an existing topic into the
-     * one type both arms throw for it.
+     * complete the future on the client's own network thread — and says every failure in a type common code
+     * can name: an existing topic and an unknown one here, what the call itself names through [named], and every
+     * other `KafkaException` as [KafkaAdminException], the client's exception its cause (B-104). The call-specific
+     * mappings are passed in rather than caught around this, because this is where every Java exception stops.
      */
     private suspend fun <T> answer(
         what: String,
+        named: (KafkaException) -> Throwable? = { null },
         call: () -> KafkaFuture<T>,
     ): T =
         try {
@@ -372,5 +384,7 @@ internal class JvmKafkaAdmin(
         } catch (failure: UnknownTopicOrPartitionException) {
             // B-103: the Java client's words do not name the topic, so [what] does.
             throw UnknownTopicException("$what: ${failure.message}", failure)
+        } catch (failure: KafkaException) {
+            throw named(failure) ?: KafkaAdminException("$what: ${failure.message}", failure)
         }
 }

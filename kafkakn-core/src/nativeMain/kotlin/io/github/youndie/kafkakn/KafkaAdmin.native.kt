@@ -224,11 +224,6 @@ import kotlin.time.TimeSource
 
 public actual fun kafkaAdmin(config: AdminConfig): KafkaAdmin = NativeKafkaAdmin(config)
 
-/** librdkafka refused an admin request, or its answer did not arrive. */
-public class KafkaAdminException(
-    message: String,
-) : RuntimeException(message)
-
 /**
  * The native admin client: a librdkafka handle used only for the `rd_kafka_*Topics` family.
  *
