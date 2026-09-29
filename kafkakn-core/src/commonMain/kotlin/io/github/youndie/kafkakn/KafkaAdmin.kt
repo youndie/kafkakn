@@ -343,3 +343,16 @@ public class UnknownTopicException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
+
+/**
+ * An admin request failed in a way kafkakn does not name with a type of its own
+ * ([B-104](../../../../../../../docs/backlog/B-104-every-admin-failure-is-a-common-type.md)): a timeout, a refusal the
+ * broker gave, an answer that never arrived. One type on both arms, so common code can catch it; the client's own
+ * error, when there is one, is the [cause]: on the JVM, the Java client's `KafkaException`. The failures kafkakn names
+ * ([TopicExistsException], [UnknownTopicException], [GroupNotEmptyException], and `IllegalArgumentException` for a
+ * refused argument) keep their own types and are not this one.
+ */
+public open class KafkaAdminException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

@@ -867,6 +867,7 @@ the same rule that keeps a producer from being checked by its own consumer.
 | SASL credentials refused | `send` throws and the message names authentication — **not promptly on native**, for the same reason |
 | an admin client creates a topic that exists | `TopicExistsException`, on both arms |
 | an admin client describes or deletes a topic that does not exist, or is not in the broker's description yet (B-101) | `UnknownTopicException`, on both arms, naming the topic; the Java client's `UnknownTopicOrPartitionException` is the cause on the JVM ([B-103](../backlog/B-103-an-unknown-topic-is-two-types.md)) |
+| an admin request fails in any way not named above: a timeout, a refusal the broker gives, an answer that never arrives | `KafkaAdminException`, on both arms; on the JVM, the Java client's `KafkaException` is the cause ([B-104](../backlog/B-104-every-admin-failure-is-a-common-type.md)). Measured for a timeout; an authorization refusal is not reachable on the fixture, which has no authorizer |
 | an admin client alters or deletes the offsets of a group with an active member, or deletes the group | `GroupNotEmptyException`, on both arms |
 | an admin client sets a topic configuration key the broker does not know, or a value it cannot read | `IllegalArgumentException`, on both arms, and nothing is changed |
 | an admin client asks for a partition count that does not grow the topic | `IllegalArgumentException`, on both arms, and the topic is unchanged |
