@@ -1,7 +1,7 @@
 ---
 id: B-104
 title: "An admin failure kafkakn does not name is still a platform type: KafkaAdminException on native, the Java client's on the JVM"
-status: open
+status: wip
 priority: P2
 size: S
 stage: stage-18-what-the-consumer-and-the-harness-found

@@ -210,7 +210,7 @@ verdict.
 
 | Task | | Priority | Size | Blocked by |
 |---|---|---|---|---|
-| [B-104](docs/backlog/B-104-every-admin-failure-is-a-common-type.md) `[ ]` | An admin failure kafkakn does not name is still a platform type: KafkaAdminException on native, the Java client's on the JVM | P2 | S | - |
+| [B-104](docs/backlog/B-104-every-admin-failure-is-a-common-type.md) `[~]` | An admin failure kafkakn does not name is still a platform type: KafkaAdminException on native, the Java client's on the JVM | P2 | S | - |
 | [B-98](docs/backlog/B-98-https-to-the-registry.md) `[?]` | A registry served over HTTPS, reached from both arms (Curl on native) | P2 | M | B-93 |
 
 ## Closed (102)
