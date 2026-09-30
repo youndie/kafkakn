@@ -7,6 +7,8 @@
 # What stays is what is this project's own and nobody else's business.
 
 [versions]
+# Fixtures for the fault tests on linuxX64 (B-105): a broker of each test\'s own.
+kontainer = "0.1.0.2"
 # The number is here AND in settings.gradle.kts, and it cannot be in one place: `pluginManagement`
 # is evaluated before any catalogue exists, so the settings plugin's version has to be a literal
 # there. The two are kept equal by hand, which is the cost the portfolio pays for the arrangement.
@@ -24,6 +26,7 @@ kafka-image = "apache/kafka:4.3.1"
 ktor = "3.6.0"
 
 [libraries]
+kontainer = { module = "io.github.youndie.kontainer:kontainer", version.ref = "kontainer" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }

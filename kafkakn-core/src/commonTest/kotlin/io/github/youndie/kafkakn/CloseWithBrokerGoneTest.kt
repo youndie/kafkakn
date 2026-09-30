@@ -29,61 +29,65 @@ class CloseWithBrokerGoneTest {
     fun close_with_records_queued_and_the_broker_gone() =
         runTest(timeout = 12.minutes) {
             val variant = testEnv("KAFKAKN_CLOSE_VARIANT")
-            if (testEnv("KAFKAKN_BROKER_STOP") == null || variant == null) {
+            if (variant == null) {
                 recordArmFact("close.gone", "not asked")
                 return@runTest
             }
-            withContext(Dispatchers.Default) {
-                val topic = "kafkakn-close-gone-$variant-$armName-${randomSuffix()}"
-                val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to bootstrap))
-                try {
-                    admin.createTopics(listOf(NewTopic(topic, 1, 1)))
-                } finally {
-                    admin.close()
-                }
-                val producer =
-                    kafkaProducer(
-                        ProducerConfig(
-                            "bootstrap.servers" to bootstrap,
-                            "acks" to "all",
-                            "metadata.recovery.strategy" to "none",
-                        ),
-                    )
-                producer.send(ProducerRecord(topic, "warm".encodeToByteArray()))
-                val deliveries = mutableListOf<Delivery>()
-                var closedAfter = -1L
-                try {
-                    if (variant == "paused") brokerPaused(true) else brokerStopped(true)
-                    for (index in 0 until RECORDS) {
-                        deliveries += producer.enqueue(ProducerRecord(topic, "r-$index".encodeToByteArray()))
-                    }
-                    val closing = TimeSource.Monotonic.markNow()
-                    try {
-                        producer.close()
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (thrown: Exception) {
-                        recordArmFact("close.$variant.threw", "${thrown::class.simpleName}: ${thrown.message}")
-                    }
-                    closedAfter = closing.elapsedNow().inWholeMilliseconds
-                } finally {
-                    if (variant == "paused") brokerPaused(false) else brokerStopped(false)
-                }
-                recordArmFact("close.$variant.topic", topic)
-                recordArmFact("close.$variant.ms", closedAfter.toString())
-                deliveries.forEachIndexed { index, delivery ->
-                    val answer =
+            val ran =
+                withFaultBroker("KAFKAKN_BROKER_STOP") { broker ->
+                    withContext(Dispatchers.Default) {
+                        val topic = "kafkakn-close-gone-$variant-$armName-${randomSuffix()}"
+                        val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to broker.bootstrap))
                         try {
-                            withTimeoutOrNull(ANSWERED) { delivery.await() }?.let { "landed at ${it.offset}" }
-                                ?: "no answer after close"
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (thrown: Exception) {
-                            "failed ${thrown::class.simpleName}: ${thrown.message}"
+                            admin.createTopics(listOf(NewTopic(topic, 1, 1)))
+                        } finally {
+                            admin.close()
                         }
-                    recordArmFact("close.$variant.r-$index", answer.replace('\n', ' ').take(REASON))
+                        val producer =
+                            kafkaProducer(
+                                ProducerConfig(
+                                    "bootstrap.servers" to broker.bootstrap,
+                                    "acks" to "all",
+                                    "metadata.recovery.strategy" to "none",
+                                ),
+                            )
+                        producer.send(ProducerRecord(topic, "warm".encodeToByteArray()))
+                        val deliveries = mutableListOf<Delivery>()
+                        var closedAfter = -1L
+                        try {
+                            if (variant == "paused") broker.paused(true) else broker.stopped(true)
+                            for (index in 0 until RECORDS) {
+                                deliveries += producer.enqueue(ProducerRecord(topic, "r-$index".encodeToByteArray()))
+                            }
+                            val closing = TimeSource.Monotonic.markNow()
+                            try {
+                                producer.close()
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (thrown: Exception) {
+                                recordArmFact("close.$variant.threw", "${thrown::class.simpleName}: ${thrown.message}")
+                            }
+                            closedAfter = closing.elapsedNow().inWholeMilliseconds
+                        } finally {
+                            if (variant == "paused") broker.paused(false) else broker.stopped(false)
+                        }
+                        recordArmFact("close.$variant.topic", topic)
+                        recordArmFact("close.$variant.ms", closedAfter.toString())
+                        deliveries.forEachIndexed { index, delivery ->
+                            val answer =
+                                try {
+                                    withTimeoutOrNull(ANSWERED) { delivery.await() }?.let { "landed at ${it.offset}" }
+                                        ?: "no answer after close"
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (thrown: Exception) {
+                                    "failed ${thrown::class.simpleName}: ${thrown.message}"
+                                }
+                            recordArmFact("close.$variant.r-$index", answer.replace('\n', ' ').take(REASON))
+                        }
+                    }
                 }
-            }
+            if (ran == null) recordArmFact("close.gone", "not asked")
         }
 
     /**
@@ -96,61 +100,68 @@ class CloseWithBrokerGoneTest {
     fun close_with_a_timeout_gives_up_on_what_is_not_acknowledged() =
         runTest(timeout = 3.minutes) {
             val variant = testEnv("KAFKAKN_CLOSE_VARIANT")
-            if (testEnv("KAFKAKN_BROKER_STOP") == null || variant == null) {
+            if (variant == null) {
                 recordArmFact("close.timeout.gone", "not asked")
                 return@runTest
             }
-            withContext(Dispatchers.Default) {
-                val topic = "kafkakn-close-timeout-$variant-$armName-${randomSuffix()}"
-                val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to bootstrap))
-                try {
-                    admin.createTopics(listOf(NewTopic(topic, 1, 1)))
-                } finally {
-                    admin.close()
-                }
-                val producer =
-                    kafkaProducer(
-                        ProducerConfig(
-                            "bootstrap.servers" to bootstrap,
-                            "acks" to "all",
-                            "metadata.recovery.strategy" to "none",
-                        ),
-                    )
-                producer.send(ProducerRecord(topic, "warm".encodeToByteArray()))
-                val deliveries = mutableListOf<Delivery>()
-                val closedAfter: Long
-                try {
-                    if (variant == "paused") brokerPaused(true) else brokerStopped(true)
-                    for (index in 0 until RECORDS) {
-                        deliveries += producer.enqueue(ProducerRecord(topic, "t-$index".encodeToByteArray()))
-                    }
-                    val closing = TimeSource.Monotonic.markNow()
-                    producer.close(CLOSE_TIMEOUT)
-                    closedAfter = closing.elapsedNow().inWholeMilliseconds
-                } finally {
-                    if (variant == "paused") brokerPaused(false) else brokerStopped(false)
-                }
-                val answers =
-                    deliveries.map { delivery ->
+            val ran =
+                withFaultBroker("KAFKAKN_BROKER_STOP") { broker ->
+                    withContext(Dispatchers.Default) {
+                        val topic = "kafkakn-close-timeout-$variant-$armName-${randomSuffix()}"
+                        val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to broker.bootstrap))
                         try {
-                            withTimeoutOrNull(ANSWERED) { delivery.await() }?.let { "landed" } ?: "no answer"
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (thrown: Exception) {
-                            thrown::class.simpleName ?: "?"
+                            admin.createTopics(listOf(NewTopic(topic, 1, 1)))
+                        } finally {
+                            admin.close()
                         }
+                        val producer =
+                            kafkaProducer(
+                                ProducerConfig(
+                                    "bootstrap.servers" to broker.bootstrap,
+                                    "acks" to "all",
+                                    "metadata.recovery.strategy" to "none",
+                                ),
+                            )
+                        producer.send(ProducerRecord(topic, "warm".encodeToByteArray()))
+                        val deliveries = mutableListOf<Delivery>()
+                        val closedAfter: Long
+                        try {
+                            if (variant == "paused") broker.paused(true) else broker.stopped(true)
+                            for (index in 0 until RECORDS) {
+                                deliveries += producer.enqueue(ProducerRecord(topic, "t-$index".encodeToByteArray()))
+                            }
+                            val closing = TimeSource.Monotonic.markNow()
+                            producer.close(CLOSE_TIMEOUT)
+                            closedAfter = closing.elapsedNow().inWholeMilliseconds
+                        } finally {
+                            if (variant == "paused") broker.paused(false) else broker.stopped(false)
+                        }
+                        val answers =
+                            deliveries.map { delivery ->
+                                try {
+                                    withTimeoutOrNull(ANSWERED) { delivery.await() }?.let { "landed" } ?: "no answer"
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (thrown: Exception) {
+                                    thrown::class.simpleName ?: "?"
+                                }
+                            }
+                        recordArmFact("close.timeout.$variant.topic", topic)
+                        recordArmFact("close.timeout.$variant.ms", closedAfter.toString())
+                        recordArmFact("close.timeout.$variant.answers", answers.joinToString(" "))
+                        broker.observe("close.timeout.$variant.answers", answers.distinct().joinToString(" "))
+                        broker.observe(
+                            "close.timeout.$variant.bounded",
+                            (closedAfter < BOUND.inWholeMilliseconds).toString(),
+                        )
+                        assertTrue(
+                            closedAfter < BOUND.inWholeMilliseconds,
+                            "close($CLOSE_TIMEOUT) took $closedAfter ms",
+                        )
+                        assertEquals(List(RECORDS) { "ClosedBeforeAcknowledgedException" }, answers)
                     }
-                recordArmFact("close.timeout.$variant.topic", topic)
-                recordArmFact("close.timeout.$variant.ms", closedAfter.toString())
-                recordArmFact("close.timeout.$variant.answers", answers.joinToString(" "))
-                recordObservation("close.timeout.$variant.answers", answers.distinct().joinToString(" "))
-                recordObservation(
-                    "close.timeout.$variant.bounded",
-                    (closedAfter < BOUND.inWholeMilliseconds).toString(),
-                )
-                assertTrue(closedAfter < BOUND.inWholeMilliseconds, "close($CLOSE_TIMEOUT) took $closedAfter ms")
-                assertEquals(List(RECORDS) { "ClosedBeforeAcknowledgedException" }, answers)
-            }
+                }
+            if (ran == null) recordArmFact("close.timeout.gone", "not asked")
         }
 
     private companion object {

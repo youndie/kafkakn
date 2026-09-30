@@ -36,103 +36,106 @@ class StoppedBrokerTest {
     @Test
     fun a_record_enqueued_while_every_broker_is_down_is_answered_alike_on_both_arms() =
         runTest(timeout = 8.minutes) {
-            if (testEnv("KAFKAKN_BROKER_STOP") == null) {
-                recordArmFact("stopped", "not asked")
-                return@runTest
-            }
             val extra =
                 testEnv("KAFKAKN_STOPPED_EXTRA")?.takeIf { it.isNotBlank() }?.split("=", limit = 2)?.let {
                     it[0] to
                         it[1]
                 }
             val keeps = extra == ("metadata.recovery.strategy" to "none")
-            withContext(Dispatchers.Default) {
-                val topic = "kafkakn-stopped-$armName-${randomSuffix()}"
-                val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to bootstrap))
-                try {
-                    admin.createTopics(listOf(NewTopic(topic, 1, 1)))
-                } finally {
-                    admin.close()
-                }
-                val producer =
-                    kafkaProducer(
-                        ProducerConfig(
-                            mapOf(
-                                "bootstrap.servers" to bootstrap,
-                                "acks" to "all",
-                                "max.block.ms" to "$MAX_BLOCK_MS",
-                            ) +
-                                listOfNotNull(extra),
-                        ),
-                    )
-                val answers = mutableListOf<String>()
-                val queued = mutableListOf<Pair<String, Delivery>>()
-                try {
-                    // The topic is known: one record written and acknowledged before the stop.
-                    producer.send(ProducerRecord(topic, "warm".encodeToByteArray()))
-                    brokerStopped(true)
-                    val stopped = TimeSource.Monotonic.markNow()
-                    try {
-                        for ((index, at) in MOMENTS.withIndex()) {
-                            val wait = at - stopped.elapsedNow()
-                            if (wait > Duration.ZERO) delay(wait)
-                            val value = "r-$index"
-                            val started = TimeSource.Monotonic.markNow()
-                            val said =
-                                outcome {
-                                    queued +=
-                                        value to producer.enqueue(ProducerRecord(topic, value.encodeToByteArray()))
-                                }
-                            recordArmFact(
-                                "stopped.$index.after.ms",
-                                started.elapsedNow().inWholeMilliseconds.toString(),
+            val ran =
+                withFaultBroker("KAFKAKN_BROKER_STOP") { broker ->
+                    withContext(Dispatchers.Default) {
+                        val topic = "kafkakn-stopped-$armName-${randomSuffix()}"
+                        val admin = kafkaAdmin(AdminConfig("bootstrap.servers" to broker.bootstrap))
+                        try {
+                            admin.createTopics(listOf(NewTopic(topic, 1, 1)))
+                        } finally {
+                            admin.close()
+                        }
+                        val producer =
+                            kafkaProducer(
+                                ProducerConfig(
+                                    mapOf(
+                                        "bootstrap.servers" to broker.bootstrap,
+                                        "acks" to "all",
+                                        "max.block.ms" to "$MAX_BLOCK_MS",
+                                    ) +
+                                        listOfNotNull(extra),
+                                ),
                             )
-                            recordArmFact("stopped.$index.said", said.replace('\n', ' ').take(REASON))
-                            if (at >= NOTICED) {
-                                answers += said.substringBefore(":")
-                                recordObservation("stopped.$index", said.substringBefore(":"))
-                            }
-                        }
-                    } finally {
-                        brokerStopped(false)
-                    }
-                    // The broker is back: the topic is described again, and a record is queued. Tried until the broker
-                    // answers, each try bounded by max.block.ms.
-                    val back = TimeSource.Monotonic.markNow()
-                    var backSaid = "not tried"
-                    while (back.elapsedNow() < BACK) {
-                        backSaid =
-                            outcome {
-                                queued +=
-                                    "back" to producer.enqueue(ProducerRecord(topic, "back".encodeToByteArray()))
-                            }
-                        if (backSaid == "queued") break
-                    }
-                    recordArmFact("stopped.back.said", backSaid.replace('\n', ' ').take(REASON))
-                    recordObservation("stopped.back", backSaid.substringBefore(":"))
-                    val fates =
-                        queued.associate { (value, delivery) ->
-                            value to
-                                try {
-                                    withTimeoutOrNull(LANDING) { delivery.await() }?.let { "landed" } ?: "no answer"
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (thrown: Exception) {
-                                    "failed ${thrown::class.simpleName}"
+                        val answers = mutableListOf<String>()
+                        val queued = mutableListOf<Pair<String, Delivery>>()
+                        try {
+                            // The topic is known: one record written and acknowledged before the stop.
+                            producer.send(ProducerRecord(topic, "warm".encodeToByteArray()))
+                            broker.stopped(true)
+                            val stopped = TimeSource.Monotonic.markNow()
+                            try {
+                                for ((index, at) in MOMENTS.withIndex()) {
+                                    val wait = at - stopped.elapsedNow()
+                                    if (wait > Duration.ZERO) delay(wait)
+                                    val value = "r-$index"
+                                    val started = TimeSource.Monotonic.markNow()
+                                    val said =
+                                        outcome {
+                                            queued +=
+                                                value to
+                                                producer.enqueue(ProducerRecord(topic, value.encodeToByteArray()))
+                                        }
+                                    recordArmFact(
+                                        "stopped.$index.after.ms",
+                                        started.elapsedNow().inWholeMilliseconds.toString(),
+                                    )
+                                    recordArmFact("stopped.$index.said", said.replace('\n', ' ').take(REASON))
+                                    if (at >= NOTICED) {
+                                        answers += said.substringBefore(":")
+                                        broker.observe("stopped.$index", said.substringBefore(":"))
+                                    }
                                 }
+                            } finally {
+                                broker.stopped(false)
+                            }
+                            // The broker is back: the topic is described again, and a record is queued. Tried until the broker
+                            // answers, each try bounded by max.block.ms.
+                            val back = TimeSource.Monotonic.markNow()
+                            var backSaid = "not tried"
+                            while (back.elapsedNow() < BACK) {
+                                backSaid =
+                                    outcome {
+                                        queued +=
+                                            "back" to
+                                            producer.enqueue(ProducerRecord(topic, "back".encodeToByteArray()))
+                                    }
+                                if (backSaid == "queued") break
+                            }
+                            recordArmFact("stopped.back.said", backSaid.replace('\n', ' ').take(REASON))
+                            broker.observe("stopped.back", backSaid.substringBefore(":"))
+                            val fates =
+                                queued.associate { (value, delivery) ->
+                                    value to
+                                        try {
+                                            withTimeoutOrNull(LANDING) { delivery.await() }?.let { "landed" }
+                                                ?: "no answer"
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (thrown: Exception) {
+                                            "failed ${thrown::class.simpleName}"
+                                        }
+                                }
+                            fates.forEach { (value, fate) -> recordArmFact("stopped.$value.fate", fate) }
+                            recordArmFact("stopped.topic", topic)
+                            recordArmFact("stopped.extra", extra?.let { "${it.first}=${it.second}" } ?: "none")
+                            val expected = if (keeps) "queued" else "threw RecordNotQueuedException"
+                            assertEquals(MOMENTS.count { it >= NOTICED }, answers.size)
+                            assertEquals(List(answers.size) { expected }, answers, "while every broker was down")
+                            assertEquals("queued", backSaid, "once the broker was back")
+                            assertTrue(fates.values.all { it == "landed" }, "every queued record lands: $fates")
+                        } finally {
+                            producer.close()
                         }
-                    fates.forEach { (value, fate) -> recordArmFact("stopped.$value.fate", fate) }
-                    recordArmFact("stopped.topic", topic)
-                    recordArmFact("stopped.extra", extra?.let { "${it.first}=${it.second}" } ?: "none")
-                    val expected = if (keeps) "queued" else "threw RecordNotQueuedException"
-                    assertEquals(MOMENTS.count { it >= NOTICED }, answers.size)
-                    assertEquals(List(answers.size) { expected }, answers, "while every broker was down")
-                    assertEquals("queued", backSaid, "once the broker was back")
-                    assertTrue(fates.values.all { it == "landed" }, "every queued record lands: $fates")
-                } finally {
-                    producer.close()
+                    }
                 }
-            }
+            if (ran == null) recordArmFact("stopped", "not asked")
         }
 
     /** "queued", or "threw <type>: <message>". */
