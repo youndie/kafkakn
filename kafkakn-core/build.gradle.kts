@@ -109,6 +109,11 @@ kotlin {
             // runTest, so a suspending surface can be exercised from a common test on both arms.
             implementation(wip.kotlinx.coroutines.test)
         }
+        // A broker of each fault test's own, on the one target kontainer is published for (B-105). The other
+        // targets keep the shared broker behind a switch.
+        getByName("linuxX64Test").dependencies {
+            implementation(libs.kontainer)
+        }
     }
 }
 

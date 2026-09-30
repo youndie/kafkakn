@@ -210,7 +210,7 @@ verdict.
 
 No open tasks.
 
-## Closed (104)
+## Closed (105)
 
 **It builds, and a test can fail**
 
@@ -356,6 +356,7 @@ No open tasks.
 
 **Green means the tests ran**
 
+- [B-105](docs/backlog/B-105-fault-tests-on-their-own-broker.md) `[x]` - The fault tests run in the suite on linuxX64, each on a broker of its own
 - [B-81](docs/backlog/B-81-the-suite-in-ci.md) `[x]` - CI runs the whole suite on both arms against the fixture broker
 
 **What was put off, taken up**
