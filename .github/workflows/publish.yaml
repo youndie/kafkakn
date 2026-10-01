@@ -34,10 +34,15 @@ jobs:
         uses: youndie/sborka/.github/actions/determine-version@main
       - run: echo "KAFKAKN_VERSION=${{ steps.version.outputs.version }}" >> "$GITHUB_ENV"
 
+      # Two JDKs. 25 runs this build: it is the toolchain sborka compiles with. 21 is for
+      # `ci/publish/downstream`, which is a stranger on the floor (`sborka.jvmFloor`) and builds with
+      # `jvmToolchain(21)` on purpose - the jvm artefact has to resolve and run there.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: |
+            21
+            25
 
       # The bundle is built in a manylinux2014 container and takes minutes; it changes only when the
       # librdkafka version in the catalogue does, which is what the key is.

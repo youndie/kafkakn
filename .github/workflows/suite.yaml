@@ -21,10 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 25 is the toolchain sborka compiles and tests with. The bytecode follows `sborka.jvmFloor` (21),
+      # so this is the JDK of the build, not the oldest Java a consumer may be on.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
 
       - uses: gradle/actions/setup-gradle@v4
 
