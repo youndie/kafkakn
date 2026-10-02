@@ -1225,7 +1225,7 @@ What the second Linux target took:
   moved from −2.7 s to −0.4 s against the Mac's within forty minutes, and by half a second within a
   single suite. The scenario now brackets the record with two records the broker stamps itself, and
   requires the bracket to be a present-day clock.
-- **The native observation writer dropped its output silently** when `build/` did not exist, which was
+- **The native observation writer dropped its output silently** when the `build` directory did not exist, which was
   the case in the container's empty directory. The whole suite passed and wrote nothing. Only
   `compare-arms.sh`, finding no file, said that the arm had not been compared. The writer now creates the
   directory and fails when it cannot write.

@@ -167,6 +167,11 @@ them there, and the Makefile reads the same line and fetches that version into `
 (which ignores itself) for a local run. Renovate bumps the line. The guards of this repository's own
 stay in `scripts/` and run under `gate:` in the Makefile.
 
+The code-anchors report blocks (`ANCHORS_ARGS ?= --check` in the Makefile): a path in `docs/` that
+resolves to nothing fails `make check`. A path outside this repository is written as an address -
+`<artefact>!/<path>` or `youndie/<repo>@<commit>!/<path>` (docs-bootstrap SPEC §4.1) - and a build
+output or runtime directory is named without a trailing slash, so that it does not read as a path.
+
 **And the suite, since [B-81](docs/backlog/B-81-the-suite-in-ci.md).** The `suite` workflow runs
 `ci/suite/run.sh` on every pull request and every push to `main`. It brings the fixture broker up, checks that its
 listeners refuse what they must, runs `jvmTest` and `linuxX64Test` whole, and diffs the arms. A green `suite` is
