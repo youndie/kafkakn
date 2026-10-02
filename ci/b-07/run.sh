@@ -47,7 +47,8 @@ PRODUCEV=$(python3 ci/lib/token_in_code.py \
     kafkakn-core/src/nativeMain/kotlin/io/github/youndie/kafkakn/KafkaProducer.native.kt \
     rd_kafka_producev)
 echo "  rd_kafka_producev outside comments: $PRODUCEV"
-[ "$PRODUCEV" -eq 0 ] || { echo "  the variadic call has no usable shape through cinterop" >&2; exit 1; }
+[ "$PRODUCEV" -eq 0 ] || {
+    echo "  the variadic call compiles, and nothing checks its arguments (research §1.5)" >&2; exit 1; }
 
 echo
 echo "=== flush waits on the queue length, not on a return code ==="

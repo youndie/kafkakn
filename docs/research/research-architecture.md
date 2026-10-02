@@ -139,13 +139,63 @@ returns an **error code**, and reading it as a count of unsent messages printed 
 These four are why [feature-backpressure-and-accounting](../features/feature-backpressure-and-accounting.md)
 exists as a feature of its own rather than a paragraph inside "produce a record".
 
-### 1.5 `rd_kafka_producev` cannot be used through cinterop
+### 1.5 `rd_kafka_producev` is variadic: callable through cinterop, and nothing checks its arguments
 
-It is variadic, and a variadic C function has no usable shape through cinterop. `rd_kafka_produce`
+This section was headed *"`rd_kafka_producev` cannot be used through cinterop"* until 2026-10-02,
+and that was wrong; the correction follows the original text.
+
+It is variadic, and ~~a variadic C function has no usable shape through cinterop~~. `rd_kafka_produce`
 is the non-variadic equivalent and is what the native actual calls.
 
 **Consequence.** The native arm cannot mirror librdkafka's own recommended API, and per-message
 headers — which `producev` is the natural vehicle for — need a different mechanism. Recorded as H2.
+
+**Corrected 2026-10-02: the premise was wrong, and the decision it led to survives on another
+reason.** The sentence cited no measurement, and no call to `producev` is recorded anywhere in this
+repository. cinterop binds a variadic C function with a Kotlin `vararg`, and the bindings this
+repository's own `rdkafka.def` produces carry it:
+
+```
+fun rd_kafka_producev(rk: CValuesRef<rd_kafka_t>?, vararg variadicArguments: Any?): rd_kafka_resp_err_t
+```
+
+Called on **macosArm64 only** — the contributor bundle from `ci/librdkafka/build-macos.sh`,
+librdkafka 2.13.0, Kotlin/Native 2.4.20 — with the tags written out by hand:
+
+```kotlin
+rd_kafka_producev(
+    rk,
+    rd_kafka_vtype_t.RD_KAFKA_VTYPE_TOPIC, "probe-topic",
+    rd_kafka_vtype_t.RD_KAFKA_VTYPE_VALUE, value.addressOf(0), value.size.convert<size_t>(),
+    rd_kafka_vtype_t.RD_KAFKA_VTYPE_KEY, key.addressOf(0), key.size.convert<size_t>(),
+    rd_kafka_vtype_t.RD_KAFKA_VTYPE_PARTITION, 7,
+    rd_kafka_vtype_t.RD_KAFKA_VTYPE_MSGFLAGS, RD_KAFKA_MSG_F_COPY,
+    rd_kafka_vtype_t.RD_KAFKA_VTYPE_END,
+)
+```
+
+it returned `NO_ERROR`, and the delivery report (a timeout: no broker was listening) carried the
+record back intact: topic `probe-topic`, partition 7, key and value byte for byte. The control: an
+unknown tag, `999`, came back `_INVALID_ARG`, so librdkafka was reading the arguments rather than
+ignoring them. The general probe behind this — Int, Long, Double, a C string and ULong through
+`snprintf`, a `Float` promoted to `double` — is in the
+[kotlin-native-cinterop skill](https://github.com/youndie/kotlin-skills/blob/main/plugins/kotlin-fullstack/skills/kotlin-native-cinterop/examples/boundary-probes.md).
+
+What a variadic call actually costs, which is what this section should have said:
+
+- **Nothing checks the arguments.** Each one's C type comes from the Kotlin value, not from what
+  librdkafka reads. The same call with the partition written `7.0` compiled without a word and the
+  record went to partition **0**. Whether a mistyped argument shows at all, and how, depends on the
+  target's variadic calling convention; this ran on macosArm64, and `linuxX64`, the published
+  target, was not probed.
+- **The `RD_KAFKA_V_*` macros do not arrive.** All ten are function-like, and cinterop drops
+  function-like macros, so the bindings carry none of them — and with them goes the type check
+  librdkafka builds into each (`_LRK_TYPECHECK`). Only `RD_KAFKA_V_END`, an object-like alias for a
+  constant, is there. Every tag and the C type of its value has to be written from `rdkafka.h`.
+
+So `rd_kafka_produceva` remains the path, and §2.10's decision stands — but as **the typed path**
+rather than the only one: the same fields go into `rd_kafka_vu_t` members, and `u.i32 = 7.0` does
+not compile.
 
 ### 1.6 The callback arrives on librdkafka's own threads
 
@@ -542,9 +592,10 @@ second registry — the shape of the fix, if two producers ever fail at once her
 producing through it on both arms ([B-10](../backlog/B-10-record-headers.md)).
 
 **§1.5 is narrower than it was being read.** It says `rd_kafka_producev` is variadic and unusable
-through cinterop, which is true; the conclusion drawn from it — that headers need a C shim of our
+through cinterop, ~~which is true~~; the conclusion drawn from it — that headers need a C shim of our
 own — does not follow. The item's fallback was a small C wrapper compiled into the bundle. It is not
-needed, and this project still contains no C of its own.
+needed, and this project still contains no C of its own. *(2026-10-02: it was not true either —
+`producev` is callable, unchecked; see the correction in §1.5. The choice of `produceva` stands.)*
 
 **Consequences.**
 

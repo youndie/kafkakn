@@ -30,8 +30,11 @@ documented ways.
    - **`rd_kafka_flush` returns an error code, not a count** (§1.4). Reading it as "how many are
      left" printed `-185`, which is a timeout wearing a quantity's clothes. The count is
      `rd_kafka_outq_len`.
-   - **`rd_kafka_producev` is variadic and unusable through cinterop** (§1.5). The library cannot
-     mirror librdkafka's own recommended API.
+   - **`rd_kafka_producev` is callable through cinterop, and nothing checks its arguments** (§1.5,
+     corrected 2026-10-02 — this line used to say it was unusable). It is variadic: each argument's
+     C type comes from the Kotlin value, and the `RD_KAFKA_V_*` macros that type-check them in C
+     never reach Kotlin. A partition written `7.0` compiled and went to partition 0. The native arm
+     uses `rd_kafka_produceva`, where the same fields are typed struct members.
 2. [docs/api/producer-contract.md](docs/api/producer-contract.md) — what a test cites.
 3. [backlog.md](backlog.md) — the queue, the stages, the decisions.
 

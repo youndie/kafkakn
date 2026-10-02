@@ -4,8 +4,11 @@
 # build.gradle.kts, so this file is the same whoever builds it and wherever their cache lives - and
 # a second native target costs a build-matrix row rather than an edit (research D6).
 #
-# rd_kafka_producev is deliberately never used: it is variadic, and a variadic C function has no
-# usable shape through cinterop (research §1.5). rd_kafka_produce is the non-variadic equivalent.
+# rd_kafka_producev is deliberately never used. It is variadic: cinterop binds it as
+# `vararg variadicArguments: Any?` and the call works, but nothing checks the arguments - each C type
+# comes from the Kotlin value, and the type-checking RD_KAFKA_V_* macros are function-like and never
+# arrive (research §1.5, corrected 2026-10-02). rd_kafka_produceva takes the same fields as typed
+# members of rd_kafka_vu_t, and is what the native actual calls (research §2.10).
 
 headers = librdkafka/rdkafka.h
 headerFilter = librdkafka/**

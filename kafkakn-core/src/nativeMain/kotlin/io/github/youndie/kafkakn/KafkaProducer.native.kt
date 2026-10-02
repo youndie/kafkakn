@@ -631,10 +631,13 @@ internal class NativeKafkaProducer(
     /**
      * One attempt, through `rd_kafka_produceva` — the path that can carry headers.
      *
-     * **`rd_kafka_producev` is variadic and unusable through cinterop** (research §1.5), and that was
-     * taken for years as "librdkafka's header path needs a C shim". It does not:
-     * `rd_kafka_produceva` takes the same tagged fields as an **array** of `rd_kafka_vu_t` and is an
-     * ordinary function. This project therefore still contains no C of its own (research §2.10).
+     * **`rd_kafka_producev` is variadic**, and that was taken as "librdkafka's header path needs a C
+     * shim". It does not: `rd_kafka_produceva` takes the same tagged fields as an **array** of
+     * `rd_kafka_vu_t` and is an ordinary function. This project therefore still contains no C of its
+     * own (research §2.10). `producev` itself is callable through cinterop — research §1.5 said it was
+     * not until 2026-10-02 — but nothing checks its arguments: each C type comes from the Kotlin
+     * value, and a partition written `7.0` compiles and goes to partition 0. Here the fields are
+     * typed members of the union, and that does not compile.
      *
      * `RD_KAFKA_VTYPE_HEADER` per header rather than one `VTYPE_HEADERS` list, and the difference is
      * ownership: with a `rd_kafka_headers_t` librdkafka takes it over **on success only**, so every

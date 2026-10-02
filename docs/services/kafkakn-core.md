@@ -127,9 +127,12 @@ about the platform seam itself or a sign the `expect` surface leaked a platform'
   rather than dropping it.
 - **The cinterop definition names no target.** Paths arrive from the build script, so a second
   native target is a matrix row ([D6](../research/research-architecture.md)).
-- **The native actual cannot use `rd_kafka_producev`** — it is variadic
-  ([research §1.5](../research/research-architecture.md)) — so per-message headers need their own
-  mechanism and are not in M1.
+- **The native actual produces through `rd_kafka_produceva`, not `rd_kafka_producev`.** The
+  variadic one is callable through cinterop, but nothing checks its arguments: each C type comes from
+  the Kotlin value, and librdkafka's type-checking `RD_KAFKA_V_*` macros do not reach Kotlin
+  ([research §1.5](../research/research-architecture.md), corrected 2026-10-02 — this line used to
+  say it could not be used). `produceva` takes the same fields, headers included, as typed members
+  of `rd_kafka_vu_t` ([research §2.10](../research/research-architecture.md)).
 - **`rd_kafka_flush` returns an error code, not a count.** Anything that treats its return as "how
   many are left" is wrong; the count is `rd_kafka_outq_len`.
 
