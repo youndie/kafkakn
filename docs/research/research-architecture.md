@@ -1237,7 +1237,7 @@ before any of it was written:
 
 | Fact | Where verified |
 |---|---|
-| `kotlinx-serialization-protobuf` is published for `linuxX64` at the portfolio's version, 1.11.0 | `org.jetbrains.kotlinx:kotlinx-serialization-protobuf-linuxx64:1.11.0` on Maven Central; the version is sborka's (`catalog/sborka.versions.toml`, `serialization = "1.11.0"`) |
+| `kotlinx-serialization-protobuf` is published for `linuxX64` at the portfolio's version, 1.11.0 | `org.jetbrains.kotlinx:kotlinx-serialization-protobuf-linuxx64:1.11.0` on Maven Central; the version is sborka's (`youndie/sborka@27c896d!/catalog/sborka.versions.toml`, `serialization = "1.11.0"`) |
 | `ProtoBufSchemaGenerator` is in its **common** code, `@ExperimentalSerializationApi`, and writes a `.proto` from `SerialDescriptor`s | `kotlinx-serialization-protobuf-1.11.0-sources.jar!/commonMain/kotlinx/serialization/protobuf/schema/ProtoBufSchemaGenerator.kt`, lines 41–76 |
 | Avro's Kotlin library is JVM-only: `avro4k-core` 2.12.0 has one variant, `jvm` | `com.github.avro-kotlin.avro4k:avro4k-core:2.12.0` `.module` file on Maven Central |
 | The registry's serializers are Apache 2.0, from `packages.confluent.io`, at 8.3.2 | `io.confluent:kafka-protobuf-serializer:8.3.2` POM, `<license>` |
