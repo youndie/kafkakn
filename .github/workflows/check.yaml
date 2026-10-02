@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: youndie/docs-bootstrap@v0.3.2
+      - uses: youndie/docs-bootstrap@v0.3.3
 
       # THE FORMATTER IS A GATE OR IT IS NOTHING. `sborka.lint` pins ktlint and the portfolio's rule
       # set, and a rule set that only runs where somebody remembers to run it is a rule set that
@@ -73,6 +73,6 @@ jobs:
       # several services would clone them shallowly here instead, and treat a repository it cannot
       # read as a warning rather than a failure - an anchor that could not be checked is not an
       # anchor that rotted.
-      - uses: youndie/docs-bootstrap@v0.3.2
+      - uses: youndie/docs-bootstrap@v0.3.3
         with:
           target: report
