@@ -152,12 +152,20 @@ all.
 ## Checks
 
 ```bash
-make check          # the documents
+make check          # the documents: docs-bootstrap's gate and reports, then this repository's guards
+make fix            # regenerate the backlog index, append missing coverage-map lines
+make docs-against BASE=origin/main   # backlog numbers against main, before a pull request
 ./gradlew ktlintCheck   # the code
 ```
 
 **Two halves, and CI runs both** ([B-14](docs/backlog/B-14-ci-workflow.md)): `make check` needs
 python and takes a second, `ktlintCheck` needs a JDK and takes a minute.
+
+The documentation checks are not copied into this repository. They are docs-bootstrap's, at the
+version the `uses: youndie/docs-bootstrap@<tag>` line in `.github/workflows/check.yaml` pins; CI runs
+them there, and the Makefile reads the same line and fetches that version into `.docs-bootstrap/`
+(which ignores itself) for a local run. Renovate bumps the line. The guards of this repository's own
+stay in `scripts/` and run under `gate:` in the Makefile.
 
 **And the suite, since [B-81](docs/backlog/B-81-the-suite-in-ci.md).** The `suite` workflow runs
 `ci/suite/run.sh` on every pull request and every push to `main`. It brings the fixture broker up, checks that its
