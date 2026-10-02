@@ -11,8 +11,9 @@ import kotlin.test.assertEquals
  *
  * [feature-produce-a-record](../../../../../../../docs/features/feature-produce-a-record.md).
  * Headers are how tracing context and schema identifiers travel, so a producer without them is not
- * usable in most deployments — and the obvious vehicle, `rd_kafka_producev`, is variadic and cannot
- * be called through cinterop at all (research §1.5).
+ * usable in most deployments — and the obvious vehicle, `rd_kafka_producev`, is variadic: callable
+ * through cinterop, with nothing checking its arguments (research §1.5, corrected 2026-10-02; it
+ * used to say the call was impossible).
  *
  * **What the broker stored is not something either arm can be asked.** The renderings recorded here
  * are what each arm *intended*; `ci/b-10/run.sh` reads what actually landed with

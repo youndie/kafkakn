@@ -9,10 +9,18 @@ stage: stage-4-a-real-user
 
 # B-20 — RQ-C: does the artefact resolve and link on a machine that has never seen this repository?
 
-`ci/downstream` proves the artefact resolves and links — **in CI, on a runner this project
+`ci/downstream` proves the artefact resolves and links — ~~**in CI**~~, **on a machine this project
 configured, against a cache this project purges**. RQ-C is the same claim from a laptop that has
 never seen the repository, because that is how a stranger will try it, and the difference between
 those two is every step the README does not name.
+
+> **Corrected 2026-10-02.** `ci/downstream` has never run in CI: no workflow names it. It is run by
+> hand, by `ci/b-13/run.sh` (and B-16's, B-20's and B-39's harnesses), on the build box. What CI does
+> run is narrower: the `publish` workflow, on a manual dispatch only, compiles a different probe,
+> `ci/publish/downstream`, against the module it has just published — `compileKotlinJvm`,
+> `compileKotlinLinuxX64` and the common metadata, with nothing linked and nothing produced. A pull
+> request runs neither. The argument below is unchanged by this: a machine somebody prepared is not
+> a stranger's.
 
 - **The decision and its reason.** The measurement is **wall-clock from `git clone` to a record on
   the topic**, on a fresh Linux box, following only what the README says. A time is used rather than
@@ -21,7 +29,8 @@ those two is every step the README does not name.
   The clock is **split at the toolchain download** rather than started after it — a stranger waits
   for that too — so the verdict can say which side of the split failed.
 - The rejected alternative is trusting the CI run. CI has a JDK, a warm toolchain and a Docker
-  daemon because a workflow put them there; a stranger has whatever they have.
+  daemon because a workflow put them there; a stranger has whatever they have. *(There was no such
+  run — see the correction above; the build box the harness runs on is prepared the same way.)*
 - Not covered: macOS and Windows — out of scope
   ([README](../../README.md)), and a Mac contributor cannot run the native arm locally by design.
 

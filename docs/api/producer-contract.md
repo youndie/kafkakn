@@ -227,8 +227,8 @@ A `Map<String, ByteArray>` would drop entries — for tracing baggage and schema
 the entries somebody added on purpose.
 
 On the native side these travel through `rd_kafka_produceva`, which is **not** variadic and needs no
-C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_producev`, the one
-§1.5 rules out, is a different function.
+C of ours ([research §2.10](../research/research-architecture.md)); `rd_kafka_producev`, which
+§1.5 sets aside because nothing checks a variadic call's arguments, is a different function.
 
 ### TLS
 
