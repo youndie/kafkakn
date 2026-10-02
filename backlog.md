@@ -5,7 +5,7 @@
 > goal, the stages, and the decisions.
 >
 > New item: copy [`docs/templates/backlog-item.md`](docs/templates/backlog-item.md), take the next
-> free `B-NN`, and run `python3 scripts/backlog_index.py` after editing.
+> free `B-NN`, and run `make fix` after editing.
 
 ## Goal
 

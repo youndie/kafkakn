@@ -20,55 +20,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  # The gate. Exactly the target a contributor runs: a local check set that differs from the CI one
-  # turns "green here, red there" into the normal state of affairs, and then neither is read.
+  # The gate. The action runs `make check` - exactly the target a contributor runs, so that "green
+  # here, red there" cannot become the normal state of affairs - with docs-bootstrap's checks at the
+  # version this `uses:` line pins; the Makefile reads the same line for a local run. Around it, the
+  # two checks that depend on the event: on a pull request, backlog item numbers against the base
+  # branch, BEFORE the gate; on a push to main, `status: draft` as an error.
+  #
+  # The numbers check stays a backstop here, not the guard. Every branch in this repository commits
+  # the regenerated `backlog.md`, so two branches that each add an item conflict in that one file and
+  # the conflict is what stops them - and a pull request that cannot be merged gets no
+  # `pull_request` run at all. It stays because it says which branch took the number; B-14 measured
+  # the difference (`B-09: here B-09-duplicate-demo.md, on origin/main already B-09-accounting.md`
+  # against the gate's `duplicate ids: B-09`).
   check:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - run: pip install pyyaml
-
-      # BEFORE `make check`, and that order is the whole value of this step. Both checks catch a
-      # number taken twice; only this one says which file took it. Measured on one commit in B-14,
-      # which carried a second B-09 on purpose:
-      #
-      #   this step   B-09: here B-09-duplicate-demo.md, on origin/main already B-09-accounting.md
-      #   make check  duplicate ids: B-09
-      #
-      # A failing step stops the job, so whichever runs first is the message the author gets.
-      #
-      # Pull requests only: it has a base branch to compare against and a push does not.
-      #
-      # The refspec is explicit on purpose: `git fetch origin main` moves FETCH_HEAD and creates no
-      # remote-tracking ref, so the next line would fail with "could not read origin/main". The
-      # check reads a tree rather than a history, so the shallow clone checkout makes is enough and
-      # `fetch-depth: 0` is not needed.
-      - if: github.event_name == 'pull_request'
-        run: |
-          git fetch --no-tags origin \
-            "+refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
-          python3 scripts/backlog_index.py --against "origin/$GITHUB_BASE_REF"
-
-      # AND IT IS A BACKSTOP HERE, not the guard. Every branch in this repository commits the
-      # regenerated `backlog.md`, so two branches that each add an item conflict in that one file
-      # and the conflict is what actually stops them. Two consequences, both worth knowing:
-      #
-      #   * a pull request that cannot be merged gets no `pull_request` run at all, so this step
-      #     is absent precisely when the branches have diverged most;
-      #   * once the conflict is resolved, `make check` catches the collision anyway - it just
-      #     says less about it.
-      #
-      # It stays because it is cheap and it explains itself better. It is not the only thing
-      # standing between two branches and one number, and nothing here should be written as if
-      # it were.
-
-      - run: make check
+      - uses: youndie/docs-bootstrap@v0.3.2
 
       # THE FORMATTER IS A GATE OR IT IS NOTHING. `sborka.lint` pins ktlint and the portfolio's rule
       # set, and a rule set that only runs where somebody remembers to run it is a rule set that
@@ -78,7 +48,7 @@ jobs:
       # failure.
       #
       # Only the formatter. Compiling the native arm needs the C bundle and the suite needs a broker;
-      # whether those belong on a hosted runner is a separate decision with its own item.
+      # those run in the `suite` workflow.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -86,33 +56,23 @@ jobs:
 
       - run: ./gradlew --no-daemon --console=plain ktlintCheck
 
-      # Default branch only. `status: draft` is legal in a pull request, where it means "this
-      # branch will make it true", and a defect the moment it merges.
-      - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: python3 scripts/docs_check.py --on-main
-
   # Separate from the gate, and on a schedule rather than on a pull request, because an anchor rots
   # when somebody refactors a **different** repository. A pull request here is the least likely
   # moment for one to break, and running it there trains people to ignore a red build they did not
   # cause. It also does not block: a path quoted *as obsolete* is indistinguishable from a live one
-  # by machine, so the report is read by a person. Add `--check` once the stale list reaches zero.
+  # by machine, so the report is read by a person. Pass `target: report ANCHORS_ARGS=--check` once
+  # the stale list reaches zero.
   anchors:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      # This repository documents itself, so there is nothing else to clone: the Makefile's
+      # `REPOS = .` makes its own subdirectories the trees. A documentation repository covering
+      # several services would clone them shallowly here instead, and treat a repository it cannot
+      # read as a warning rather than a failure - an anchor that could not be checked is not an
+      # anchor that rotted.
+      - uses: youndie/docs-bootstrap@v0.3.2
         with:
-          python-version: "3.11"
-
-      - run: pip install pyyaml
-
-      # The code lives in this checkout, so its parent is a directory whose one subdirectory is
-      # this repository — which is exactly what --repos expects.
-      - run: python3 scripts/code_anchors.py --repos ..
-
-      # This repository documents itself, so there is nothing else to clone. A documentation
-      # repository covering several services would clone them shallowly here instead, and treat a
-      # repository it cannot read as a warning rather than a failure - an anchor that could not be
-      # checked is not an anchor that rotted.
+          target: report
