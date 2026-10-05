@@ -31,7 +31,7 @@ jobs:
       # The portfolio's one implementation of `<head>.<run number>`. Every script below reads the
       # result through ci/lib/coordinate.sh, and every Gradle call gets it as -PVERSION.
       - id: version
-        uses: youndie/sborka/.github/actions/determine-version@main
+        uses: youndie/sborka/.github/actions/determine-version@v0.5.0.130
       - run: echo "KAFKAKN_VERSION=${{ steps.version.outputs.version }}" >> "$GITHUB_ENV"
 
       # Two JDKs. 25 runs this build: it is the toolchain sborka compiles with. 21 is for
