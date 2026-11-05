@@ -262,8 +262,8 @@ let those through, and the tests that would hold the two arms to one answer for 
 | `retries` | 2 147 483 647 | 2 147 483 647 |
 | `compression.type` | `none` | `none` |
 
-*Verified:* `ProducerConfig.configDef().defaultValues()` executed against `kafka-clients-4.3.1.jar`;
-the default column of `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`.
+*Verified:* `org.apache.kafka.clients.producer.ProducerConfig.configDef().defaultValues()` executed against
+`kafka-clients-4.3.1.jar`; the default column of `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`.
 
 **Consequence 1, and it is the same shape as §2.2.** The JVM arm is idempotent by default and the
 native arm is not, with retries unbounded on both. A record whose acknowledgement is lost and which is
@@ -271,8 +271,8 @@ retried can therefore be written **twice by one arm and once by the other**, and
 individually consistent with the broker. That the defaults differ is read out of the artefacts; that
 it produces a duplicate is **H6**, and it is not measured yet.
 
-**The consumer side has its own disagreement**, read the same way — `ConsumerConfig.configDef()` and
-the same `CONFIGURATION.md`:
+**The consumer side has its own disagreement**, read the same way —
+`org.apache.kafka.clients.consumer.ConsumerConfig.configDef()` and the same `CONFIGURATION.md`:
 
 | Key | kafka-clients 4.3.1 | librdkafka 2.13.0 |
 |---|---|---|
@@ -1069,7 +1069,7 @@ coordinator; a fenced producer's commit and next `send` both `ProducerFencedExce
 | the Java consumer's thread check is a lock held **for one call**: `acquire()` takes the caller's thread id, `release()` clears it; overlapping calls throw `ConcurrentModificationException`, sequential calls from different threads do not | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/clients/consumer/internals/ClassicKafkaConsumer.java`, and the same in `…/AsyncKafkaConsumer.java` |
 | `wakeup()` is the one cross-thread call; interrupts are discouraged because they can abort a clean shutdown | `apache/kafka@4.3.1!/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java` |
 | librdkafka is thread-safe throughout; its offset store is filled as each message is handed to the application | `librdkafka-2.13.0.tar.gz!/INTRODUCTION.md` |
-| six more consumer defaults disagree or exist on one side only: `allow.auto.create.topics` (`true`/`false`), `check.crcs` (`true`/`false`), `fetch.max.wait.ms` vs `fetch.wait.max.ms`, `max.poll.records` (JVM only), `enable.auto.offset.store` and `enable.partition.eof` (native only) | `ConsumerConfig.configDef().defaultValues()` run against `kafka-clients-4.3.1.jar`; `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md` |
+| six more consumer defaults disagree or exist on one side only: `allow.auto.create.topics` (`true`/`false`), `check.crcs` (`true`/`false`), `fetch.max.wait.ms` vs `fetch.wait.max.ms`, `max.poll.records` (JVM only), `enable.auto.offset.store` and `enable.partition.eof` (native only) | `org.apache.kafka.clients.consumer.ConsumerConfig.configDef().defaultValues()` run against `kafka-clients-4.3.1.jar`; `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md` |
 
 **Consequences, all *target* until B-36 and B-37 measure them.** The JVM arm confines each consumer to
 a `Dispatchers.IO.limitedParallelism(1)` lane — not one thread, because the check is not per thread —

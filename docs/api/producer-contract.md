@@ -637,9 +637,9 @@ is also the reference's.
 ### A key honoured by exactly one arm is the harder case, and it is not portable
 
 **Measured 2026-09-17.** `queue.buffering.max.messages` is librdkafka's, and the JVM arm refuses it
-at construction because `ProducerConfig.configNames()` has never heard of it. A configuration that
-works on native therefore cannot be handed to the oracle unchanged — and the oracle is the whole
-argument of this project.
+at construction because `org.apache.kafka.clients.producer.ProducerConfig.configNames()` has never
+heard of it. A configuration that works on native therefore cannot be handed to the oracle unchanged
+— and the oracle is the whole argument of this project.
 
 There is no third spelling. librdkafka bounds its queue by a **record count**; the Java client bounds
 it by `buffer.memory` in **bytes** and waits `max.block.ms` for room. Inventing `maxQueuedRecords`
