@@ -457,8 +457,8 @@ both clients change it. The test broker, `apache/kafka:4.3.1`, accepts it with n
 
 ## 3. Defaults: every key this contract names, read from both artefacts
 
-**Read at:** `ConsumerConfig.configDef().defaultValues()` executed against `kafka-clients-4.3.1.jar`
-on 2026-09-24, and `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`. Five of these rows were in
+**Read at:** `org.apache.kafka.clients.consumer.ConsumerConfig.configDef().defaultValues()` executed against
+`kafka-clients-4.3.1.jar` on 2026-09-24, and `librdkafka-2.13.0.tar.gz!/CONFIGURATION.md`. Five of these rows were in
 [research §1.8](../research/research-architecture.md); the rest are new here.
 
 | Key | kafka-clients 4.3.1 | librdkafka 2.13.0 | kafkakn (*target*) | Why |
