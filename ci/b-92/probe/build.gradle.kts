@@ -1,5 +1,5 @@
 plugins {
-    kotlin("multiplatform") version "2.4.20"
+    kotlin("multiplatform") version "2.4.21"
 }
 
 kotlin {
@@ -12,7 +12,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // The portfolio's Ktor, from sborka's catalogue.
-            implementation("io.ktor:ktor-client-cio:3.6.0")
+            implementation("io.ktor:ktor-client-cio:3.6.1")
         }
     }
 }

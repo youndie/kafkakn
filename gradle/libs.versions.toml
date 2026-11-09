@@ -12,7 +12,7 @@ kontainer = "0.1.0.2"
 # The number is here AND in settings.gradle.kts, and it cannot be in one place: `pluginManagement`
 # is evaluated before any catalogue exists, so the settings plugin's version has to be a literal
 # there. The two are kept equal by hand, which is the cost the portfolio pays for the arrangement.
-sborka = "0.4.0.111"
+sborka = "0.5.0.135"
 # The JVM arm delegates to this, and it is the same release as the broker below - one variable fewer
 # in the differential suite.
 kafka-clients = "4.3.1"
@@ -23,7 +23,7 @@ librdkafka = "2.13.0"
 kafka-image = "apache/kafka:4.3.1"
 # kafkakn-schema-registry's HTTP client (B-93). The version B-92 measured: CIO speaks HTTP on both targets and HTTPS on
 # the JVM only, since `ktor-network-tls` has no TLS on Kotlin/Native.
-ktor = "3.6.0"
+ktor = "3.6.1"
 
 [libraries]
 kontainer = { module = "io.github.youndie.kontainer:kontainer", version.ref = "kontainer" }

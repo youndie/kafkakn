@@ -43,7 +43,7 @@ services:
   # the version whose serializers are the oracle (B-92). On the host network because the broker advertises
   # 127.0.0.1, and on 18081, not 8081, because the box is shared.
   registry:
-    image: confluentinc/cp-schema-registry:8.3.2
+    image: confluentinc/cp-schema-registry:8.4.0
     container_name: kafkakn-registry
     network_mode: host
     depends_on:
