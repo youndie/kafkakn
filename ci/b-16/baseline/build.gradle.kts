@@ -1,7 +1,7 @@
 plugins {
     // The same version `ci/downstream` pins. A baseline built by a different compiler would measure
     // the compiler as well as the library, and the difference is the only thing being asked about.
-    kotlin("multiplatform") version "2.4.20"
+    kotlin("multiplatform") version "2.4.21"
 }
 
 kotlin {
