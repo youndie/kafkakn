@@ -25,7 +25,7 @@ pluginManagement {
 plugins {
     // Resolves a JDK for the toolchain rather than depending on whichever one happens to be on the
     // machine. The two arms must compile the same way on a laptop and on a build box.
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
 
     // The portfolio's settings half: the resolution repositories with their content filters, and
     // the shared `wip` catalogue beside this repository's own `libs`.
